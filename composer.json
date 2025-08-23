@@ -1,0 +1,21 @@
+{
+    "name": "otavio/estrutura",
+    "description": "Estrutura base para aplicações",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "core\\": "core/",
+            "src\\controllers\\": "src/controllers/",
+            "src\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Otavio Silva",
+            "email": "otavio.silva1661@gmail.com"
+        }
+    ],
+    "require": {
+        "vlucas/phpdotenv": "^5.6"
+    }
+}

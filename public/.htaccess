@@ -1,0 +1,9 @@
+Options -MultiViews
+RewriteEngine On
+
+# Se o arquivo ou diretório existir, não redireciona
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Redireciona tudo para o index.php
+RewriteRule ^ index.php [QSA,L]
