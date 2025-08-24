@@ -14,3 +14,8 @@
 <script>
   document.getElementById("data-rodape").textContent = new Date().getFullYear();
 </script>
+
+<script src="/js/home.js"></script>
+<script src="/js/login.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+

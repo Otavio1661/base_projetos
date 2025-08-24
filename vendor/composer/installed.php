@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'otavio/estrutura',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '171f592c74ab42390e6bf07883653dc4d6984a71',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -20,9 +20,9 @@
             'dev_requirement' => false,
         ),
         'otavio/estrutura' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '171f592c74ab42390e6bf07883653dc4d6984a71',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

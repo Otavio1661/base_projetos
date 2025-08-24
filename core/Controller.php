@@ -10,7 +10,11 @@ class Controller
          $basePath = dirname(__DIR__);
         // Extrai as variáveis para uso na view
         extract($data);
+        $base = $basePath;
         $partials = $basePath . '/src/view/partials/';
+        $baseJs = '/public/js/';
+        $baseCss = '/public/css/';
+        $baseImg = '/public/img/';
 
         // Caminho do arquivo de view
         $viewFile = __DIR__ . '/../src/view/' . $view . '.php';

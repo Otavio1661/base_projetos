@@ -1,0 +1,28 @@
+#xampp-passo3 {
+    width: 100%;
+    min-height: 50px;
+    max-height: 230px;
+    resize: none;
+    font-family: monospace;
+    overflow-y: none;
+}
+
+.code-block {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.code-block pre {
+    margin: 0;
+    padding-right: 80px;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+}

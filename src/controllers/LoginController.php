@@ -25,21 +25,20 @@ class LoginController extends ctrl
                 return $this->json(['error' => 'Dados incompletos'], 400);
             }
 
-$info = $this->loginModel->verificarLogin($data);
+            $info = $this->loginModel->verificarLogin($data);
 
-if ($info['success']) {
-    $info['msg'] = 'Login bem-sucedido';
-} else {
-    $info['msg'] = 'Login falhou';
-}
+            if ($info['success'] == true) {
+                $info['msg'] = 'Login bem-sucedido';
+                $info['erro_login'] = 'false';
+            } else {
+                $info['msg'] = 'Erro: Login falhou';
+                $info['erro_login'] = 'true';
+            }
 
-            print_r($info['login']); die;
-
-            return ctrl::retorno(['message' => $info['msg']], 200);
-
+            return ctrl::retorno(['message' => $info['msg'], 'erro_login' => $info['erro_login'] ], 200);
         } catch (\Exception $e) {
-        // Falha na autenticação
-        return ctrl::retorno(['error' => 'Usuário ou senha inválidos'], 401);
+            // Falha na autenticação
+            return ctrl::retorno(['error' => $e], 401);
+        }
     }
 }
-}   
