@@ -10,14 +10,23 @@ class RenderController extends ctrl
     {
         $this->render('home', [
             'title' => 'Home',
-            'navhome' => true
+            'navlogin' => false
         ]);
     }
 
     public function login()
     {
         $this->render('login', [
-            'title' => 'Login'
+            'title' => 'Login',
+            'navlogin' => true
+        ]);
+    }
+
+    public function menu()
+    {
+        $this->render('menu', [
+            'title' => 'Menu',
+            'navlogin' => true
         ]);
     }
 

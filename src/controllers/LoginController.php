@@ -4,6 +4,7 @@ namespace src\controllers;
 
 use core\Controller as ctrl;
 use src\model\LoginModel;
+use Exception;
 
 class LoginController extends ctrl
 {
@@ -30,8 +31,9 @@ class LoginController extends ctrl
             if ($info['success'] == true) {
                 $info['msg'] = 'Login bem-sucedido';
                 $info['erro_login'] = 'false';
+                $_SESSION['user'] = $data['usuario'];
             } else {
-                $info['msg'] = 'Erro: Login falhou';
+                $info['msg'] = 'Erro: Usuário não encontrado';
                 $info['erro_login'] = 'true';
             }
 
@@ -41,4 +43,21 @@ class LoginController extends ctrl
             return ctrl::retorno(['error' => $e], 401);
         }
     }
+
+
+        public function Logout() {
+        try {
+            if (session_status() == PHP_SESSION_NONE) {
+                session_start();
+            }
+
+            unset($_SESSION['user']);
+            session_destroy();
+
+            ctrl::retorno(['message' => 'Logout realizado com sucesso!', 'logout' => true], 200);
+        } catch (Exception $e) {
+            ctrl::retorno(['error' => $e->getMessage()], 400);
+        }
+    }
+
 }

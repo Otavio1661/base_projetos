@@ -6,32 +6,33 @@ class RouterBase
 {
     private $routes = [];
 
-    public function get($route, $controllerAction)
+    public function get($route, $controllerAction, $middleware = null)
     {
-        $this->addRoute('GET', $route, $controllerAction);
+        $this->addRoute('GET', $route, $controllerAction, $middleware);
     }
 
-    public function post($route, $controllerAction)
+    public function post($route, $controllerAction, $middleware = null )
     {
-        $this->addRoute('POST', $route, $controllerAction);
+        $this->addRoute('POST', $route, $controllerAction, $middleware);
     }
 
-    public function put($route, $controllerAction)
+    public function put($route, $controllerAction, $middleware = null)
     {
-        $this->addRoute('PUT', $route, $controllerAction);
+        $this->addRoute('PUT', $route, $controllerAction, $middleware);
     }
 
-    public function delete($route, $controllerAction)
+    public function delete($route, $controllerAction, $middleware = null)
     {
-        $this->addRoute('DELETE', $route, $controllerAction);
+        $this->addRoute('DELETE', $route, $controllerAction, $middleware);
     }
 
-    private function addRoute($method, $route, $controllerAction)
+    private function addRoute($method, $route, $controllerAction, $middleware = null)
     {
         $this->routes[] = [
             'method' => $method,
             'route' => $route,
-            'controllerAction' => $controllerAction
+            'controllerAction' => $controllerAction,
+            'middleware' => $middleware
         ];
     }
 
@@ -47,6 +48,11 @@ class RouterBase
 
         // Compara cada rota registrada
         foreach ($this->routes as $r) {
+            if ($r['method'] === $method && $r['route'] === $uri && $r['middleware'] !== null) {
+                $this->dispatchMiddleware($r['middleware']);
+                return $this->dispatch($r['controllerAction']);
+            }
+
             if ($r['method'] === $method && $r['route'] === $uri) {
                 return $this->dispatch($r['controllerAction']);
             }
@@ -75,4 +81,24 @@ class RouterBase
 
         return call_user_func([$instance, $method]);
     }
+
+    private function dispatchMiddleware($middleware)
+    {
+        list($controller, $method) = explode('@', $middleware);
+
+        $controllerClass = "src\\middleware\\{$controller}";
+
+        if (!class_exists($controllerClass)) {
+            throw new \Exception("middleware {$controllerClass} não encontrado");
+        }
+
+        $instance = new $controllerClass();
+
+        if (!method_exists($instance, $method)) {
+            throw new \Exception("Método {$method} não encontrado em {$controllerClass}");
+        }
+
+        return call_user_func([$instance, $method]);
+    }
+
 }

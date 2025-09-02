@@ -35,9 +35,9 @@ async function logarUsuario() {
                 allowOutsideClick: false,
                 showConfirmButton: false,
                 timer: 2000,
-                timerProgressBar: true
+                timerProgressBar: true,
             }).then(() => {
-                window.location.href = '/login';
+                window.location.href = '/menu';
             });
         } else {
             Swal.fire({

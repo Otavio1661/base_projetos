@@ -1,5 +1,5 @@
-<?php 
-    include($partials . "head.php"); 
+<?php
+include($partials . "head.php");
 ?>
 
 <!-- <link rel="stylesheet" href="/css/login.css"> -->
@@ -23,14 +23,17 @@
                             <div id="loginError" class="alert alert-success" role="alert">
                                 Usuário = 'admin'
                             </div>
+                            <div id="loginError" class="alert alert-success" role="alert">
+                                <?php echo $_SESSION['user'] ?? 'Usuário não logado'; ?>
+                            </div>
                             <form onsubmit="event.preventDefault(); logarUsuario();">
-                                <div class="mb-3">
-                                    <label for="username" class="form-label">Usuário</label>
-                                    <input type="text" class="form-control" id="username" placeholder="Digite seu usuário" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar
-                                </button>
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Usuário</label>
+                                <input type="text" class="form-control" id="username" placeholder="Digite seu usuário" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar
+                            </button>
                             </form>
                         </div>
                     </div>
@@ -43,3 +46,21 @@
 </body>
 
 </html>
+<script src="<?php echo asset('/js/login.js'); ?>"></script>
+
+
+<script>
+    function errorunauthorized() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('error') === 'unauthorized') {
+            Swal.fire({
+                title: 'Erro!',
+                text: 'Você precisa estar logado para acessar a página menu.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }
+
+    window.onload = errorunauthorized;
+</script>
