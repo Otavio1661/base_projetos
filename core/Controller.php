@@ -12,9 +12,6 @@ class Controller
         extract($data);
         $base = $basePath;
         $partials = $basePath . '/src/view/partials/';
-        $baseJs = '/public/js/';
-        $baseCss = '/public/css/';
-        $baseImg = '/public/img/';
 
         // Caminho do arquivo de view
         $viewFile = __DIR__ . '/../src/view/' . $view . '.php';

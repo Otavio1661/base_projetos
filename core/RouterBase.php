@@ -6,6 +6,19 @@ class RouterBase
 {
     private $routes = [];
 
+    public function group($prefix, $middleware, $callback) {
+        $subRouter = new self();
+        $callback($subRouter);
+        foreach ($subRouter->routes as $route) {
+            $this->addRoute(
+                $route['method'],
+                $prefix . $route['route'],
+                $route['controllerAction'],
+                $middleware // Aplica o middleware do grupo
+            );
+        }
+    }
+
     public function get($route, $controllerAction, $middleware = null)
     {
         $this->addRoute('GET', $route, $controllerAction, $middleware);

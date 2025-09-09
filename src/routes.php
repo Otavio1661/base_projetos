@@ -10,11 +10,17 @@ $router = new \core\Router();
 // Registra rotas: metodo ( get/post ), rota, controller@metodo, middleware@metodo
 
 $router->get('/home', 'RenderController@home');
-$router->get('/menu', 'RenderController@menu', 'AuthMiddleware@handle');
 $router->get('/login', 'RenderController@login');
 $router->get('/getuser', 'HomeController@getUser');
 $router->post('/postlogin', 'LoginController@loginPost');
 $router->post('/logout', [], 'AuthMiddleware@Logout');
+
+$router->group('/admin', 'AuthMiddleware@handle' , function($router) {
+    $router->get('/menu', 'RenderController@menu');
+    $router->get('/dashboard', 'AdminController@dashboard');
+    $router->get('/users', 'AdminController@listUsers');
+    $router->post('/create-user', 'AdminController@createUser');
+});
 
 return $router;
 

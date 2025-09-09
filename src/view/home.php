@@ -271,7 +271,12 @@ ctrl::retorno(['mensagem' => 'Sucesso!'], 200);
                                 <ul>
                                     <li>Nunca versionar <code>.env</code> com dados sensíveis.</li>
                                     <li>Separe lógica de negócio (Model) da lógica de apresentação (View).</li>
-                                    <li>Use SQL externo para facilitar manutenção.</li>
+                                    <li>Use SQL externo para facilitar manutenção.
+                                        <p>        $db = Database::getInstance();
+        $db->beginTransaction();
+        $db->commit();
+        $db->rollBack();</p>
+                                    </li>
                                     <li>Utilize rotas amigáveis e controllers organizados.</li>
                                 </ul>
                                 <hr>

@@ -8,7 +8,7 @@ include($partials . "head.php");
 
 <body class="d-flex flex-column min-vh-100 bg-light">
 
-    <?php include($partials . "topo.php"); ?>
+    <?php include($partials . "admin/topo.php"); ?>
 
     <div id="voltar" class="container d-flex justify-content-end">
         <a class="btn btn-primary ms-auto" onclick="logout()">Sair</a>

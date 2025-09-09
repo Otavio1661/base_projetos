@@ -12,6 +12,7 @@ class LoginModel
     public function verificarLogin($data)
     {
 
+
         try {
             $verificarLogin = [
                 'login' => $data['usuario']
@@ -19,7 +20,7 @@ class LoginModel
             $Login = [
                 'login' => 'admin'
             ];
-
+            
             if ($verificarLogin == $Login) {
                 return [
                     'login' => $verificarLogin['login'],
