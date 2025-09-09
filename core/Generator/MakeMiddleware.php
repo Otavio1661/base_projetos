@@ -4,6 +4,7 @@
 if ($argc < 2) {
     echo "Erro: Nome do middleware não foi fornecido.\n";
     exit(1);
+}
 // Pega o nome do middleware do terminal
 $middleware = $argv[1];
 
@@ -55,6 +56,5 @@ if ($arquivo) {
     echo "Arquivo '{$nomeArquivo}' criado com sucesso!\n";
 } else {
     echo "Erro ao criar o arquivo.\n";
-}
 }
 exit(0);
