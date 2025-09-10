@@ -33,7 +33,7 @@ namespace src\middleware;
 use core\Controller as ctrl;
 use Exception;
 
-class {$className}Middleware {
+class {$className} {
 
     public function Logout() {
         try {

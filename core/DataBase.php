@@ -92,4 +92,21 @@ class Database
 
         return $res;
     }
+    /**
+     * Executa migrações para criar tabelas se não existirem
+    */
+    public static function RunMigration($tables)
+    {
+        $pdo = self::getInstance();
+        foreach ($tables as $tableName => $columns) {
+            $cols = [];
+            foreach ($columns as $colName => $colType) {
+                $cols[] = "`$colName` $colType";
+            }
+            $colsSql = implode(", ", $cols);
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($colsSql) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+            $pdo->exec($sql);
+        }
+    }
+
 }

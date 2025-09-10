@@ -19,7 +19,8 @@
         "vlucas/phpdotenv": "^5.6"
     },
     "scripts": {
-        "migration": "php core/Migration.php",
+        "migration": "php core/Migration/Migration.php",
+        "run migration": "php core/Migration/RunMigration.php",
         "controller": "php core/Generator/MakeController.php",
         "model": "php core/Generator/MakeModel.php",
         "middleware": "php core/Generator/MakeMiddleware.php"
