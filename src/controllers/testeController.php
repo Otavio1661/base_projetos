@@ -3,7 +3,7 @@
 namespace src\controllers;
 
 use core\Controller as ctrl;
-use src\model\Model;
+use src\model\TesteModel;
 
 class TesteController extends ctrl
 {
@@ -11,8 +11,7 @@ class TesteController extends ctrl
 
     public function __construct()
     {
-        $this->Model = new Model();
+        $this->Model = new TesteModel();
     }
 
 }
-

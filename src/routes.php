@@ -9,18 +9,14 @@ $router = new \core\Router();
 // obs. O middleware opcional, e será executado antes do controlador
 // Registra rotas: metodo ( get/post ), rota, controller@metodo, middleware@metodo
 
-$router->get('/home', 'RenderController@home');
-$router->get('/login', 'RenderController@login');
-$router->get('/getuser', 'HomeController@getUser');
-$router->post('/postlogin', 'LoginController@loginPost');
-$router->post('/logout', [], 'AuthMiddleware@Logout');
+// $router->get('/exemplo', 'ExampleController@exampleMethod'); ---> resultado da rota /exemplo sem middleware
 
-$router->group('/admin', 'AuthMiddleware@handle' , function($router) {
-    $router->get('/menu', 'RenderController@menu');
-    $router->get('/dashboard', 'AdminController@dashboard');
-    $router->get('/users', 'AdminController@listUsers');
-    $router->post('/create-user', 'AdminController@createUser');
-});
+// $router->get('/exemplo', 'ExampleController@exampleMethod', 'ExampleMiddleware@handle'); ---> resultado da rota /exemplo com middleware
+
+// $router->group('/exemplo1', 'ExampleMiddleware@handle' , function($router) {           ---> exemplo rota protegida
+//     $router->get('/exemplo2', 'ExampleController@dashboard'); ---> resultado da rota protegida /exemplo1/exemplo2
+// });
+
 
 return $router;
 

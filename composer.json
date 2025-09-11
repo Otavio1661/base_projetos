@@ -23,6 +23,7 @@
         "run migration": "php core/Migration/RunMigration.php",
         "controller": "php core/Generator/MakeController.php",
         "model": "php core/Generator/MakeModel.php",
-        "middleware": "php core/Generator/MakeMiddleware.php"
+        "middleware": "php core/Generator/MakeMiddleware.php",
+        "mvc": "php core/Generator/MakeMVC.php"
     }
 }
