@@ -22,7 +22,7 @@ O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a cr
 ---
 
 ## Estrutura de Pastas
-
+```
 /core   <── Núcleo do framework (Router, Controller, Database)
 ├── Controller.php
 ├── DataBase.php
