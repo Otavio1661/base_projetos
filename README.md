@@ -1,7 +1,4 @@
 
----
-
-```markdown
 # Meu Framework
 
 O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a criação de aplicações web robustas, seguras e escaláveis. Ele oferece uma arquitetura limpa, modular e flexível, facilitando tanto projetos simples quanto sistemas profissionais.
@@ -26,7 +23,6 @@ O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a cr
 
 ## Estrutura de Pastas
 
-```text
 /core   <── Núcleo do framework (Router, Controller, Database)
 ├── Controller.php
 ├── DataBase.php
