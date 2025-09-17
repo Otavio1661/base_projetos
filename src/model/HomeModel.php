@@ -2,6 +2,6 @@
 
 namespace src\model;
 
-class LoginModel {
+class HomeModel {
     // Model logic goes here
 }

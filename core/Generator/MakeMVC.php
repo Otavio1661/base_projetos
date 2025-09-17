@@ -12,7 +12,7 @@ $name = $argv[1];
 // Nome dos arquivos de destino
 $controllerFile = "src/controllers/{$name}Controller.php";
 $modelFile = "src/model/{$name}Model.php";
-$viewFile = "src/views/{$name}.php";
+$viewFile = "src/view/{$name}.php";
 
 // Nome das classes
 $controllerClass = ucfirst($name) . "Controller";
@@ -28,9 +28,9 @@ if (!file_exists("src/model")) {
     mkdir("src/model", 0777, true);
 }
 
-// Cria o diretório de views se não existir
-if (!file_exists("src/views")) {
-    mkdir("src/views", 0777, true);
+// Cria o diretório de view se não existir
+if (!file_exists("src/view")) {
+    mkdir("src/view", 0777, true);
 }
 
 // Verifica se os arquivos já existem

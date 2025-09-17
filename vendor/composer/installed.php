@@ -3,7 +3,7 @@
         'name' => 'otavio/estrutura',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '171f592c74ab42390e6bf07883653dc4d6984a71',
+        'reference' => '52b23f3b6b4d01f486cd725eca09e0877b27b577',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -22,7 +22,7 @@
         'otavio/estrutura' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '171f592c74ab42390e6bf07883653dc4d6984a71',
+            'reference' => '52b23f3b6b4d01f486cd725eca09e0877b27b577',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -1,21 +1,21 @@
 version: '3.8'
 
 services:
-  web:
+  web-app-myframework:
     build: .
     ports:
-      - "8080:80"
+      - "8087:80"
     volumes:
       - .:/var/www/html
-    depends_on:
-      - db
+#    depends_on:
+#      - db
 
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: meu_banco
-      MYSQL_USER: usuario
-      MYSQL_PASSWORD: senha123
-    ports:
-      - "3306:3306"
+#  db:
+#    image: mysql:8.0
+#    environment:
+#      MYSQL_ROOT_PASSWORD: root123
+#      MYSQL_DATABASE: meu_banco
+#      MYSQL_USER: usuario
+#      MYSQL_PASSWORD: senha123
+#    ports:
+#      - "3306:3306"

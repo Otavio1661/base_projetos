@@ -7,7 +7,7 @@ class Controller
     protected function render($view, $data = [])
     {
 
-         $basePath = dirname(__DIR__);
+        $basePath = dirname(__DIR__);
         // Extrai as variáveis para uso na view
         extract($data);
         $base = $basePath;
