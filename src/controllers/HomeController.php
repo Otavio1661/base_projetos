@@ -15,6 +15,12 @@ class HomeController extends ctrl
         $this->Model = new HomeModel();
     }
 
+    public function index() {
+        ctrl::render('Home', [
+            'titulo' => 'Home',
+        ]);
+    }
+
     public function home() {
         ctrl::render('Home', [
             'titulo' => 'Home',

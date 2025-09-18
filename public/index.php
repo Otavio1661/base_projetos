@@ -1,13 +1,6 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
 
-// Verifica se o arquivo requisitado existe e não é diretório
-$path = $_SERVER['REQUEST_URI'];
-$file = $_SERVER['DOCUMENT_ROOT'] . $path;
-if (file_exists($file) && !is_dir($file)) {
-    return false; // Deixa o servidor servir o arquivo estático
-}
-
 session_start();
 
 /**

@@ -18,7 +18,8 @@ $router = new \core\Router();
 // });
 
 
-$router->get('/', 'HomeController@home');
+$router->get('/', 'HomeController@index');
+$router->get('/home', 'HomeController@home');
 
 
 return $router;
