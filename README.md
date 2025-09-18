@@ -1,4 +1,3 @@
-
 # Meu Framework
 
 O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a criação de aplicações web robustas, seguras e escaláveis. Ele oferece uma arquitetura limpa, modular e flexível, facilitando tanto projetos simples quanto sistemas profissionais.
@@ -22,7 +21,8 @@ O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a cr
 ---
 
 ## Estrutura de Pastas
-```
+
+```text
 /core   <── Núcleo do framework (Router, Controller, Database)
 ├── Controller.php
 ├── DataBase.php
@@ -117,42 +117,86 @@ O **Meu Framework** é um framework PHP moderno, modular e flexível, criado par
 
 ---
 
-## Estrutura de Pastas
+## Scripts Automatizados via Composer
 
-```text
-/core                # Núcleo do framework
-├── Controller.php   # Classe base para controllers
-├── DataBase.php     # Singleton PDO e execução de SQL externo
-├── Router.php       # Sistema de rotas amigáveis
-├── RouterBase.php   # Base do roteador
+O framework traz scripts prontos que podem ser executados pelo **Composer**, facilitando a criação de componentes do sistema:
 
-/public              # Arquivos públicos (webroot)
-├── index.php        # Front controller
-├── css/             # CSS customizado
-├── js/              # JS customizado
-├── img/             # Imagens
-
-/src                 # Código da aplicação
-├── config.php       # Configurações globais (usa .env)
-├── Env.php          # Carrega variáveis do .env
-├── routes.php       # Definição das rotas
-├── controllers/     # Controllers da aplicação
-│   ├── HomeController.php
-│   ├── LoginController.php
-│   └── RenderController.php
-├── model/           # Models da aplicação
-│   └── LoginModel.php
-├── sql/             # SQL externo (ex: GetUser.sql)
-├── view/            # Views (HTML/PHP)
-│   ├── home.php
-│   ├── login.php
-│   └── partials/
-│       ├── head.php
-│       ├── topo.php
-│       └── rodape.php
-
-.env                  # Variáveis de ambiente (NUNCA versionar com dados sensíveis)
+```json
+"scripts": {
+    "migration": "php core/Migration/Migration.php",
+    "run migration": "php core/Migration/RunMigration.php",
+    "controller": "php core/Generator/MakeController.php",
+    "model": "php core/Generator/MakeModel.php",
+    "middleware": "php core/Generator/MakeMiddleware.php",
+    "mvc": "php core/Generator/MakeMVC.php"
+}
 ```
+
+**Como usar:**  
+Basta executar pelo terminal, por exemplo:
+```bash
+composer controller NomeDoController
+composer model NomeDoModel
+composer middleware NomeDoMiddleware
+composer mvc NomeDaFuncionalidade
+```
+> O nome do arquivo será gerado automaticamente com o prefixo necessário.  
+> O comando `mvc` cria **Model**, **View** e **Controller** juntos, bastando informar o nome (o prefixo é adicionado automaticamente).
+
+---
+
+## Renderização de Views
+
+Os controllers podem renderizar views facilmente usando o método `render`.  
+Exemplo de uso:
+
+```php
+public function home() {
+    ctrl::render('Home', [
+        'titulo' => 'Home',
+    ]);
+}
+```
+- O primeiro parâmetro é o nome da view (exemplo: `Home` corresponde a `/src/view/Home.php`).
+- O segundo parâmetro é um array de dados que será disponibilizado na view.
+
+---
+
+## Sistema de Rotas
+
+O sistema de rotas é flexível, suportando **middlewares** de forma opcional. O middleware, se informado, será executado antes do controller.
+
+**Como registrar rotas:**
+- Sintaxe: método (get/post), rota, controller@metodo, [middleware@metodo opcional]
+- Exemplos:
+
+```php
+// Rota simples (sem middleware)
+$router->get('/exemplo', 'ExampleController@exampleMethod');
+
+// Rota com middleware
+$router->get('/exemplo', 'ExampleController@exampleMethod', 'ExampleMiddleware@handle');
+
+// Grupo de rotas protegidas por middleware
+$router->group('/exemplo1', 'ExampleMiddleware@handle', function($router) {
+    $router->get('/exemplo2', 'ExampleController@dashboard');
+});
+
+// Rotas padrão
+$router->get('/', 'HomeController@index');
+$router->get('/home', 'HomeController@home');
+```
+
+---
+
+## Capturando Dados de POST
+
+Para capturar dados enviados via POST para o controller, utilize:
+
+```php
+$data = ctrl::getPost();
+```
+> Os dados já vêm convertidos em JSON automaticamente.
 
 ---
 
@@ -235,22 +279,6 @@ ctrl::retorno(['mensagem' => 'Sucesso!'], 200);
 
 ---
 
-### Exemplo de Login (AJAX)
-
-- **Front-end:** `/src/view/login.php`
-- **Back-end:** `/src/controllers/LoginController.php` e `/src/model/LoginModel.php`
-- **Rota:** `/postlogin` (POST)
-
----
-
-### Personalização de Layout
-
-- Partials em `/src/view/partials/` (`head.php`, `topo.php`, `rodape.php`)
-- CSS customizado em `/public/css/`
-- JS customizado em `/public/js/`
-
----
-
 ## Boas Práticas
 
 - Nunca versionar `.env` com dados sensíveis.
@@ -275,7 +303,7 @@ ctrl::retorno(['mensagem' => 'Sucesso!'], 200);
   Altere as variáveis no `.env`.
 
 - **Como proteger rotas?**  
-  Implemente lógica de autenticação no controller.
+  Implemente lógica de autenticação no controller usando middlewares.
 
 ---
 
