@@ -83,13 +83,32 @@ class RouterBase
         $controllerClass = "src\\controllers\\{$controller}";
 
         if (!class_exists($controllerClass)) {
+            $linha = __LINE__;
+            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro: Controller não encontrado</h2>';
+            echo '<p>O controller <strong>' . htmlspecialchars($controllerClass) . '</strong> não foi localizado.</p>';
+            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . $arquivo . ' linha ' . $linha . '</code>';
+            echo '<p>Verifique se o nome e o caminho do controller estão corretos.</p>';
+            echo '</div>';
             throw new \Exception("Controller {$controllerClass} não encontrado");
+            exit;
         }
 
         $instance = new $controllerClass();
 
         if (!method_exists($instance, $method)) {
+            $linha = __LINE__;
+            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+            echo "<h6 style=\"color:#f44336;margin-bottom:12px;\">Método = public function " . htmlspecialchars($method) . "(){}</h6>";
+            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro: Método não encontrado</h2>';
+            echo '<p>O método <strong>' . htmlspecialchars($method) . '</strong> não foi localizado em <strong>' . htmlspecialchars($controllerClass) . '</strong>.</p>';
+            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . $arquivo . ' linha ' . $linha . '</code>';
+            echo '<p>Verifique se o nome do método está correto e se ele existe no controller.</p>';
+            echo '</div>';
             throw new \Exception("Método {$method} não encontrado em {$controllerClass}");
+            exit;
         }
 
         return call_user_func([$instance, $method]);

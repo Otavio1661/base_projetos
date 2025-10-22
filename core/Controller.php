@@ -17,7 +17,17 @@ class Controller
         $viewFile = __DIR__ . '/../src/view/' . $view . '.php';
 
         if (!file_exists($viewFile)) {
+            $linha = __LINE__;
+            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro: View não encontrada</h2>';
+            echo '<p>A view <strong>' . htmlspecialchars($view) . '</strong> não foi localizada em:</p>';
+            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . htmlspecialchars($viewFile) . '</code>';
+            echo '<br><code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;margin-top:8px;">' . $arquivo . ' linha ' . $linha . '</code>';
+            echo '<p>Verifique se o nome e o caminho da view estão corretos.</p>';
+            echo '</div>';
             throw new \Exception("View '{$view}' não encontrada em {$viewFile}");
+            exit;
         }
 
         // Buffer de saída para permitir incluir layouts

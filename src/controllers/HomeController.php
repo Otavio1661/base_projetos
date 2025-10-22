@@ -22,6 +22,9 @@ class HomeController extends ctrl
     }
 
     public function home() {
+
+        $dados = $this->Model->getDadosHome();
+
         ctrl::render('Home', [
             'titulo' => 'Home',
         ]);
