@@ -6,7 +6,8 @@ class RouterBase
 {
     private $routes = [];
 
-    public function group($prefix, $middleware, $callback) {
+    public function group($prefix, $middleware, $callback)
+    {
         $subRouter = new self();
         $callback($subRouter);
         foreach ($subRouter->routes as $route) {
@@ -24,7 +25,7 @@ class RouterBase
         $this->addRoute('GET', $route, $controllerAction, $middleware);
     }
 
-    public function post($route, $controllerAction, $middleware = null )
+    public function post($route, $controllerAction, $middleware = null)
     {
         $this->addRoute('POST', $route, $controllerAction, $middleware);
     }
@@ -59,18 +60,32 @@ class RouterBase
         // Remove a barra no final, se houver
         $uri = '/' . trim($uri, '/');
 
+        $rotaEncontrada = false;
+
         // Compara cada rota registrada
         foreach ($this->routes as $r) {
-            if ($r['method'] === $method && $r['route'] === $uri && $r['middleware'] !== null) {
-                $this->dispatchMiddleware($r['middleware']);
-                return $this->dispatch($r['controllerAction']);
-            }
+            // Se a rota corresponde à URI
+            if ($r['route'] === $uri) {
+                $rotaEncontrada = true;
 
-            if ($r['method'] === $method && $r['route'] === $uri) {
-                return $this->dispatch($r['controllerAction']);
+                // Se o método também corresponde
+                if ($r['method'] === $method) {
+                    if ($r['middleware'] !== null) {
+                        $this->dispatchMiddleware($r['middleware']);
+                    }
+                    return $this->dispatch($r['controllerAction']);
+                }
             }
         }
 
+        // Se a rota foi encontrada mas o método é diferente
+        if ($rotaEncontrada) {
+            http_response_code(405);
+            include(__DIR__ . '/../public/erro405.php');
+            return;
+        }
+
+        // Se nem a rota foi encontrada
         http_response_code(404);
         include(__DIR__ . '/../public/erro404.php');
     }
@@ -121,16 +136,34 @@ class RouterBase
         $controllerClass = "src\\middleware\\{$controller}";
 
         if (!class_exists($controllerClass)) {
+            $linha = __LINE__;
+            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro: Middleware não encontrado</h2>';
+            echo '<p>O middleware <strong>' . htmlspecialchars($controllerClass) . '</strong> não foi localizado.</p>';
+            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . $arquivo . ' linha ' . $linha . '</code>';
+            echo '<p>Verifique se o nome e o caminho do middleware estão corretos.</p>';
+            echo '</div>';
             throw new \Exception("middleware {$controllerClass} não encontrado");
+            exit;
         }
 
         $instance = new $controllerClass();
 
         if (!method_exists($instance, $method)) {
+            $linha = __LINE__;
+            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+            echo "<h6 style=\"color:#f44336;margin-bottom:12px;\">Método = public function " . htmlspecialchars($method) . "(){}</h6>";
+            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro: Método não encontrado</h2>';
+            echo '<p>O método <strong>' . htmlspecialchars($method) . '</strong> não foi localizado em <strong>' . htmlspecialchars($controllerClass) . '</strong>.</p>';
+            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . $arquivo . ' linha ' . $linha . '</code>';
+            echo '<p>Verifique se o nome do método está correto e se ele existe no middleware.</p>';
+            echo '</div>';
             throw new \Exception("Método {$method} não encontrado em {$controllerClass}");
+            exit;
         }
 
         return call_user_func([$instance, $method]);
     }
-
 }
