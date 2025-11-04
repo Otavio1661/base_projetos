@@ -81,6 +81,11 @@ git clone https://github.com/Otavio1661/base_projetos.git
 ```
 (Coloque dentro da pasta `htdocs` do XAMPP)
 
+**Passo 1.2 - Instalar Dependências**
+```bash
+composer install
+```
+
 **Passo 2 - Habilitar o módulo vhost_alias**
 Abra o arquivo `httpd.conf` e verifique se a linha abaixo está descomentada:
 
