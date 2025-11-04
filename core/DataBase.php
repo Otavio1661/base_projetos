@@ -126,3 +126,18 @@ class Database
     }
 
 }
+
+
+
+        // // Converte campos de texto para UTF-8 antes de salvar
+        // if (isset($AddLocal['nome'])) {
+        //     // Se vier em ISO-8859-1 (Latin1), converte para UTF-8
+        //     if (!mb_check_encoding($AddLocal['nome'], 'UTF-8')) {
+        //         $AddLocal['nome'] = mb_convert_encoding($AddLocal['nome'], 'UTF-8', 'ISO-8859-1');
+        //     }
+        // }
+        // if (isset($AddLocal['descricao'])) {
+        //     if (!mb_check_encoding($AddLocal['descricao'], 'UTF-8')) {
+        //         $AddLocal['descricao'] = mb_convert_encoding($AddLocal['descricao'], 'UTF-8', 'ISO-8859-1');
+        //     }
+        // }

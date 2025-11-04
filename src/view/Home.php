@@ -1,5 +1,14 @@
 <?php
+// Toast pequeno
 
+use src\resources\alert;
+
+echo alert::successToast("Registro salvo!", "Sucesso!");
+echo alert::errorToast("Falha ao salvar!", "Erro!");
+
+// Modal centralizado
+echo alert::successModal("Seu cadastro foi concluído!", "Parabéns!");
+echo alert::errorModal("Não foi possível processar.", "Ops!", 'tentar de novo', ['testeAlert()', true], ['5000', true]);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -9,6 +18,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $titulo; ?></title>
     <link rel="icon" href="/img/aaaaa2.png" type="image/png">
+    <link rel="stylesheet" href="/CSS_New/colors.css">
+    <link rel="stylesheet" href="/CSS_New/alert.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -84,6 +95,7 @@
                             O objetivo é proporcionar uma base sólida para aprender, experimentar novas ideias e acelerar o desenvolvimento, sem abrir mão da segurança e das boas práticas. Sinta-se à vontade para explorar, contribuir e adaptar conforme suas necessidades!
                         </p>
                     </div>
+                    <button class="btn btn-primary">Saiba mais</button>
                 </div>
             </div>
         </div>
@@ -92,6 +104,13 @@
     <?php include $partials . 'footer.php'; ?>
 
     <script>
+
+
+        function testeAlert() {
+            alert("testesttetstesttestetste");
+        }
+
+
         document.addEventListener('DOMContentLoaded', function () {
             const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22'];
             const confettiCount = 40;
