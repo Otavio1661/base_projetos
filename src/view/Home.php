@@ -8,7 +8,7 @@ echo alert::errorToast("Falha ao salvar!", "Erro!");
 
 // Modal centralizado
 echo alert::successModal("Seu cadastro foi concluído!", "Parabéns!");
-echo alert::errorModal("Não foi possível processar.", "Ops!", 'tentar de novo', ['testeAlert()', true], ['5000', true]);
+echo alert::errorModal("Não foi possível processar.", "Ops!", 'tentar de novo', ['testeAlert()', false], ['5000', true]);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -125,6 +125,23 @@ echo alert::errorModal("Não foi possível processar.", "Ops!", 'tentar de novo'
                 setTimeout(() => confetti.remove(), 3000);
             }
         });
+
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/login');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+                const data = await response.json();
+                await fetch('/AlertSucesso');
+
+                console.log(data);
+            } catch (error) {
+                console.error('There has been a problem with your fetch operation:', error);
+            }
+        }
+
     </script>
 
 </body>
