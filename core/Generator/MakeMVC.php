@@ -61,20 +61,45 @@ class {$controllerClass} extends ctrl
 PHP;
 
 // Conteúdo do arquivo do model
-$modelContent = <<<PHP
+$modelContent =  <<<PHP
 <?php
-
 namespace src\model;
 
+use core\Database;
+use Exception;
+use PDO;
+use core\Controller as ctrl;
+
 class {$modelClass} {
-    // Model logic goes here
+
+    public function Logout() {
+        try {
+
+            \$info = Database::switchParams('parametros', 'nomeSql', true, '', 0, true);
+
+            ctrl::retorno(['message' => ''], 200);
+        } catch (Exception \$e) {
+            ctrl::retorno(['error' => \$e->getMessage()], 400);
+        }
+    }
 }
 PHP;
 
 // Conteúdo do arquivo da view
 $viewContent = <<<HTML
-<!-- View for {$name} goes here -->
-<h1>{$name} View</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1>{$name} View</h1>
+</body>
+</html>
+
+
 HTML;
 
 // Cria os arquivos com a estrutura padrão
