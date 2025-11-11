@@ -1,112 +1,171 @@
+
 <?php
 
-// Verifica se o nome do MVC foi passado como argumento
+// Uso: php core/Generator/MakeMVC.php NomeMvc [get|post|put|delete] [/rota]
 if ($argc < 2) {
     echo "Erro: Nome do MVC não foi fornecido.\n";
+    echo "Uso: php core/Generator/MakeMVC.php Produto get /produto\n";
     exit(1);
 }
 
-// Pega o nome do MVC do terminal
 $name = $argv[1];
+$httpMethod = isset($argv[2]) ? strtolower($argv[2]) : 'get';
+$httpMethod = in_array($httpMethod, ['get','post','put','delete'], true) ? $httpMethod : 'get';
+$routePath = isset($argv[3]) ? $argv[3] : '/' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $name));
 
-// Nome dos arquivos de destino
-$controllerFile = "src/controllers/{$name}Controller.php";
-$modelFile = "src/model/{$name}Model.php";
-$viewFile = "src/view/{$name}.php";
-
-// Nome das classes
+// Nomes de classes/método
 $controllerClass = ucfirst($name) . "Controller";
-$modelClass = ucfirst($name) . "Model";
+$modelClass      = ucfirst($name) . "Model";
+$actionMethod    = preg_replace('/[^A-Za-z0-9_]/', '', $name); // método válido em PHP
 
-// Cria o diretório de controllers se não existir
-if (!file_exists("src/controllers")) {
-    mkdir("src/controllers", 0777, true);
-}
+// Arquivos de destino
+$controllerFile = "src/controllers/{$name}Controller.php";
+$modelFile      = "src/model/{$name}Model.php";
+$viewFile       = "src/view/{$name}.php";
 
-// Cria o diretório de models se não existir
-if (!file_exists("src/model")) {
-    mkdir("src/model", 0777, true);
-}
+// Garante diretórios
+@mkdir("src/controllers", 0777, true);
+@mkdir("src/model", 0777, true);
+@mkdir("src/view", 0777, true);
 
-// Cria o diretório de view se não existir
-if (!file_exists("src/view")) {
-    mkdir("src/view", 0777, true);
-}
-
-// Verifica se os arquivos já existem
-if (file_exists($controllerFile) || file_exists($modelFile) || file_exists($viewFile)) {
-    echo "Um ou mais arquivos já existem. Nenhuma ação foi realizada.\n";
-    exit(0);
-}
-
-// Conteúdo do arquivo do controller
+// Templates
 $controllerContent = <<<PHP
 <?php
 
-namespace src\controllers;
+namespace src\\controllers;
 
-use core\Controller as ctrl;
-use src\model\\{$modelClass};
+use core\\Controller as ctrl;
+use src\\model\\{$modelClass};
 
 class {$controllerClass} extends ctrl
 {
-    private \$Model;
+    private \${$modelClass};
 
     public function __construct()
     {
-        \$this->Model = new {$modelClass}();
+        \$this->{$modelClass} = new {$modelClass}();
     }
 
+    public function {$actionMethod}() {
+        ctrl::render('{$name}', [
+            'titulo' => '{$name}',
+        ]);
+    }
 }
+
 PHP;
 
-// Conteúdo do arquivo do model
-$modelContent =  <<<PHP
+$modelContent = <<<PHP
 <?php
-namespace src\model;
+namespace src\\model;
 
-use core\Database;
+use core\\Database;
 use Exception;
 use PDO;
-use core\Controller as ctrl;
+use core\\Controller as ctrl;
 
 class {$modelClass} {
 
-    public function Logout() {
+    public function example() {
         try {
+            // Exemplo de chamada ao Database::switchParams
+            // \$info = Database::switchParams(\$params, 'seu_sql', true);
 
-            \$info = Database::switchParams('parametros', 'nomeSql', true, '', 0, true);
-
-            ctrl::retorno(['message' => ''], 200);
+            ctrl::retorno(['message' => 'OK'], 200);
         } catch (Exception \$e) {
             ctrl::retorno(['error' => \$e->getMessage()], 400);
         }
     }
 }
+
 PHP;
 
-// Conteúdo do arquivo da view
 $viewContent = <<<HTML
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>{$name}</title>
 </head>
 <body>
     <h1>{$name} View</h1>
+    <p>Edite esta view em src/view/{$name}.php</p>
 </body>
 </html>
 
-
 HTML;
 
-// Cria os arquivos com a estrutura padrão
-file_put_contents($controllerFile, $controllerContent);
-file_put_contents($modelFile, $modelContent);
-file_put_contents($viewFile, $viewContent);
+// Criação dos arquivos (sem abortar se algum já existir)
+if (!file_exists($controllerFile)) {
+    file_put_contents($controllerFile, $controllerContent);
+    echo "Criado: {$controllerFile}\n";
+} else {
+    echo "Já existe: {$controllerFile}\n";
+}
 
-echo "Arquivos '{$controllerFile}', '{$modelFile}' e '{$viewFile}' criados com sucesso!\n";
+if (!file_exists($modelFile)) {
+    file_put_contents($modelFile, $modelContent);
+    echo "Criado: {$modelFile}\n";
+} else {
+    echo "Já existe: {$modelFile}\n";
+}
+
+if (!file_exists($viewFile)) {
+    file_put_contents($viewFile, $viewContent);
+    echo "Criado: {$viewFile}\n";
+} else {
+    echo "Já existe: {$viewFile}\n";
+}
+
+// ==== Adiciona rota no src/routes.php, se não existir ====
+function addRouteIfMissing($routesFile, $method, $path, $controllerAction) {
+    if (!file_exists($routesFile)) {
+        echo "Aviso: '{$routesFile}' não encontrado. Pulei a adição da rota.\n";
+        return;
+    }
+
+    $content = file_get_contents($routesFile);
+    $routeLine = "\$router->{$method}('{$path}', '{$controllerAction}');";
+
+    if (strpos($content, $routeLine) !== false) {
+        echo "Rota já existe em '{$routesFile}': {$routeLine}\n";
+        return;
+    }
+
+    // Marcadores opcionais
+    $startMarker = '>>> AUTO-ROUTES (inseridas pelo gerador) >>>';
+    $endMarker   = '<<< AUTO-ROUTES END <<<';
+
+    if (strpos($content, $startMarker) !== false && strpos($content, $endMarker) !== false) {
+        $content = preg_replace(
+            '/(>>> AUTO-ROUTES \(inseridas pelo gerador\) >>>)(.*?)(<<< AUTO-ROUTES END <<<)/s',
+            "\$1\n    {$routeLine}\n\$2\$3",
+            $content,
+            1
+        );
+        file_put_contents($routesFile, $content);
+        echo "Rota adicionada entre marcadores: {$routeLine}\n";
+        return;
+    }
+
+    // Inserir antes de "return $router;"
+    $pattern = '/(\s*)return\s+\$router\s*;\s*$/m';
+    if (preg_match($pattern, $content, $m)) {
+        $indent = $m[1] ?? "";
+        $insertion = "\n{$indent}{$routeLine}\n\n{$indent}return \$router;";
+        $content = preg_replace($pattern, $insertion, $content, 1);
+        file_put_contents($routesFile, $content);
+        echo "Rota adicionada: {$routeLine}\n";
+    } else {
+        // Fallback
+        $content .= "\n\n{$routeLine}\nreturn \$router;\n";
+        file_put_contents($routesFile, $content);
+        echo "Rota adicionada no final do arquivo: {$routeLine}\n";
+    }
+}
+
+$controllerAction = "{$controllerClass}@{$actionMethod}";
+addRouteIfMissing("src/routes.php", $httpMethod, $routePath, $controllerAction);
 
 exit(0);

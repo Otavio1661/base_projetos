@@ -24,6 +24,7 @@
         "controller": "php core/Generator/MakeController.php",
         "model": "php core/Generator/MakeModel.php",
         "middleware": "php core/Generator/MakeMiddleware.php",
-        "mvc": "php core/Generator/MakeMVC.php"
+        "mvc": "php core/Generator/MakeMVC.php",
+        "excluir mvc": "php core/Generator/DeleteMVC.php"
     }
 }
