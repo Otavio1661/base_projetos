@@ -64,8 +64,14 @@ $router->group('/especiais', 'Especiais@handle' , function($router) {
     $router->get('/alert', 'Controller@alertErrorMini');
 });
 
-$router->get('/', 'HomeController@index');
+$router->get('/', 'IndexController@index1');
 
 $router->get('/home', 'HomeController@home');
+
+$router->get('/index', 'IndexController@index');
+
+$router->post('/login', 'IndexController@login');
+
+
 
 return $router;
