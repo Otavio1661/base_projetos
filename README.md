@@ -1,130 +1,92 @@
-# Meu Framework
+# Meu Framework — Documentação 
 
-O **Meu Framework** é um framework PHP moderno, desenvolvido para acelerar a criação de aplicações web robustas, seguras e escaláveis. Ele oferece uma arquitetura limpa, modular e flexível, facilitando tanto projetos simples quanto sistemas profissionais.
+Uma estrutura PHP minimalista e modular para acelerar o desenvolvimento de aplicações web. O projeto oferece um roteador simples, controllers, modelos, views, utilities (criptografia, database) e scripts CLI para gerar/remover scaffolding.
 
----
+Visão geral e objetivos:
+- Arquitetura MVC leve e organizada.
+- Rotas com suporte a middleware e grupos.
+- Integração com PDO (singleton), SQL externo e ferramentas CLI para produtividade.
 
-## Estrutura Modular
+--------------------------------------------------------------------------------
 
-- **MVC:** Separação clara entre Model, View e Controller.
-- **Rotas:** Sistema de roteamento flexível e intuitivo.
-- **Configuração `.env`:** Variáveis de ambiente centralizadas.
-- **SQL Externo:** Consultas SQL organizadas em arquivos.
+## Conteúdo desta documentação
 
-### Diferenciais
+- Pré-requisitos
+- Instalação
+- Inicialização (Docker, XAMPP, PHP built-in server)
+- Scripts Composer e gerador (core/Generator)
+- Estrutura do projeto
+- Guia rápido: rotas, controllers, models e views
+- Segurança e boas práticas
+- Próximos passos
 
-- **Injeção de Dependências:** Controllers e Models desacoplados.
-- **Banco de Dados:** PDO singleton, transações e SQL parametrizado.
-- **APIs JSON:** Pronto para integração com front-end moderno.
-- **Login Exemplo:** Sistema assíncrono, seguro e personalizável.
+--------------------------------------------------------------------------------
 
----
+## Pré-requisitos
 
-## Estrutura de Pastas
+- PHP 8.0+ com as extensões `pdo` e `pdo_mysql` (ou `pdo_pgsql` conforme DB).
+- Composer (para instalar dependências e usar scripts).
+- Opcional: Docker/Docker Compose para ambiente isolado.
 
-```text
-/core   <── Núcleo do framework (Router, Controller, Database)
-├── Controller.php
-├── DataBase.php
-├── Router.php
-├── RouterBase.php
-/public
-├── css
-├── img
-├── js
-/src
-├── controllers/
-│   └── RenderController.php
-├── model/
-├── sql/
-├── view/
-│   ├── home.php
-│   └── partials/ <─ Arquivos de cabeçalho, rodapé...
-├── config.php
-├── Env.php
-├── routes.php 
-.env
-```
-
----
+--------------------------------------------------------------------------------
 
 ## Instalação
 
-> **Lembre-se de alterar o arquivo `.env` dentro do framework!**
+1. Clone o repositório:
 
----
-
-## Executando o Framework com Docker
-
-**Passo 1 - Clonar o Repositório**
 ```bash
 git clone https://github.com/Otavio1661/base_projetos.git
+cd base_projetos
 ```
 
-**Passo 2 - Instalar Dependências**
+2. Copie/ajuste o arquivo `.env` com suas credenciais (ex: `Exemplo.env`):
+
+```text
+APP_ENV=local
+APP_DEBUG=true
+BASE_CRIPTOGRAFIA=...
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=nome_do_banco
+DB_USERNAME=usuario
+DB_PASSWORD=senha
+```
+
+3. Instale dependências PHP via Composer:
+
 ```bash
 composer install
 ```
 
-**Passo 3 - Iniciar o Ambiente com Docker**
+--------------------------------------------------------------------------------
+
+## Inicialização — modos disponíveis
+
+1) Docker (recomendado para produção/desenvolvimento consistente)
+
 ```bash
 docker-compose up -d --build
 ```
 
----
+2) XAMPP / Apache
 
-## Executando o Framework no XAMPP
+- Copie o projeto para `htdocs` e configure o VirtualHost apontando para a pasta `public/`.
 
-**Passo 1 - Clonar o Repositório**
+3) PHP built-in server (modo rápido para desenvolvimento)
+
 ```bash
-git clone https://github.com/Otavio1661/base_projetos.git
-```
-(Coloque dentro da pasta `htdocs` do XAMPP)
-
-**Passo 1.2 - Instalar Dependências**
-```bash
-composer install
+# na raiz do projeto
+php -S localhost:8000 -t public
 ```
 
-**Passo 2 - Habilitar o módulo vhost_alias**
-Abra o arquivo `httpd.conf` e verifique se a linha abaixo está descomentada:
+Observações:
+- O PHP built-in server é recomendado apenas para desenvolvimento. Ele serve o conteúdo da pasta `public/` diretamente.
 
-Comentada (incorreto):
-```apacheconf
-#LoadModule vhost_alias_module modules/mod_vhost_alias.so
-```
-Correta (descomentada):
-```apacheconf
-LoadModule vhost_alias_module modules/mod_vhost_alias.so
-```
+--------------------------------------------------------------------------------
 
-**Passo 3 - Configurar VirtualHost**
-No arquivo `httpd-vhosts.conf`, adicione a configuração abaixo. Substitua **NOME_DA_PASTA** pelo nome da pasta do projeto (padrão: `base_projetos`):
+## Scripts Composer (atalhos úteis)
 
-```apacheconf
-<VirtualHost *:80>
-    DocumentRoot "C:/xampp/htdocs/NOME_DA_PASTA/public"
-    ServerName meu-framework.localhost
-    <Directory "C:/xampp/htdocs/NOME_DA_PASTA/public">
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
----
-
-# Documentação Completa
-
-## Visão Geral
-
-O **Meu Framework** é um framework PHP moderno, modular e flexível, criado para acelerar o desenvolvimento de aplicações web robustas, seguras e escaláveis. Ele segue o padrão MVC, utiliza rotas amigáveis, suporta injeção de dependências, integra facilmente com bancos de dados via PDO e permite a separação de SQL em arquivos externos. Ideal para projetos de qualquer porte.
-
----
-
-## Scripts Automatizados via Composer
-
-O framework traz scripts prontos que podem ser executados pelo **Composer**, facilitando a criação de componentes do sistema:
+O `composer.json` já expõe scripts para tarefas comuns. Exemplos:
 
 ```json
 "scripts": {
@@ -133,191 +95,167 @@ O framework traz scripts prontos que podem ser executados pelo **Composer**, fac
     "controller": "php core/Generator/MakeController.php",
     "model": "php core/Generator/MakeModel.php",
     "middleware": "php core/Generator/MakeMiddleware.php",
-    "mvc": "php core/Generator/MakeMVC.php"
+    "mvc": "php core/Generator/MakeMVC.php",
+    "excluir mvc": "php core/Generator/DeleteMVC.php"
 }
 ```
 
-**Como usar:**  
-Basta executar pelo terminal, por exemplo:
+Exemplos de execução:
+
 ```bash
 composer controller NomeDoController
 composer model NomeDoModel
 composer middleware NomeDoMiddleware
 composer mvc NomeDaFuncionalidade
+composer run-script "excluir mvc" Nome
 ```
-> O nome do arquivo será gerado automaticamente com o prefixo necessário.  
-> O comando `mvc` cria **Model**, **View** e **Controller** juntos, bastando informar o nome (o prefixo é adicionado automaticamente).
 
----
+Para scripts com espaços (ex: `excluir mvc`) use `composer run-script` e envolva o nome em aspas.
 
-## Renderização de Views
+--------------------------------------------------------------------------------
 
-Os controllers podem renderizar views facilmente usando o método `render`.  
-Exemplo de uso:
+## Estrutura do projeto (resumida)
+
+```text
+./
+├─ core/               # Núcleo: Router, Controller base, Database, Generator
+├─ public/             # Document root (index.php, assets, erros)
+├─ src/                # Código da aplicação (controllers, models, views, utils)
+├─ vendor/             # Dependências (não versionar)
+├─ composer.json
+└─ .env (local)
+```
+
+Principais arquivos/folders:
+- `core/Controller.php` — classe base para controllers (render, json, getPost).
+- `core/RouterBase.php` — lógica de roteamento, dispatch e middleware.
+- `core/DataBase.php` — singleton PDO, `switchParams()` e `RunMigration()`.
+- `core/Generator/` — scripts CLI para gerar/remover MVC.
+- `src/utils/Decryption.php` e `public/js/r4.js` — criptografia AES-GCM (frontend/backend).
+
+--------------------------------------------------------------------------------
+
+## Guia rápido: rotas, controllers, models, views
+
+- Defina rotas em `src/routes.php` usando o roteador:
 
 ```php
-public function home() {
-    ctrl::render('Home', [
-        'titulo' => 'Home',
-    ]);
-}
-```
-- O primeiro parâmetro é o nome da view (exemplo: `Home` corresponde a `/src/view/Home.php`).
-- O segundo parâmetro é um array de dados que será disponibilizado na view.
-
----
-
-## Sistema de Rotas
-
-O sistema de rotas é flexível, suportando **middlewares** de forma opcional. O middleware, se informado, será executado antes do controller.
-
-**Como registrar rotas:**
-- Sintaxe: método (get/post), rota, controller@metodo, [middleware@metodo opcional]
-- Exemplos:
-
-```php
-// Rota simples (sem middleware)
-$router->get('/exemplo', 'ExampleController@exampleMethod');
-
-// Rota com middleware
-$router->get('/exemplo', 'ExampleController@exampleMethod', 'ExampleMiddleware@handle');
-
-// Grupo de rotas protegidas por middleware
-$router->group('/exemplo1', 'ExampleMiddleware@handle', function($router) {
-    $router->get('/exemplo2', 'ExampleController@dashboard');
-});
-
-// Rotas padrão
-$router->get('/', 'HomeController@index');
 $router->get('/home', 'HomeController@home');
+$router->post('/login', 'IndexController@login');
+
+// Grupo de rotas com middleware
+$router->group('/admin', 'AuthMiddleware@check', function($router) {
+        $router->get('/dashboard', 'AdminController@dashboard');
+});
 ```
 
----
-
-## Capturando Dados de POST
-
-Para capturar dados enviados via POST para o controller, utilize:
-
-```php
-$data = ctrl::getPost();
-```
-> Os dados já vêm convertidos em JSON automaticamente.
-
----
-
-## Configuração Inicial
-
-1. **Clone o repositório:**
-   ```bash
-   git clone https://github.com/Otavio1661/base_projetos.git
-   ```
-
-2. **Configure o arquivo `.env`:**
-   ```env
-   DB_HOST=localhost
-   DB_PORT=3306
-   DB_DATABASE=nome_do_banco
-   DB_USERNAME=usuario
-   DB_PASSWORD=senha
-   ```
-
-3. **Instale as dependências (se houver):**
-   ```bash
-   composer install
-   ```
-
-4. **Acesse via navegador:**
-   - Se estiver usando XAMPP, configure o VirtualHost conforme [instruções acima](#executando-o-framework-no-xampp).
-
----
-
-## Conceitos e Recursos
-
-- **MVC (Model-View-Controller):** Separação de responsabilidades entre lógica, dados e apresentação.
-- **Sistema de Rotas:** Definido em `/src/routes.php` com suporte a GET e POST.
-- **Banco de Dados (PDO Singleton):** Conexão única, SQL externo em `/src/sql/`.
-- **Variáveis de Ambiente:** Carregadas automaticamente do `.env`.
-- **Injeção de Dependências:** Controllers podem instanciar Models facilmente.
-- **APIs JSON:** Controllers podem retornar JSON facilmente.
-- **Exemplo de Login:** Login assíncrono via fetch/AJAX.
-
----
-
-### Como Criar uma Nova Rota
-
-```php
-$router->get('/minharota', 'MeuController@minhaAcao');
-$router->post('/enviar', 'OutroController@enviarDados');
-```
-
-### Como Criar um Novo Controller
+- Controllers estendem `core\Controller` e usam `render()` ou `json()`:
 
 ```php
 namespace src\controllers;
 use core\Controller as ctrl;
 
-class MeuController extends ctrl {
-    public function minhaAcao() {
-        $this->render('minhaview', ['title' => 'Minha Página']);
+class HomeController extends ctrl {
+    public function home() {
+        ctrl::render('index', ['titulo' => 'Home']);
     }
 }
 ```
-Crie a view correspondente em `/src/view/minhaview.php`.
 
----
+- Models tipicamente usam `core\Database::switchParams()` para executar SQL externo em `src/sql/`.
 
-### Como Usar SQL Externo
+--------------------------------------------------------------------------------
 
-```php
-$result = Database::switchParams(['param' => $valor], 'BuscarUsuarios', true);
+## Criptografia (frontend ↔ backend)
+
+- O frontend contém `public/js/r4.js` que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
+- O backend usa `src/utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
+- A chave base está definida em `BASE_CRIPTOGRAFIA` no `.env` e é injetada nas views pelo `public/index.php`.
+
+--------------------------------------------------------------------------------
+
+## Boas práticas e segurança
+
+- Nunca versionar `.env` com credenciais reais.
+- Em produção, defina `APP_DEBUG=false` no `.env` para suprimir mensagens detalhadas.
+- Evite passar dados sensíveis via `render()` sem validação — `render()` usa `extract()`.
+- Faça backup de `src/routes.php` antes de rodar os scripts de geração/remoção.
+
+--------------------------------------------------------------------------------
+
+## Desenvolvimento e testes rápidos
+
+- Rodar localmente (PHP built-in):
+
+```bash
+php -S localhost:8000 -t public
 ```
 
----
+- Rodar o bridge de WhatsApp (opcional):
 
-### Como Retornar JSON
-
-```php
-$this->json(['mensagem' => 'Sucesso!']);
-// ou
-ctrl::retorno(['mensagem' => 'Sucesso!'], 200);
+```bash
+npm install
+node whatsapp-bridge.js
 ```
 
----
+--------------------------------------------------------------------------------
 
-## Boas Práticas
+## Integração com WhatsApp (whatsapp-bridge)
 
-- Nunca versionar `.env` com dados sensíveis.
-- Separe lógica de negócio (Model) da lógica de apresentação (View).
-- Use SQL externo para facilitar manutenção:
-    ```php
-    $db = Database::getInstance();
-    $db->beginTransaction();
-    $db->commit();
-    $db->rollBack();
-    ```
-- Utilize rotas amigáveis e controllers organizados.
+Este repositório inclui um pequeno *bridge* HTTP para `whatsapp-web.js` em `whatsapp-bridge.js`. Ele expõe endpoints simples que permitem enviar mensagens via uma sessão do WhatsApp Web controlada pelo Puppeteer.
 
----
+Pré-requisitos:
+- Node.js 14+ e `npm`/`yarn`.
 
-## Dúvidas Frequentes
+Instalação e execução:
 
-- **Como adicionar uma nova página?**  
-  Crie o controller e a view, depois adicione a rota em `routes.php`.
+```bash
+# instalar dependências (na raiz do projeto)
+npm install
 
-- **Como conectar a outro banco?**  
-  Altere as variáveis no `.env`.
+# iniciar o bridge (por padrão porta 3000)
+node whatsapp-bridge.js
+```
 
-- **Como proteger rotas?**  
-  Implemente lógica de autenticação no controller usando middlewares.
+Variáveis de ambiente úteis:
+- `WHATSAPP_BRIDGE_PORT` — porta do servidor HTTP (padrão `3000`).
+- `WHATSAPP_DEFAULT_CC` — código de país padrão (ex: `55`) que será prefixado automaticamente ao número informado se a tentativa direta falhar.
 
----
+Como funciona (endpoints principais):
+- `GET /qr` — retorna a imagem PNG do QR atual para autenticação (404 se já autenticado).
+- `GET /status` — retorna JSON com `{ ready: true|false }` indicando se o cliente está pronto.
+- `POST /send` — envia mensagem. Body JSON esperado: `{ "number": "5511999999999", "message": "Olá" }`.
 
-## Contribua!
+Notas importantes sobre envio (`/send`):
+- O `number` deve conter apenas dígitos; o bridge tentará resolver o ID do WhatsApp automaticamente.
+- Se o número não estiver registrado no WhatsApp, o endpoint retorna `404` com uma lista `tried` dos formatos tentados.
+- O bridge usa persistência de sessão em disco (`whatsapp-session/`) para evitar reescaneamento frequente do QR.
 
-> Este framework foi criado para ser simples, mas poderoso. Explore o código, adapte para seu projeto e contribua!
+Exemplo de uso com `curl`:
 
----
+```bash
+curl -X POST http://localhost:3000/send \
+    -H "Content-Type: application/json" \
+    -d '{"number":"5511999999999","message":"Olá do bridge"}'
+```
 
-**Meu Framework** — Simples, moderno e pronto para produção!
+Exemplo simples em fetch (JS):
 
----
+```javascript
+fetch('http://localhost:3000/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number: '5511999999999', message: 'Olá via bridge' })
+}).then(r => r.json()).then(console.log);
+```
+
+Recomendações de segurança e produção:
+- Proteja o bridge com autenticação (token/header ou proxy reverso) — ele não implementa auth por padrão.
+- Não exponha a porta publicamente sem um gateway seguro (firewall, VPN ou API gateway).
+- Em produção, execute o bridge via `pm2`/systemd ou dentro de um container Docker e monitore o processo.
+- Faça backup da pasta de sessão (`whatsapp-session/`) caso precise mover o serviço.
+
+Limitações e observações:
+- O bridge depende do `whatsapp-web.js` e do Puppeteer; alterações na API do WhatsApp Web podem afetá-lo.
+- O uso comercial ou em massa pode violar os termos do WhatsApp; avalie legal e operacionalmente antes de automatizar envios em grande escala.
+
