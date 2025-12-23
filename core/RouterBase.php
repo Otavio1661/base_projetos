@@ -1,4 +1,30 @@
 <?php
+/**
+ * ============================================
+ * RouterBase.php
+ * ============================================
+ *
+ * @author Otavio
+ * @github https://github.com/Otavio1661
+ * @version 1.0.0
+ * @created 2025-12-23
+ *
+ * Implementa um roteador simples para registrar rotas
+ * e despachar requisições para controllers e middlewares
+ * definidos em `src/controllers` e `src/middleware`.
+ *
+ * Recursos principais:
+ * - Registro com métodos HTTP (`get`, `post`, `put`, `delete`).
+ * - Grupos de rotas com prefixo e middleware aplicado ao grupo.
+ * - Suporte a arquivos SQL (via `core/Database::switchParams`) e
+ *   visualização de erros em `Config::APP_DEBUG`.
+ *
+ * Observação:
+ * - O roteador usa correspondência exata de caminho (`/minha/rota`).
+ * - Para rotas com parâmetros dinâmicos é necessário adaptação.
+ *
+ * ============================================
+ */
 
 namespace core;
 
@@ -6,10 +32,25 @@ use src\Config;
 
 class RouterBase
 {
+    /**
+     * Lista interna de rotas registradas.
+     * Cada rota é um array com chaves: method, route, controllerAction, middleware
+     * @var array
+     */
     private $routes = [];
+
 
     public function group($prefix, $middleware, $callback)
     {
+        /**
+         * Registra um grupo de rotas com um prefixo comum e middleware.
+         *
+         * - `$prefix`: string adicionada no início de cada rota do grupo.
+         * - `$middleware`: controller@method a ser executado antes das rotas do grupo.
+         * - `$callback`: função que recebe um sub-roteador para registrar rotas locais.
+         *
+         * O middleware do grupo é aplicado a todas as rotas registradas pelo callback.
+         */
         $subRouter = new self();
         $callback($subRouter);
         foreach ($subRouter->routes as $route) {
@@ -24,26 +65,37 @@ class RouterBase
 
     public function get($route, $controllerAction, $middleware = null)
     {
+        // Registra rota GET simples: `$route` e `Controller@method`.
         $this->addRoute('GET', $route, $controllerAction, $middleware);
     }
 
     public function post($route, $controllerAction, $middleware = null)
     {
+        // Registra rota POST simples: `$route` e `Controller@method`.
         $this->addRoute('POST', $route, $controllerAction, $middleware);
     }
 
     public function put($route, $controllerAction, $middleware = null)
     {
+        // Registra rota PUT simples: `$route` e `Controller@method`.
         $this->addRoute('PUT', $route, $controllerAction, $middleware);
     }
 
     public function delete($route, $controllerAction, $middleware = null)
     {
+        // Registra rota DELETE simples: `$route` e `Controller@method`.
         $this->addRoute('DELETE', $route, $controllerAction, $middleware);
     }
 
     private function addRoute($method, $route, $controllerAction, $middleware = null)
     {
+        /**
+         * Adiciona uma rota à lista interna.
+         * - `$method`: verbo HTTP (GET, POST, ...)
+         * - `$route`: caminho exato (ex: '/users')
+         * - `$controllerAction`: 'Controller@method'
+         * - `$middleware`: opcional 'MiddlewareController@method'
+         */
         $this->routes[] = [
             'method' => $method,
             'route' => $route,
@@ -62,6 +114,13 @@ class RouterBase
         // Remove a barra no final, se houver
         $uri = '/' . trim($uri, '/');
 
+        /**
+         * Busca uma rota que corresponda exatamente à URI.
+         * - Se encontrada e o método HTTP coincidir: executa middleware (se houver)
+         *   e despacha para o controller.
+         * - Se encontrada mas com método diferente: retorna 405 (Method Not Allowed).
+         * - Se não encontrada: retorna 404.
+         */
         $rotaEncontrada = false;
 
         // Compara cada rota registrada
@@ -95,6 +154,16 @@ class RouterBase
 
     private function dispatch($controllerAction)
     {
+        /**
+         * Despacha a requisição para o controller indicado.
+         * - `$controllerAction`: string no formato 'Controller@method'.
+         *
+         * Fluxo:
+         * 1. Resolve a classe em `src\controllers\Controller`.
+         * 2. Verifica existência da classe e do método; em `APP_DEBUG`
+         *    exibe erros detalhados e lança exceções para facilitar depuração.
+         * 3. Caso contrário retorna 404 quando não encontrado.
+         */
         list($controller, $method) = explode('@', $controllerAction);
 
         $controllerClass = "src\\controllers\\{$controller}";
@@ -141,6 +210,18 @@ class RouterBase
         return call_user_func([$instance, $method]);
     }
 
+    /**
+     * Despacha e executa um middleware.
+     *
+     * Espera `$middleware` no formato 'MiddlewareController@method'.
+     * O método verifica existência da classe em `src\middleware` e do método
+     * solicitado. Em `Config::APP_DEBUG` exibe mensagens detalhadas e lança
+     * exceções para facilitar a depuração; em ambiente não-debug retorna
+     * uma página 404.
+     *
+     * @param string $middleware
+     * @return mixed
+     */
     private function dispatchMiddleware($middleware)
     {
         list($controller, $method) = explode('@', $middleware);

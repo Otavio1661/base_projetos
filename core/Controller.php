@@ -1,4 +1,29 @@
 <?php
+/**
+ * ============================================
+ * Controller.php
+ * ============================================
+ *
+ * @author Otavio
+ * @github https://github.com/Otavio1661
+ * @version 1.0.0
+ * @created 2025-12-23
+ *
+ * Classe base para controllers. Fornece utilitários comuns:
+ * - `render($view, $data)`: renderiza views com layout padrão e partials;
+ * - `json($data, $statusCode)`: responde JSON com código HTTP;
+ * - `getPost()`: lê dados POST criptografados pelo frontend
+ *    (integração com `src\utils\Decryption`);
+ * - `retorno(...)`: padrão simples para retorno JSON com status.
+ *
+ * Observações de segurança e uso:
+ * - `render` faz `extract($data)` para tornar variáveis disponíveis na view;
+ *   evite expor dados sensíveis via variáveis extraídas.
+ * - `getPost` espera payloads compatíveis com o esquema de criptografia do
+ *   frontend (chaves 'x','y','z') ou JSON em claro.
+ *
+ * ============================================
+ */
 
 namespace core;
 
@@ -6,6 +31,25 @@ use src\utils\Decryption;
 
 class Controller
 {
+    /**
+     * Renderiza uma view PHP e a inclui em um layout padrão quando disponível.
+     *
+     * - `$view`: nome do arquivo de view em `src/view` (sem extensão `.php`).
+     * - `$data`: array associativo cujas chaves serão extraídas como variáveis
+     *   dentro da view (uso via `extract`).
+     *
+     * Fluxo:
+     * 1. Resolve o caminho da view e verifica existência; em caso de falha lança
+     *    uma exceção com mensagem amigável (útil em desenvolvimento).
+     * 2. Faz buffer de saída (`ob_start`) para capturar o conteúdo da view.
+     * 3. Se existir `src/view/layout.php` inclui o layout, caso contrário ecoa
+     *    diretamente o conteúdo renderizado.
+     *
+     * @param string $view
+     * @param array $data
+     * @return void
+     * @throws \Exception Quando a view não é encontrada
+     */
     protected function render($view, $data = [])
     {
 
@@ -46,6 +90,13 @@ class Controller
         }
     }
 
+    /**
+     * Envia uma resposta JSON com o código HTTP informado e encerra a execução.
+     *
+     * @param mixed $data Dados a serem serializados em JSON
+     * @param int $statusCode Código HTTP (padrão 200)
+     * @return void
+     */
     protected function json($data, $statusCode = 200)
     {
         http_response_code($statusCode);
@@ -54,6 +105,15 @@ class Controller
         exit;
     }
 
+    /**
+     * Lê os dados do POST e, se necessário, realiza a descriptografia.
+     *
+     * Retorna `null` quando o payload é inválido ou vazio.
+     * Integra com `src\utils\Decryption::getDecryptedPost()` para suportar
+     * payloads criptografados pelo frontend.
+     *
+     * @return array|null
+     */
     public static function getPost(): ?array
     {
         header('Content-Type: application/json; charset=utf-8');
@@ -64,6 +124,21 @@ class Controller
         return $data;
     }
 
+    /**
+     * Padrão simples para retorno JSON.
+     *
+     * - `$item`: conteúdo do retorno (pode ser string, array, objeto).
+     * - `$status`: código HTTP a ser enviado.
+     * - `$pure`: quando `true` imprime `$item` puro sem envelope JSON.
+     *
+     * Exemplo padrão quando `$pure` é `false`:
+     * { "status": 200, "retorno": ... }
+     *
+     * @param mixed $item
+     * @param int $status
+     * @param bool $pure
+     * @return void
+     */
     public static function retorno($item, $status, $pure = false)
     {
         header('Content-Type: application/json; charset=utf-8');

@@ -1,4 +1,26 @@
 <?php
+/**
+ * ============================================
+ * Database.php
+ * ============================================
+ *
+ * @author Otavio
+ * @github https://github.com/Otavio1661
+ * @version 1.0.0
+ * @created 2025-12-23
+ *
+ * Classe utilitária para conexão com o banco de dados
+ * e execução de consultas usando PDO. Implementa um
+ * singleton para fornecer uma única instância de PDO
+ * com configurações seguras e convenientes para o app.
+ *
+ * Observações:
+ * - As credenciais são lidas de `src\Config`.
+ * - Em caso de erro de conexão, a classe exibe uma
+ *   mensagem amigável e lança uma exceção.
+ *
+ * ============================================
+ */
 namespace core;
 
 use COM;
@@ -15,7 +37,18 @@ class Database
     public function __wakeup() { }
 
     /**
-     * Retorna a instância única do PDO
+     * Retorna a instância única (singleton) de PDO.
+     *
+     * - Cria a conexão quando chamada pela primeira vez.
+     * - Configura `ATTR_ERRMODE` para `ERRMODE_EXCEPTION`,
+     *   `ATTR_DEFAULT_FETCH_MODE` para `FETCH_ASSOC` e
+     *   `ATTR_EMULATE_PREPARES` para `false` para segurança.
+     * - Em caso de erro exibe uma mensagem amigável no browser
+     *   (útil em ambiente de desenvolvimento) e lança uma
+     *   exceção para interromper a execução segura.
+     *
+     * @return \PDO Instância pronta para uso
+     * @throws \Exception Em caso de falha na conexão
      */
     public static function getInstance()
     {
@@ -56,7 +89,40 @@ class Database
     }
 
     /**
-     * Executa SQL com parâmetros e modo transação manual ou automático
+     * Executa uma consulta SQL a partir de arquivo .sql ou retorna o SQL bruto.
+     *
+     * Comportamento e parâmetros:
+     * - `$params`: array de parâmetros para bind. Suporta arrays indexados
+     *    (posicionais) e associativos (nomeados sem `:`).
+     * - `$sqlnome`: nome do arquivo SQL (sem extensão) localizado em
+     *    `src/sql/` quando `$sqlPrm` não é informado.
+     * - `$exec` (bool): se `true` prepara e executa a query; se `false`
+     *    apenas retorna o SQL lido do arquivo.
+     * - `$sqlPrm`: caminho completo alternativo para o arquivo SQL.
+     * - `$asObject`: se `1` retorna um único objeto via `fetchObject()`,
+     *    caso contrário retorna `fetchAll(PDO::FETCH_ASSOC)`.
+     * - `$transacao`: controla se a execução usa transação; a função
+     *    inicia `beginTransaction()` somente quando não já estiver
+     *    em transação.
+     *
+     * Retorno:
+     * - Array com chaves: 'retorno' (resultado ou SQL), 'error' (mensagem
+     *   de erro quando houver) e opcionalmente 'sql' (preview interpolado)
+     *   quando `Config::APP_DEBUG` está ativo.
+     *
+     * Recursos adicionais:
+     * - Remove aspas simples envolta de placeholders nomeados para permitir
+     *   que PDO detecte corretamente os binds.
+     * - Faz binding automático com inferência de tipo (int, bool, null, string).
+     * - Garante rollback em caso de exceção quando `$transacao` estiver ativo.
+     *
+     * @param mixed $params
+     * @param string $sqlnome
+     * @param bool $exec
+     * @param string $sqlPrm
+     * @param int $asObject
+     * @param bool $transacao
+     * @return array Resultado com chaves 'retorno' e 'error'
      */
     public static function switchParams(
         $params,
@@ -168,7 +234,23 @@ class Database
         return $res;
     }
     /**
-     * Executa migrações para criar tabelas se não existirem
+     * Executa migrações simples: cria tabelas passadas em `$tables` caso
+     * não existam.
+     *
+     * Formato esperado de `$tables`:
+     * [
+     *   'nome_tabela' => [ 'coluna1' => 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY',
+     *                      'coluna2' => 'VARCHAR(255) NOT NULL',
+     *                      ... ]
+     * ]
+     *
+     * Observações:
+     * - Usa `ENGINE=InnoDB` e `CHARSET=utf8` por padrão.
+     * - Método simples adequado para migrações iniciais; para migrações
+     *   complexas recomenda-se usar um sistema de migrations dedicado.
+     *
+     * @param array $tables Definição das tabelas e colunas
+     * @return void
     */
     public static function RunMigration($tables)
     {
