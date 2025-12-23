@@ -2,6 +2,8 @@
 
 namespace core;
 
+use src\utils\Decryption;
+
 class Controller
 {
     protected function render($view, $data = [])
@@ -55,8 +57,11 @@ class Controller
     public static function getPost(): ?array
     {
         header('Content-Type: application/json; charset=utf-8');
-        $body = file_get_contents('php://input');
-        return json_decode($body, true);
+        $data = Decryption::getDecryptedPost();
+         if (empty($data) || !is_array($data)) {
+            return null;
+        }
+        return $data;
     }
 
     public static function retorno($item, $status, $pure = false)

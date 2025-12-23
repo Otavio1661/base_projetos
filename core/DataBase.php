@@ -1,6 +1,7 @@
 <?php
 namespace core;
 
+use COM;
 use src\Config;
 use PDO;
 use PDOException;
@@ -79,23 +80,80 @@ class Database
             $pdo = self::getInstance();
 
             if ($exec) {
-                if ($transacao) $pdo->beginTransaction();
+                // Inicia transação somente se solicitado e se ainda não estivermos em uma
+                if ($transacao && !$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                    $startedTransaction = true;
+                } else {
+                    $startedTransaction = false;
+                }
+
+                // Preserve original SQL for debug/preview
+                $originalSql = $sql;
+
+                // Remove single quotes around named placeholders so PDO can detect them
+                // e.g. turn "':email'" into ":email"
+                $sql = preg_replace("/'(:[A-Za-z0-9_]+)'/", "$1", $sql);
 
                 $stmt = $pdo->prepare($sql);
 
                 if (is_array($params)) {
-                    foreach ($params as $nome => $valor) {
-                        $stmt->bindValue(':' . $nome, $valor);
+                    // Detect named placeholders present in the prepared SQL
+                    preg_match_all('/:([A-Za-z0-9_]+)/', $sql, $allMatches);
+                    $placeholders = !empty($allMatches[1]) ? array_unique($allMatches[1]) : [];
+
+                    // If params is a numeric-indexed array use positional execute
+                    $isList = array_keys($params) === range(0, count($params) - 1);
+
+                    if ($isList && empty($placeholders)) {
+                        $stmt->execute(array_values($params));
+                    } else {
+                        // Bind each placeholder found in the SQL; require matching param
+                        foreach ($placeholders as $name) {
+                            if (!array_key_exists($name, $params)) {
+                                throw new \Exception("Parametro faltando para placeholder :{$name}");
+                            }
+
+                            $valor = $params[$name];
+
+                            // Infer PDO param type
+                            if (is_int($valor)) {
+                                $type = PDO::PARAM_INT;
+                            } elseif (is_bool($valor)) {
+                                $type = PDO::PARAM_BOOL;
+                            } elseif (is_null($valor)) {
+                                $type = PDO::PARAM_NULL;
+                            } else {
+                                $type = PDO::PARAM_STR;
+                            }
+
+                            $stmt->bindValue(':' . $name, $valor, $type);
+                        }
+
+                        $stmt->execute();
                     }
+                } else {
+                    $stmt->execute();
                 }
 
-                $stmt->execute();
+                // Add SQL preview when in debug mode (helps troubleshooting)
+                if (defined('APP_DEBUG') && Config::APP_DEBUG) {
+                    $preview = $originalSql;
+                    if (is_array($params)) {
+                        foreach ($params as $n => $v) {
+                            $replace = is_null($v) ? 'NULL' : (is_numeric($v) ? $v : "'" . addslashes((string)$v) . "'");
+                            // replace both quoted and unquoted occurrences
+                            $preview = str_replace(":$n", $replace, $preview);
+                        }
+                    }
+                    $res['sql'] = $preview;
+                }
 
                 $res['retorno'] = $asObject == 1
                     ? $stmt->fetchObject()
                     : $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                if ($transacao) $pdo->commit();
+                if ($startedTransaction && $transacao) $pdo->commit();
             } else {
                 $res['retorno'] = $sql;
             }
