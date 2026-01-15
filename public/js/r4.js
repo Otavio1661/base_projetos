@@ -70,6 +70,64 @@ const r4 = {
         };
     },
 
+    // Função para descriptografar dados usando AES
+    decryptData: async function(encryptedData) {
+        try {
+            // Verificar se os dados necessários estão presentes
+            if (!encryptedData.x || !encryptedData.y || !encryptedData.z) {
+                throw new Error('Dados de criptografia incompletos');
+            }
+
+            const encoder = new TextEncoder();
+            
+            // Decodificar base64
+            const encryptedArray = Uint8Array.from(atob(encryptedData.x), c => c.charCodeAt(0));
+            const salt = Uint8Array.from(atob(encryptedData.y), c => c.charCodeAt(0));
+            const iv = Uint8Array.from(atob(encryptedData.z), c => c.charCodeAt(0));
+            
+            // Gerar chave a partir da senha base
+            const cryptoKey = window.BASE_CRIPTOGRAFIA;
+            const keyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                encoder.encode(cryptoKey),
+                { name: "PBKDF2" },
+                false,
+                ["deriveBits", "deriveKey"]
+            );
+            
+            // Derivar chave usando PBKDF2 com o salt recebido
+            const key = await window.crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["decrypt"]
+            );
+            
+            // Descriptografar dados
+            const decryptedBuffer = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                encryptedArray
+            );
+            
+            // Converter buffer para string e depois para objeto
+            const decoder = new TextDecoder();
+            const decryptedString = decoder.decode(decryptedBuffer);
+            
+            return JSON.parse(decryptedString);
+            
+        } catch (error) {
+            console.error('Erro na descriptografia:', error);
+            return null;
+        }
+    },
+
     fetch: async function(url, method = 'GET', data = null) {
         const response = await fetch(url, {
                 method: method,

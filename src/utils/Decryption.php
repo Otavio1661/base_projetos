@@ -74,6 +74,65 @@ class Decryption
     }
 
     /**
+     * Criptografa dados usando AES-GCM (compatível com o frontend)
+     * 
+     * @param array|object $data Dados a serem criptografados
+     * @return array|null Retorna array com 'x' (dados), 'y' (salt) e 'z' (iv) ou null em caso de erro
+     */
+    public static function encrypt($data)
+    {
+        try {
+            // Converter dados para JSON
+            $jsonData = json_encode($data);
+            
+            if ($jsonData === false) {
+                throw new \Exception('Erro ao converter dados para JSON');
+            }
+
+            // Gerar salt e IV aleatórios
+            $salt = random_bytes(16);
+            $iv = random_bytes(12); // GCM usa IV de 12 bytes
+
+            // Chave base (mesma usada no frontend)
+            $baseKey = Config::BASE_CRIPTOGRAFIA;
+
+            // Derivar chave usando PBKDF2 (compatível com o frontend)
+            $key = hash_pbkdf2('sha256', $baseKey, $salt, 100000, 32, true);
+
+            // Criptografar usando openssl (AES-256-GCM)
+            $tag = '';
+            $ciphertext = openssl_encrypt(
+                $jsonData,
+                'aes-256-gcm',
+                $key,
+                OPENSSL_RAW_DATA,
+                $iv,
+                $tag,
+                '',
+                16
+            );
+
+            if ($ciphertext === false) {
+                throw new \Exception('Falha ao criptografar dados');
+            }
+
+            // Concatenar ciphertext com tag
+            $encrypted = $ciphertext . $tag;
+
+            // Retornar dados codificados em base64
+            return [
+                'x' => base64_encode($encrypted), // data
+                'y' => base64_encode($salt),      // salt
+                'z' => base64_encode($iv)         // iv
+            ];
+
+        } catch (\Exception $e) {
+            error_log('Erro na criptografia: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Pega os dados descriptografados do POST
      * 
      * @return array|null Retorna os dados descriptografados ou null em caso de erro
