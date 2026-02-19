@@ -15,23 +15,32 @@ class IndexController extends ctrl
         $this->IndexModel = new IndexModel();
     }
 
-    public function index1() {
-        header('Location: /index');        
-    }
     public function index() {
+        header("Location: /login");
+        exit;    
+    }
+
+    public function login() {
         ctrl::render('index', [
             'titulo' => 'index',
         ]);
     }
 
-    public function login() {
-        $data = ctrl::getPost();
-
-        $dataDecrypted = Decryption::decrypt($data);
-
-        
-
-       print_r($dataDecrypted); die; 
+    public function sobre() {
+        ctrl::render('sobre', [
+            'titulo' => 'Sobre',
+        ]);
     }
 
+    public function servicos() {
+        ctrl::render('servicos', [
+            'titulo' => 'Serviços',
+        ]);
+    }
+
+    public function contato() {
+        ctrl::render('contato', [
+            'titulo' => 'Contato',
+        ]);
+    }
 }

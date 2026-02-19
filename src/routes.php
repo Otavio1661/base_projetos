@@ -59,19 +59,15 @@ $router = new \core\Router();
  * ROTAS DA APLICAÇÃO
  * ============================================
 */
-
-$router->group('/especiais', 'Especiais@handle' , function($router) {
-    $router->get('/alert', 'Controller@alertErrorMini');
-});
-
-$router->get('/', 'IndexController@index1');
-
-$router->get('/home', 'HomeController@home');
-
-$router->get('/index', 'IndexController@index');
-
-$router->post('/login', 'IndexController@login');
+$router->get('/', 'indexController@index');
+$router->get('/login', 'indexController@login');
+$router->get('/sobre', 'indexController@sobre');
+$router->get('/servicos', 'indexController@servicos');
+$router->get('/contato', 'indexController@contato');
+    
+$router->post('/auth/login', 'loginController@login');
 
 
+$router->get('/dashboard', 'dashboardController@index', 'authMiddleware@handle');
 
 return $router;
