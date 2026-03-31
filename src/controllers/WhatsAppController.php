@@ -37,6 +37,13 @@ class WhatsAppController extends ctrl
             ], 400);
             return;
         }
+        if (strlen($number) < 10 || strlen($number) > 15) {
+            $this->json([
+                'status' => 'error',
+                'message' => 'Número inválido. Use DDI + DDD + número, apenas dígitos.'
+            ], 400);
+            return;
+        }
 
         if ($this->apiKey === '') {
             $this->json([
@@ -91,6 +98,6 @@ class WhatsAppController extends ctrl
             'status' => 'error',
             'code' => $httpCode,
             'response' => $decoded ?? $response
-        ], 502);
+        ], ($httpCode >= 400 && $httpCode <= 599) ? $httpCode : 502);
     }
 }

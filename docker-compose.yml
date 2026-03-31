@@ -7,8 +7,6 @@ services:
       - "8087:80"
     volumes:
       - .:/var/www/html
-    depends_on:
-      - evolution-api
 
 #  db:
 #    image: mysql:8.0
