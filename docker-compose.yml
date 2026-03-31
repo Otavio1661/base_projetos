@@ -7,8 +7,8 @@ services:
       - "8087:80"
     volumes:
       - .:/var/www/html
-#    depends_on:
-#      - db
+    depends_on:
+      - evolution-api
 
 #  db:
 #    image: mysql:8.0
@@ -19,3 +19,20 @@ services:
 #      MYSQL_PASSWORD: senha123
 #    ports:
 #      - "3306:3306"
+
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_store:/evolution/store
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: 8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me-in-env}
+
+volumes:
+  evolution_store:

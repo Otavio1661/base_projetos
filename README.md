@@ -200,7 +200,51 @@ node whatsapp-bridge.js
 
 --------------------------------------------------------------------------------
 
-## Integração com WhatsApp (whatsapp-bridge)
+## Integração com WhatsApp (Evolution API)
+
+Esta base agora suporta integração com Evolution API via Docker Compose, mantendo o projeto PHP separado do motor do WhatsApp.
+
+Configuração de ambiente (`.env`):
+
+```text
+EVOLUTION_API_KEY=change-me-in-env
+EVOLUTION_URL=http://evolution-api:8080
+EVOLUTION_INSTANCE=default
+```
+
+Serviço no Docker Compose:
+- `evolution-api` em `docker-compose.yml`, com persistência em `evolution_store`.
+
+Subir ambiente:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+Endpoint HTTP no framework:
+- `POST /whatsapp/send`
+- Body JSON:
+
+```json
+{
+  "number": "5511999999999",
+  "text": "Olá, teste Evolution API",
+  "delay": 1200
+}
+```
+
+Exemplo com `curl`:
+
+```bash
+curl -X POST http://localhost:8087/whatsapp/send \
+  -H "Content-Type: application/json" \
+  -d '{"number":"5511999999999","text":"Olá, teste Evolution API","delay":1200}'
+```
+
+--------------------------------------------------------------------------------
+
+## Integração com WhatsApp (whatsapp-bridge legado)
 
 Este repositório inclui um pequeno *bridge* HTTP para `whatsapp-web.js` em `whatsapp-bridge.js`. Ele expõe endpoints simples que permitem enviar mensagens via uma sessão do WhatsApp Web controlada pelo Puppeteer.
 
@@ -258,4 +302,3 @@ Recomendações de segurança e produção:
 Limitações e observações:
 - O bridge depende do `whatsapp-web.js` e do Puppeteer; alterações na API do WhatsApp Web podem afetá-lo.
 - O uso comercial ou em massa pode violar os termos do WhatsApp; avalie legal e operacionalmente antes de automatizar envios em grande escala.
-
