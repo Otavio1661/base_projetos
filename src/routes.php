@@ -66,7 +66,7 @@ $router->get('/servicos', 'indexController@servicos');
 $router->get('/contato', 'indexController@contato');
     
 $router->post('/auth/login', 'loginController@login');
-$router->post('/whatsapp/send', 'whatsAppController@send');
+$router->post('/whatsapp/send', 'WhatsAppController@send');
 
 
 $router->get('/dashboard', 'dashboardController@index', 'authMiddleware@handle');

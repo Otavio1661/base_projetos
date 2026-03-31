@@ -35,6 +35,7 @@ class WhatsAppController extends ctrl
                 'status' => 'error',
                 'message' => 'Campos obrigatórios: number e text'
             ], 400);
+            return;
         }
 
         if ($this->apiKey === '') {
@@ -42,6 +43,7 @@ class WhatsAppController extends ctrl
                 'status' => 'error',
                 'message' => 'EVOLUTION_API_KEY não configurada'
             ], 500);
+            return;
         }
 
         $url = $this->evolutionUrl . '/message/sendText/' . rawurlencode($this->instance);
@@ -72,6 +74,7 @@ class WhatsAppController extends ctrl
                 'message' => 'Falha ao comunicar com Evolution API',
                 'detail' => $curlError
             ], 502);
+            return;
         }
 
         $decoded = json_decode((string) $response, true);
@@ -81,6 +84,7 @@ class WhatsAppController extends ctrl
                 'status' => 'sent',
                 'response' => $decoded ?? $response
             ], 200);
+            return;
         }
 
         $this->json([
