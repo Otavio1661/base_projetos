@@ -1,6 +1,7 @@
 <?php
 
-function kebab($s) {
+function kebab($s)
+{
     return '/' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $s));
 }
 
@@ -25,12 +26,13 @@ $actionMethod    = preg_replace('/[^A-Za-z0-9_]/', '', $name);
 $routePath       = kebab($name);
 
 // Mesmos caminhos criados pelo gerador
-$controllerFile = "src/controllers/{$name}Controller.php";
-$modelFile      = "src/model/{$name}Model.php";
+$controllerFile = "src/Controllers/{$controllerClass}.php";
+$modelFile      = "src/Model/{$modelClass}.php";
 $viewFile       = "src/view/{$name}.php";
 
 // Remove arquivos com segurança
-function rm($file) {
+function rm($file)
+{
     if (file_exists($file)) {
         if (@unlink($file)) {
             echo "Removido: {$file}\n";
@@ -47,7 +49,8 @@ rm($modelFile);
 rm($viewFile);
 
 // Remove linha(s) de rota do src/routes.php
-function removeRoutes($routesFile, $controllerClass, $actionMethod, $routePath) {
+function removeRoutes($routesFile, $controllerClass, $actionMethod, $routePath)
+{
     if (!file_exists($routesFile)) {
         echo "Aviso: '{$routesFile}' não encontrado. Pulei a remoção da rota.\n";
         return;

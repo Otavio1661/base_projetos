@@ -1,15 +1,17 @@
 <?php
-namespace src\middleware;
 
-use core\Controller as ctrl;
+namespace App\Middleware;
+
+use Core\Controller as ctrl;
 use Exception;
 
-class AuthMiddleware {
-
+class AuthMiddleware
+{
     /**
      * Inicia a sessão de forma segura
      */
-    private static function initSession() {
+    private static function initSession()
+    {
         if (session_status() === PHP_SESSION_NONE) {
             // Configurações de segurança para sessão
             ini_set('session.cookie_httponly', '1');
@@ -17,7 +19,7 @@ class AuthMiddleware {
             ini_set('session.cookie_samesite', 'Strict');
             ini_set('session.use_strict_mode', '1');
             ini_set('session.use_only_cookies', '1');
-            
+
             session_start();
         }
     }
@@ -25,7 +27,8 @@ class AuthMiddleware {
     /**
      * Cria a sessão do usuário após login bem-sucedido
      */
-    public static function createUserSession($userData) {
+    public static function createUserSession($userData)
+    {
         try {
             self::initSession();
             
@@ -54,7 +57,8 @@ class AuthMiddleware {
     /**
      * Verifica se o usuário está autenticado
      */
-    public static function checkAuth() {
+    public static function checkAuth()
+    {
         self::initSession();
         
         // Verificar se está logado
@@ -91,7 +95,8 @@ class AuthMiddleware {
     /**
      * Retorna os dados do usuário da sessão
      */
-    public static function getUserData() {
+    public static function getUserData()
+    {
         if (!self::checkAuth()) {
             return null;
         }
@@ -107,7 +112,8 @@ class AuthMiddleware {
     /**
      * Destrói a sessão de forma segura
      */
-    private static function destroySession() {
+    private static function destroySession()
+    {
         if (session_status() === PHP_SESSION_ACTIVE) {
             // Limpar todas as variáveis de sessão
             $_SESSION = [];
@@ -134,7 +140,8 @@ class AuthMiddleware {
     /**
      * Realiza o logout do usuário
      */
-    public function Logout() {
+    public function logout()
+    {
         try {
             self::destroySession();
             
@@ -155,7 +162,16 @@ class AuthMiddleware {
     /**
      * Middleware para proteger rotas
      */
-    public static function requireAuth() {
+    public function handle()
+    {
+        self::requireAuth();
+    }
+
+    /**
+     * Middleware para proteger rotas
+     */
+    public static function requireAuth()
+    {
         if (!self::checkAuth()) {
             http_response_code(401);
             echo json_encode([

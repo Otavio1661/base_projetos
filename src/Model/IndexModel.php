@@ -1,14 +1,14 @@
 <?php
-namespace src\model;
 
-use core\Database;
+namespace App\Model;
+
+use Core\Database;
 use Exception;
-use PDO;
-use core\Controller as ctrl;
 
-class IndexModel {
-
-    public function login($params) {
+class IndexModel
+{
+    public function login($params)
+    {
         try {
             // Validar parâmetros
             if (empty($params['username'])) {

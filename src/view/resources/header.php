@@ -101,7 +101,7 @@
   <script>
     // Definir a chave de criptografia globalmente
     <?php
-    use src\Config;
+    use App\Config;
     $cryptoKey = Config::BASE_CRIPTOGRAFIA;
     if (empty($cryptoKey)) {
         $cryptoKey = 'chave-padrao-desenvolvimento-2024'; // Chave padrão se não estiver configurada

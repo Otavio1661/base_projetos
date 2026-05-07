@@ -1,7 +1,8 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../src/Env.php';
 
-use src\Config;
+use App\Config;
 
 session_start();
 
@@ -19,7 +20,8 @@ if (Config::APP_DEBUG === false) {
 /**
  * Função para gerar URL de assets com versão baseada na última modificação
  */
-function asset($path) {
+function asset($path)
+{
     $fullPath = $_SERVER['DOCUMENT_ROOT'] . $path;
     if (file_exists($fullPath)) {
         $version = filemtime($fullPath);
@@ -35,7 +37,8 @@ $GLOBALS['asset'] = 'asset';
  * Função para injetar configurações de criptografia e script r4.js no HTML
  * Adiciona automaticamente o script com BASE_CRIPTOGRAFIA e r4.js antes de fechar </head>
  */
-function inject_crypto_config($content) {
+function injectCryptoConfig($content)
+{
     $cryptoScript = '<script>window.BASE_CRIPTOGRAFIA = "' . Config::BASE_CRIPTOGRAFIA . '";</script>';
     $r4Script = '<script src="/js/r4.js"></script>';
     $injection = $cryptoScript . "\n" . $r4Script;
@@ -43,7 +46,7 @@ function inject_crypto_config($content) {
 }
 
 // Iniciar buffer de saída para processar HTML antes de enviar
-ob_start('inject_crypto_config');
+ob_start('injectCryptoConfig');
 
 // Carregar rotas
 $router = require __DIR__ . '/../src/routes.php';

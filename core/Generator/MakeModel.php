@@ -8,15 +8,15 @@ if ($argc < 2) {
 // Pega o nome do model do terminal
 $model = $argv[1];
 
-// Nome do arquivo de destino
-$nomeArquivo = "src/model/{$model}Model.php";
-
-// Nome da classe (ex: UserController)
+// Nome da classe (ex: UserModel)
 $className = ucfirst($model) . "Model";
 
+// Nome do arquivo de destino
+$nomeArquivo = "src/Model/{$className}.php";
+
 // Cria o diretório se não existir
-if (!file_exists("src/model")) {
-    mkdir("src/model", 0777, true);
+if (!file_exists("src/Model")) {
+    mkdir("src/Model", 0777, true);
 }
 
 // Verifica se o arquivo já existe
@@ -28,16 +28,16 @@ if (file_exists($nomeArquivo)) {
 // Conteúdo do arquivo da migration
 $conteudo = <<<PHP
 <?php
-namespace src\model;
+namespace App\\Model;
 
-use core\Database;
+use Core\\Database;
 use Exception;
-use PDO;
-use core\Controller as ctrl;
+use Core\\Controller as ctrl;
 
-class {$className} {
-
-    public function Logout() {
+class {$className}
+{
+    public function logout()
+    {
         try {
 
             ctrl::retorno(['message' => ''], 200);
