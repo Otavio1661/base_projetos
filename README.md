@@ -120,7 +120,7 @@ Para scripts com espaços (ex: `excluir mvc`) use `composer run-script` e envolv
 ./
 ├─ core/               # Núcleo: Router, Controller base, Database, Generator
 ├─ public/             # Document root (index.php, assets, erros)
-├─ src/                # Código da aplicação (controllers, models, views, utils)
+├─ src/                # Código da aplicação (Controllers, Model, view, Utils)
 ├─ vendor/             # Dependências (não versionar)
 ├─ composer.json
 └─ .env (local)
@@ -129,9 +129,9 @@ Para scripts com espaços (ex: `excluir mvc`) use `composer run-script` e envolv
 Principais arquivos/folders:
 - `core/Controller.php` — classe base para controllers (render, json, getPost).
 - `core/RouterBase.php` — lógica de roteamento, dispatch e middleware.
-- `core/DataBase.php` — singleton PDO, `switchParams()` e `RunMigration()`.
+- `core/Database.php` — singleton PDO, `switchParams()` e `runMigration()`.
 - `core/Generator/` — scripts CLI para gerar/remover MVC.
-- `src/utils/Decryption.php` e `public/js/r4.js` — criptografia AES-GCM (frontend/backend).
+- `src/Utils/Decryption.php` e `public/js/r4.js` — criptografia AES-GCM (frontend/backend).
 
 --------------------------------------------------------------------------------
 
@@ -144,32 +144,35 @@ $router->get('/home', 'HomeController@home');
 $router->post('/login', 'IndexController@login');
 
 // Grupo de rotas com middleware
-$router->group('/admin', 'AuthMiddleware@check', function($router) {
-        $router->get('/dashboard', 'AdminController@dashboard');
+$router->group('/admin', 'AuthMiddleware@handle', function($router) {
+    $router->get('/dashboard', 'AdminController@dashboard');
 });
 ```
 
-- Controllers estendem `core\Controller` e usam `render()` ou `json()`:
+- Controllers estendem `Core\Controller` e usam `render()` ou `json()`:
 
 ```php
-namespace src\controllers;
-use core\Controller as ctrl;
+namespace App\Controllers;
 
-class HomeController extends ctrl {
-    public function home() {
+use Core\Controller as ctrl;
+
+class HomeController extends ctrl
+{
+    public function home()
+    {
         ctrl::render('index', ['titulo' => 'Home']);
     }
 }
 ```
 
-- Models tipicamente usam `core\Database::switchParams()` para executar SQL externo em `src/sql/`.
+- Models tipicamente usam `Core\Database::switchParams()` para executar SQL externo em `src/sql/`.
 
 --------------------------------------------------------------------------------
 
 ## Criptografia (frontend ↔ backend)
 
 - O frontend contém `public/js/r4.js` que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
-- O backend usa `src/utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
+- O backend usa `src/Utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
 - A chave base está definida em `BASE_CRIPTOGRAFIA` no `.env` e é injetada nas views pelo `public/index.php`.
 
 --------------------------------------------------------------------------------
@@ -258,4 +261,3 @@ Recomendações de segurança e produção:
 Limitações e observações:
 - O bridge depende do `whatsapp-web.js` e do Puppeteer; alterações na API do WhatsApp Web podem afetá-lo.
 - O uso comercial ou em massa pode violar os termos do WhatsApp; avalie legal e operacionalmente antes de automatizar envios em grande escala.
-

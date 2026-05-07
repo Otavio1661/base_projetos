@@ -8,15 +8,15 @@ if ($argc < 2) {
 // Pega o nome do middleware do terminal
 $middleware = $argv[1];
 
-// Nome do arquivo de destino
-$nomeArquivo = "src/middleware/{$middleware}Middleware.php";
-
-// Nome da classe (ex: UserController)
+// Nome da classe (ex: UserMiddleware)
 $className = ucfirst($middleware) . "Middleware";
 
+// Nome do arquivo de destino
+$nomeArquivo = "src/Middleware/{$className}.php";
+
 // Cria o diretório se não existir
-if (!file_exists("src/middleware")) {
-    mkdir("src/middleware", 0777, true);
+if (!file_exists("src/Middleware")) {
+    mkdir("src/Middleware", 0777, true);
 }
 
 // Verifica se o arquivo já existe
@@ -28,14 +28,15 @@ if (file_exists($nomeArquivo)) {
 // Conteúdo do arquivo da migration
 $conteudo = <<<PHP
 <?php
-namespace src\middleware;
+namespace App\\Middleware;
 
-use core\Controller as ctrl;
+use Core\\Controller as ctrl;
 use Exception;
 
-class {$className} {
-
-    public function Logout() {
+class {$className}
+{
+    public function logout()
+    {
         try {
 
             ctrl::retorno(['message' => ''], 200);

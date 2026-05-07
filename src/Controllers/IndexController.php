@@ -1,44 +1,48 @@
 <?php
 
-namespace src\controllers;
+namespace App\Controllers;
 
-use core\Controller as ctrl;
-use src\model\IndexModel;
-use src\utils\Decryption;
+use App\Model\IndexModel;
+use Core\Controller as ctrl;
 
 class IndexController extends ctrl
 {
-    private $IndexModel;
+    private IndexModel $indexModel;
 
     public function __construct()
     {
-        $this->IndexModel = new IndexModel();
+        $this->indexModel = new IndexModel();
     }
 
-    public function index() {
-        header("Location: /login");
-        exit;    
+    public function index()
+    {
+        header('Location: /login');
+        exit;
     }
 
-    public function login() {
+    public function login()
+    {
         ctrl::render('index', [
             'titulo' => 'index',
         ]);
     }
 
-    public function sobre() {
+    public function sobre()
+    {
         ctrl::render('sobre', [
             'titulo' => 'Sobre',
         ]);
     }
 
-    public function servicos() {
+    public function servicos()
+    {
         ctrl::render('servicos', [
             'titulo' => 'Serviços',
         ]);
     }
 
-    public function contato() {
+    public function contato()
+    {
         ctrl::render('contato', [
             'titulo' => 'Contato',
         ]);

@@ -1,10 +1,8 @@
 <?php
 
-require_once __DIR__ . '/../core/RouterBase.php';
-require_once __DIR__ . '/../core/Controller.php';
-require_once __DIR__ . '/../core/Router.php';
+use Core\Router;
 
-$router = new \core\Router();
+$router = new Router();
 
 /**
  * ============================================
@@ -59,15 +57,15 @@ $router = new \core\Router();
  * ROTAS DA APLICAÇÃO
  * ============================================
 */
-$router->get('/', 'indexController@index');
-$router->get('/login', 'indexController@login');
-$router->get('/sobre', 'indexController@sobre');
-$router->get('/servicos', 'indexController@servicos');
-$router->get('/contato', 'indexController@contato');
+$router->get('/', 'IndexController@index');
+$router->get('/login', 'IndexController@login');
+$router->get('/sobre', 'IndexController@sobre');
+$router->get('/servicos', 'IndexController@servicos');
+$router->get('/contato', 'IndexController@contato');
     
-$router->post('/auth/login', 'loginController@login');
+$router->post('/auth/login', 'LoginController@login');
 
 
-$router->get('/dashboard', 'dashboardController@index', 'authMiddleware@handle');
+$router->get('/dashboard', 'DashboardController@index', 'AuthMiddleware@handle');
 
 return $router;

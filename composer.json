@@ -2,11 +2,11 @@
     "name": "otavio/estrutura",
     "description": "Estrutura base para aplicações",
     "type": "project",
+    "license": "proprietary",
     "autoload": {
         "psr-4": {
-            "core\\": "core/",
-            "src\\controllers\\": "src/controllers/",
-            "src\\": "src/"
+            "Core\\": "core/",
+            "App\\": "src/"
         }
     },
     "authors": [
@@ -16,6 +16,7 @@
         }
     ],
     "require": {
+        "php": ">=8.0",
         "vlucas/phpdotenv": "^5.6"
     },
     "config": {

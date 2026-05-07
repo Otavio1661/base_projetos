@@ -17,36 +17,38 @@ $routePath = isset($argv[3]) ? $argv[3] : '/' . strtolower(preg_replace('/[^a-z0
 $controllerClass = ucfirst($name) . "Controller";
 $modelClass      = ucfirst($name) . "Model";
 $actionMethod    = preg_replace('/[^A-Za-z0-9_]/', '', $name); // método válido em PHP
+$modelProperty   = lcfirst($modelClass);
 
 // Arquivos de destino
-$controllerFile = "src/controllers/{$name}Controller.php";
-$modelFile      = "src/model/{$name}Model.php";
+$controllerFile = "src/Controllers/{$controllerClass}.php";
+$modelFile      = "src/Model/{$modelClass}.php";
 $viewFile       = "src/view/{$name}.php";
 
 // Garante diretórios
-@mkdir("src/controllers", 0777, true);
-@mkdir("src/model", 0777, true);
+@mkdir("src/Controllers", 0777, true);
+@mkdir("src/Model", 0777, true);
 @mkdir("src/view", 0777, true);
 
 // Templates
 $controllerContent = <<<PHP
 <?php
 
-namespace src\\controllers;
+namespace App\\Controllers;
 
-use core\\Controller as ctrl;
-use src\\model\\{$modelClass};
+use App\\Model\\{$modelClass};
+use Core\\Controller as ctrl;
 
 class {$controllerClass} extends ctrl
 {
-    private \${$modelClass};
+    private \${$modelProperty};
 
     public function __construct()
     {
-        \$this->{$modelClass} = new {$modelClass}();
+        \$this->{$modelProperty} = new {$modelClass}();
     }
 
-    public function {$actionMethod}() {
+    public function {$actionMethod}()
+    {
         ctrl::render('{$name}', [
             'titulo' => '{$name}',
         ]);
@@ -57,16 +59,17 @@ PHP;
 
 $modelContent = <<<PHP
 <?php
-namespace src\\model;
+namespace App\\Model;
 
-use core\\Database;
+use Core\\Database;
 use Exception;
 use PDO;
-use core\\Controller as ctrl;
+use Core\\Controller as ctrl;
 
-class {$modelClass} {
-
-    public function example() {
+class {$modelClass}
+{
+    public function example()
+    {
         try {
             // Exemplo de chamada ao Database::switchParams
             // \$info = Database::switchParams(\$params, 'seu_sql', true);
@@ -119,7 +122,8 @@ if (!file_exists($viewFile)) {
 }
 
 // ==== Adiciona rota no src/routes.php, se não existir ====
-function addRouteIfMissing($routesFile, $method, $path, $controllerAction) {
+function addRouteIfMissing($routesFile, $method, $path, $controllerAction)
+{
     if (!file_exists($routesFile)) {
         echo "Aviso: '{$routesFile}' não encontrado. Pulei a adição da rota.\n";
         return;

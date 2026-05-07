@@ -9,15 +9,15 @@ if ($argc < 2) {
 // Pega o nome da migration do terminal
 $migration = $argv[1];
 
-// Nome do arquivo de destino
-$nomeArquivo = "src/migration/{$migration}_migration.php";
-
 // Nome da classe (ex: UserMigration)
 $className = ucfirst($migration) . "Migration";
 
+// Nome do arquivo de destino
+$nomeArquivo = "src/Migration/{$className}.php";
+
 // Cria o diretório se não existir
-if (!file_exists("src/migration")) {
-    mkdir("src/migration", 0777, true);
+if (!file_exists("src/Migration")) {
+    mkdir("src/Migration", 0777, true);
 }
 
 // Verifica se o arquivo já existe
@@ -30,9 +30,9 @@ if (file_exists($nomeArquivo)) {
 $conteudo = <<<PHP
 <?php
 
-namespace src\\migration;
+namespace App\\Migration;
 
-use core\\Database;
+use Core\\Database;
 use Exception;
 
 class {$className}

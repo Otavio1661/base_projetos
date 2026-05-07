@@ -9,15 +9,15 @@ if ($argc < 2) {
 // Pega o nome do controller do terminal
 $controller = $argv[1];
 
-// Nome do arquivo de destino
-$nomeArquivo = "src/controllers/{$controller}Controller.php";
-
 // Nome da classe (ex: UserController)
 $className = ucfirst($controller) . "Controller";
 
+// Nome do arquivo de destino
+$nomeArquivo = "src/Controllers/{$className}.php";
+
 // Cria o diretório se não existir
-if (!file_exists("src/controllers")) {
-    mkdir("src/controllers", 0777, true);
+if (!file_exists("src/Controllers")) {
+    mkdir("src/Controllers", 0777, true);
 }
 
 // Verifica se o arquivo já existe
@@ -30,20 +30,19 @@ if (file_exists($nomeArquivo)) {
 $conteudo = <<<PHP
 <?php
 
-namespace src\controllers;
+namespace App\\Controllers;
 
-use core\Controller as ctrl;
-use src\model\Model;
+use App\\Model\\Model;
+use Core\\Controller as ctrl;
 
 class {$className} extends ctrl
 {
-    private \$Model;
+    private \$model;
 
     public function __construct()
     {
-        \$this->Model = new Model();
+        \$this->model = new Model();
     }
-
 }
 
 

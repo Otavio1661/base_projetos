@@ -47,7 +47,7 @@ Uso:
 - `php core/Generator/MakeMVC.php Nome [get|post|put|delete] [/rota]`
 
 Comportamento:
-- Gera arquivos em `src/controllers`, `src/model` e `src/view`.
+- Gera arquivos em `src/Controllers`, `src/Model` e `src/view`.
 - Se `src/routes.php` contiver marcadores especiais, a rota é inserida
 	entre eles; caso contrário é inserida antes do `return $router;`.
 - Não sobrescreve arquivos existentes; apenas relata se já existem.
@@ -61,33 +61,33 @@ Observações:
 ## MakeController.php
 
 Descrição:
-- Gera um controller básico estendendo `core\Controller`.
+- Gera um controller básico estendendo `Core\Controller`.
 
 Uso:
 - `php core/Generator/MakeController.php Nome`
 
 Observações:
-- Cria `src/controllers` quando necessário e não sobrescreve arquivos existentes.
+- Cria `src/Controllers` quando necessário e não sobrescreve arquivos existentes.
 
 ---
 
 ## MakeModel.php
 
 Descrição:
-- Gera um model básico com boilerplate para trabalhar com `core\Database`.
+- Gera um model básico com boilerplate para trabalhar com `Core\Database`.
 
 Uso:
 - `php core/Generator/MakeModel.php Nome`
 
 Observações:
-- Inclui um exemplo de método `Logout()` que demonstra o padrão de retorno.
+- Inclui um exemplo de método `logout()` que demonstra o padrão de retorno.
 
 ---
 
 ## MakeMiddleware.php
 
 Descrição:
-- Gera um middleware simples (classe em `src/middleware`) que pode ser
+- Gera um middleware simples (classe em `src/Middleware`) que pode ser
 	invocado pelo router no formato `Middleware@method`.
 
 Uso:
@@ -109,8 +109,8 @@ Uso:
 - `php core/Generator/DeleteMVC.php Nome`
 
 Comportamento de remoção:
-- Remove arquivos: `src/controllers/{nome}Controller.php`,
-	`src/model/{nome}Model.php`, `src/view/{nome}.php`.
+- Remove arquivos: `src/Controllers/{Nome}Controller.php`,
+	`src/Model/{Nome}Model.php`, `src/view/{nome}.php`.
 - Tenta remover a linha exata da rota; se não encontrar, faz fallback
 	removendo qualquer rota que aponte para `Controller@metodo`.
 

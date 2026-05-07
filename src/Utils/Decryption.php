@@ -15,9 +15,9 @@
  * ============================================
  */
 
-namespace src\utils;
+namespace App\Utils;
 
-use src\Config;
+use App\Config;
 
 class Decryption
 {
@@ -155,6 +155,5 @@ class Decryption
         return $data;
     }
 }
-
 
 

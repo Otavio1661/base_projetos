@@ -13,7 +13,7 @@
  * - `render($view, $data)`: renderiza views com layout padrão e partials;
  * - `json($data, $statusCode)`: responde JSON com código HTTP;
  * - `getPost()`: lê dados POST criptografados pelo frontend
- *    (integração com `src\utils\Decryption`);
+ *    (integração com `App\Utils\Decryption`);
  * - `retorno(...)`: padrão simples para retorno JSON com status.
  *
  * Observações de segurança e uso:
@@ -25,9 +25,9 @@
  * ============================================
  */
 
-namespace core;
+namespace Core;
 
-use src\utils\Decryption;
+use App\Utils\Decryption;
 
 class Controller
 {
@@ -52,7 +52,6 @@ class Controller
      */
     protected function render($view, $data = [])
     {
-
         $basePath = dirname(__DIR__);
         // Extrai as variáveis para uso na view
         extract($data);
@@ -109,7 +108,7 @@ class Controller
      * Lê os dados do POST e, se necessário, realiza a descriptografia.
      *
      * Retorna `null` quando o payload é inválido ou vazio.
-     * Integra com `src\utils\Decryption::getDecryptedPost()` para suportar
+     * Integra com `App\Utils\Decryption::getDecryptedPost()` para suportar
      * payloads criptografados pelo frontend.
      *
      * @return array|null
@@ -118,7 +117,7 @@ class Controller
     {
         header('Content-Type: application/json; charset=utf-8');
         $data = Decryption::getDecryptedPost();
-         if (empty($data) || !is_array($data)) {
+        if (empty($data) || !is_array($data)) {
             return null;
         }
         return $data;

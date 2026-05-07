@@ -15,16 +15,15 @@
  * com configurações seguras e convenientes para o app.
  *
  * Observações:
- * - As credenciais são lidas de `src\Config`.
+ * - As credenciais são lidas de `App\Config`.
  * - Em caso de erro de conexão, a classe exibe uma
  *   mensagem amigável e lança uma exceção.
  *
  * ============================================
  */
-namespace core;
+namespace Core;
 
-use COM;
-use src\Config;
+use App\Config;
 use PDO;
 use PDOException;
 
@@ -32,9 +31,17 @@ class Database
 {
     private static $instance = null;
 
-    private function __construct() { }
-    private function __clone() { }
-    public function __wakeup() { }
+    private function __construct()
+    {
+    }
+
+    private function __clone()
+    {
+    }
+
+    public function __wakeup()
+    {
+    }
 
     /**
      * Retorna a instância única (singleton) de PDO.
@@ -55,7 +62,7 @@ class Database
         if (self::$instance === null) {
             try {
                 self::$instance = new PDO(
-                    Config::DB_HOST_LG.":host=" . Config::DB_HOST . ";port=" . Config::DB_PORT . ";dbname=" . Config::DB_DATABASE . ";charset=utf8",
+                    Config::DB_HOST_LG . ":host=" . Config::DB_HOST . ";port=" . Config::DB_PORT . ";dbname=" . Config::DB_DATABASE . ";charset=utf8",
                     Config::DB_USERNAME,
                     Config::DB_PASSWORD,
                     [
@@ -65,23 +72,23 @@ class Database
                     ]
                 );
             } catch (PDOException $e) {
-                            $linha = __LINE__;
-            $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
-            echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
-            echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro de conexão com o banco: </h2>';
-            echo '<h4>Verifique: </h4>';
-            echo '<p>' . $e->getMessage() . '</p>';
-            echo '<p style="text-align:justify"><strong>'
-                . Config::DB_HOST_LG . ":DB_HOST=" . Config::DB_HOST
-                . ";<br>DB_PORT=" . Config::DB_PORT
-                . ";<br>DB_DATABASE=" . Config::DB_DATABASE
-                . ";<br>DB_USERNAME:" . Config::DB_USERNAME
-                . ";<br>DB_PASSWORD:" . Config::DB_PASSWORD.';'
-                . '</strong></p>';
-            echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . htmlspecialchars('.env') . '</code>';
-            echo '<br><code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;margin-top:8px;">' . htmlspecialchars('core/Database.php') . ' linha ' . $linha . '</code>';
-            echo '<p>Verifique se as credenciais estão corretas.</p>';
-            echo '</div>';
+                $linha = __LINE__;
+                $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
+                echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
+                echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro de conexão com o banco: </h2>';
+                echo '<h4>Verifique: </h4>';
+                echo '<p>' . $e->getMessage() . '</p>';
+                echo '<p style="text-align:justify"><strong>'
+                    . Config::DB_HOST_LG . ":DB_HOST=" . Config::DB_HOST
+                    . ";<br>DB_PORT=" . Config::DB_PORT
+                    . ";<br>DB_DATABASE=" . Config::DB_DATABASE
+                    . ";<br>DB_USERNAME:" . Config::DB_USERNAME
+                    . ";<br>DB_PASSWORD:" . Config::DB_PASSWORD . ';'
+                    . '</strong></p>';
+                echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . htmlspecialchars('.env') . '</code>';
+                echo '<br><code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;margin-top:8px;">' . htmlspecialchars('core/Database.php') . ' linha ' . $linha . '</code>';
+                echo '<p>Verifique se as credenciais estão corretas.</p>';
+                echo '</div>';
                 throw new \Exception("Erro de conexão com o banco: " . $e->getMessage());
             }
         }
@@ -252,7 +259,7 @@ class Database
      * @param array $tables Definição das tabelas e colunas
      * @return void
     */
-    public static function RunMigration($tables)
+    public static function runMigration($tables)
     {
         $pdo = self::getInstance();
         foreach ($tables as $tableName => $columns) {
@@ -265,20 +272,4 @@ class Database
             $pdo->exec($sql);
         }
     }
-
 }
-
-
-
-        // // Converte campos de texto para UTF-8 antes de salvar
-        // if (isset($AddLocal['nome'])) {
-        //     // Se vier em ISO-8859-1 (Latin1), converte para UTF-8
-        //     if (!mb_check_encoding($AddLocal['nome'], 'UTF-8')) {
-        //         $AddLocal['nome'] = mb_convert_encoding($AddLocal['nome'], 'UTF-8', 'ISO-8859-1');
-        //     }
-        // }
-        // if (isset($AddLocal['descricao'])) {
-        //     if (!mb_check_encoding($AddLocal['descricao'], 'UTF-8')) {
-        //         $AddLocal['descricao'] = mb_convert_encoding($AddLocal['descricao'], 'UTF-8', 'ISO-8859-1');
-        //     }
-        // }

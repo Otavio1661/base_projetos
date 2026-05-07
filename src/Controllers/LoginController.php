@@ -1,22 +1,23 @@
 <?php
 
-namespace src\controllers;
+namespace App\Controllers;
 
-use core\Controller as ctrl;
-use src\model\IndexModel as Model;
-use src\middleware\AuthMiddleware;
-use src\utils\Decryption;
+use App\Middleware\AuthMiddleware;
+use App\Model\IndexModel as Model;
+use App\Utils\Decryption;
+use Core\Controller as ctrl;
 
 class LoginController extends ctrl
 {
-    private $Model;
+    private Model $model;
 
     public function __construct()
     {
-        $this->Model = new Model();
+        $this->model = new Model();
     }
 
-    public function login() {
+    public function login()
+    {
         // Pega os dados criptografados do POST e descriptografa
         $params = Decryption::getDecryptedPost();
         
@@ -41,7 +42,7 @@ class LoginController extends ctrl
         }
 
         // Processar login no model (validação e busca no banco)
-        $result = $this->Model->login($params);
+        $result = $this->model->login($params);
         
         // Verificar se o login foi bem-sucedido
         if ($result['success'] === true) {
@@ -76,6 +77,4 @@ class LoginController extends ctrl
             echo json_encode(Decryption::encrypt($result));
         }
     }
-
 }
-

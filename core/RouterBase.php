@@ -11,7 +11,7 @@
  *
  * Implementa um roteador simples para registrar rotas
  * e despachar requisições para controllers e middlewares
- * definidos em `src/controllers` e `src/middleware`.
+ * definidos em `src/Controllers` e `src/Middleware`.
  *
  * Recursos principais:
  * - Registro com métodos HTTP (`get`, `post`, `put`, `delete`).
@@ -26,9 +26,9 @@
  * ============================================
  */
 
-namespace core;
+namespace Core;
 
-use src\Config;
+use App\Config;
 
 class RouterBase
 {
@@ -159,14 +159,14 @@ class RouterBase
          * - `$controllerAction`: string no formato 'Controller@method'.
          *
          * Fluxo:
-         * 1. Resolve a classe em `src\controllers\Controller`.
+         * 1. Resolve a classe em `App\Controllers\Controller`.
          * 2. Verifica existência da classe e do método; em `APP_DEBUG`
          *    exibe erros detalhados e lança exceções para facilitar depuração.
          * 3. Caso contrário retorna 404 quando não encontrado.
          */
         list($controller, $method) = explode('@', $controllerAction);
 
-        $controllerClass = "src\\controllers\\{$controller}";
+        $controllerClass = "App\\Controllers\\{$controller}";
 
         if (!class_exists($controllerClass)) {
             if (Config::APP_DEBUG === true) {
@@ -214,7 +214,7 @@ class RouterBase
      * Despacha e executa um middleware.
      *
      * Espera `$middleware` no formato 'MiddlewareController@method'.
-     * O método verifica existência da classe em `src\middleware` e do método
+      * O método verifica existência da classe em `App\Middleware` e do método
      * solicitado. Em `Config::APP_DEBUG` exibe mensagens detalhadas e lança
      * exceções para facilitar a depuração; em ambiente não-debug retorna
      * uma página 404.
@@ -226,7 +226,7 @@ class RouterBase
     {
         list($controller, $method) = explode('@', $middleware);
 
-        $controllerClass = "src\\middleware\\{$controller}";
+        $controllerClass = "App\\Middleware\\{$controller}";
 
         if (!class_exists($controllerClass)) {
             if (Config::APP_DEBUG === true) {
