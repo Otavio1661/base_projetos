@@ -72,24 +72,27 @@ class Database
                     ]
                 );
             } catch (PDOException $e) {
-                $linha = __LINE__;
-                $arquivo = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', __FILE__);
-                echo '<div style="margin:40px auto;max-width:600px;padding:30px;border-radius:12px;background:#fff3f3;color:#b71c1c;border:2px solid #f44336;font-family:Montserrat,Arial,sans-serif;box-shadow:0 2px 16px 0 rgba(244,67,54,0.10);text-align:center;">';
-                echo '<h2 style="color:#f44336;margin-bottom:12px;">Erro de conexão com o banco: </h2>';
-                echo '<h4>Verifique: </h4>';
-                echo '<p>' . $e->getMessage() . '</p>';
-                echo '<p style="text-align:justify"><strong>'
-                    . Config::DB_HOST_LG . ":DB_HOST=" . Config::DB_HOST
-                    . ";<br>DB_PORT=" . Config::DB_PORT
-                    . ";<br>DB_DATABASE=" . Config::DB_DATABASE
-                    . ";<br>DB_USERNAME:" . Config::DB_USERNAME
-                    . ";<br>DB_PASSWORD:" . Config::DB_PASSWORD . ';'
-                    . '</strong></p>';
-                echo '<code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;">' . htmlspecialchars('.env') . '</code>';
-                echo '<br><code style="background:#ffeaea;padding:6px 12px;border-radius:6px;display:inline-block;margin-top:8px;">' . htmlspecialchars('core/Database.php') . ' linha ' . $linha . '</code>';
-                echo '<p>Verifique se as credenciais estão corretas.</p>';
-                echo '</div>';
-                throw new \Exception("Erro de conexão com o banco: " . $e->getMessage());
+                // O detalhe da falha vai SEMPRE para o log, nunca para a tela.
+                error_log('[Database] falha de conexao: ' . $e->getMessage());
+
+                if (Config::APP_DEBUG === true) {
+                    // Debug: host/usuario ajudam a diagnosticar, mas a senha NUNCA e' impressa.
+                    echo '<div style="margin:40px auto;max-width:600px;padding:30px;border:2px solid #f44336;background:#fff3f3;color:#b71c1c;font-family:Arial,sans-serif;text-align:center;">';
+                    echo '<h2>Erro de conexão com o banco</h2>';
+                    echo '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
+                    echo '<p><strong>DB_HOST=' . htmlspecialchars((string) Config::DB_HOST)
+                        . '<br>DB_PORT=' . htmlspecialchars((string) Config::DB_PORT)
+                        . '<br>DB_DATABASE=' . htmlspecialchars((string) Config::DB_DATABASE)
+                        . '<br>DB_USERNAME=' . htmlspecialchars((string) Config::DB_USERNAME)
+                        . '<br>DB_PASSWORD=(omitida)</strong></p>';
+                    echo '</div>';
+                } else {
+                    http_response_code(503);
+                    echo '<h1>Servico temporariamente indisponivel</h1>';
+                    echo '<p>Tente novamente em alguns instantes.</p>';
+                }
+
+                throw new \Exception('Erro de conexao com o banco de dados');
             }
         }
         return self::$instance;
