@@ -249,21 +249,6 @@
         
         <div class="info-item">
           <div class="info-icon">
-            <i class="bi bi-whatsapp"></i>
-          </div>
-          <div class="info-content">
-            <h4>WhatsApp</h4>
-            <p>
-              <a href="https://wa.me/5544997341687" target="_blank">
-                +55 (44) 99734-1687
-              </a>
-            </p>
-            <small style="color: #888;">Clique para conversar pelo WhatsApp</small>
-          </div>
-        </div>
-        
-        <div class="info-item">
-          <div class="info-icon">
             <i class="bi bi-envelope-fill"></i>
           </div>
           <div class="info-content">

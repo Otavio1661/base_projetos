@@ -24,7 +24,7 @@ Visão geral e objetivos:
 
 ## Pré-requisitos
 
-- PHP 8.0+ com as extensões `pdo` e `pdo_mysql` (ou `pdo_pgsql` conforme DB).
+- PHP 8.2+ (recomendado 8.5.12+, versões anteriores à 8.2.35 têm RCE conhecido) com as extensões `pdo` e `pdo_mysql` (ou `pdo_pgsql` conforme DB).
 - Composer (para instalar dependências e usar scripts).
 - Opcional: Docker/Docker Compose para ambiente isolado.
 
@@ -194,70 +194,4 @@ class HomeController extends ctrl
 php -S localhost:8000 -t public
 ```
 
-- Rodar o bridge de WhatsApp (opcional):
-
-```bash
-npm install
-node whatsapp-bridge.js
-```
-
 --------------------------------------------------------------------------------
-
-## Integração com WhatsApp (whatsapp-bridge)
-
-Este repositório inclui um pequeno *bridge* HTTP para `whatsapp-web.js` em `whatsapp-bridge.js`. Ele expõe endpoints simples que permitem enviar mensagens via uma sessão do WhatsApp Web controlada pelo Puppeteer.
-
-Pré-requisitos:
-- Node.js 14+ e `npm`/`yarn`.
-
-Instalação e execução:
-
-```bash
-# instalar dependências (na raiz do projeto)
-npm install
-
-# iniciar o bridge (por padrão porta 3000)
-node whatsapp-bridge.js
-```
-
-Variáveis de ambiente úteis:
-- `WHATSAPP_BRIDGE_PORT` — porta do servidor HTTP (padrão `3000`).
-- `WHATSAPP_DEFAULT_CC` — código de país padrão (ex: `55`) que será prefixado automaticamente ao número informado se a tentativa direta falhar.
-
-Como funciona (endpoints principais):
-- `GET /qr` — retorna a imagem PNG do QR atual para autenticação (404 se já autenticado).
-- `GET /status` — retorna JSON com `{ ready: true|false }` indicando se o cliente está pronto.
-- `POST /send` — envia mensagem. Body JSON esperado: `{ "number": "5511999999999", "message": "Olá" }`.
-
-Notas importantes sobre envio (`/send`):
-- O `number` deve conter apenas dígitos; o bridge tentará resolver o ID do WhatsApp automaticamente.
-- Se o número não estiver registrado no WhatsApp, o endpoint retorna `404` com uma lista `tried` dos formatos tentados.
-- O bridge usa persistência de sessão em disco (`whatsapp-session/`) para evitar reescaneamento frequente do QR.
-
-Exemplo de uso com `curl`:
-
-```bash
-curl -X POST http://localhost:3000/send \
-    -H "Content-Type: application/json" \
-    -d '{"number":"5511999999999","message":"Olá do bridge"}'
-```
-
-Exemplo simples em fetch (JS):
-
-```javascript
-fetch('http://localhost:3000/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ number: '5511999999999', message: 'Olá via bridge' })
-}).then(r => r.json()).then(console.log);
-```
-
-Recomendações de segurança e produção:
-- Proteja o bridge com autenticação (token/header ou proxy reverso) — ele não implementa auth por padrão.
-- Não exponha a porta publicamente sem um gateway seguro (firewall, VPN ou API gateway).
-- Em produção, execute o bridge via `pm2`/systemd ou dentro de um container Docker e monitore o processo.
-- Faça backup da pasta de sessão (`whatsapp-session/`) caso precise mover o serviço.
-
-Limitações e observações:
-- O bridge depende do `whatsapp-web.js` e do Puppeteer; alterações na API do WhatsApp Web podem afetá-lo.
-- O uso comercial ou em massa pode violar os termos do WhatsApp; avalie legal e operacionalmente antes de automatizar envios em grande escala.

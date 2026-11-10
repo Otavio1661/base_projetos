@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6c0b757a5a264982b909f92ed1103a58",
+    "content-hash": "ee3711cb85b156d9d425eac3949f627c",
     "packages": [
         {
             "name": "graham-campbell/result-type",
@@ -400,12 +400,12 @@
             "version": "v5.6.2",
             "source": {
                 "type": "git",
-                "url": "https://github.com/vlucas/phpdotenv.git",
+                "url": "https://github.com/phpdotenv/phpdotenv.git",
                 "reference": "24ac4c74f91ee2c193fa1aaa5c249cb0822809af"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/vlucas/phpdotenv/zipball/24ac4c74f91ee2c193fa1aaa5c249cb0822809af",
+                "url": "https://api.github.com/repos/phpdotenv/phpdotenv/zipball/24ac4c74f91ee2c193fa1aaa5c249cb0822809af",
                 "reference": "24ac4c74f91ee2c193fa1aaa5c249cb0822809af",
                 "shasum": ""
             },
@@ -487,8 +487,8 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=8.0"
+        "php": ">=8.2"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }
