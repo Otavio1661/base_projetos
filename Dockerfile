@@ -1,37 +1,27 @@
-# PHP 8.5.12 com Apache (versão corrigida p/ CVE-2026-109618/9; não usar < 8.5.12)
-FROM php:8.5.12-apache
+# PHP 8.5.12 FPM (versão corrigida p/ CVE-2026-109618/9; não usar < 8.5.12)
+# O servidor web é o Nginx (ver docker-compose.yml e docker/nginx/default.conf)
+FROM php:8.5.12-fpm
 
 # unzip/zip para o Composer baixar pacotes como dist
 RUN apt-get update && apt-get install -y --no-install-recommends unzip libzip-dev \
     && docker-php-ext-install zip \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala extensões necessárias para MySQL
+# Extensões necessárias para MySQL
 RUN docker-php-ext-install mysqli pdo pdo_mysql
 
-# Mitigação CVE-2026-115560 (sem correção oficial ainda)
-RUN echo 'session.upload_progress.enabled=0' > /usr/local/etc/php/conf.d/zz-seguranca.ini
+# Ajustes de segurança/performance do PHP
+COPY docker/php/zz-app.ini /usr/local/etc/php/conf.d/zz-app.ini
 
-# Habilita mod_rewrite do Apache
-RUN a2enmod rewrite
-
-# Ajusta DocumentRoot para a pasta public
-RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
-
-# Copia arquivos do projeto
-COPY . /var/www/html/
-
-# Copia o Composer para dentro do container
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Ajusta permissões
-RUN chown -R www-data:www-data /var/www/html
+WORKDIR /var/www/html
+COPY . /var/www/html/
 
-# Instala dependências do Composer (dentro do container)
-RUN composer install --no-dev --optimize-autoloader --working-dir=/var/www/html
+# Dependências de produção (dentro do container)
+RUN composer install --no-dev --optimize-autoloader --working-dir=/var/www/html \
+    && chown -R www-data:www-data /var/www/html
 
-# Porta que o Apache vai expor
-EXPOSE 80
-
-# Comando padrão
-CMD ["apache2-foreground"]
+EXPOSE 9000
+CMD ["php-fpm"]

@@ -65,12 +65,17 @@ composer install
 1) Docker (recomendado para produção/desenvolvimento consistente)
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
+# porta padrão 8087; para trocar: WEB_PORT=8080 docker compose up -d --build
 ```
 
-2) XAMPP / Apache
+Stack: **Nginx 1.30 + PHP 8.5.12-FPM** (serviços `web` e `app`). A config do Nginx fica em
+`docker/nginx/default.conf` e os ajustes do PHP em `docker/php/zz-app.ini`.
 
-- Copie o projeto para `htdocs` e configure o VirtualHost apontando para a pasta `public/`.
+2) Nginx próprio (sem Docker)
+
+- Aponte o `root` para a pasta `public/`, use `try_files $uri $uri/ /index.php?$query_string;` e
+  repasse apenas `/index.php` ao PHP-FPM (veja `docker/nginx/default.conf` como modelo).
 
 3) PHP built-in server (modo rápido para desenvolvimento)
 
