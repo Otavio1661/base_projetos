@@ -57,15 +57,8 @@ $router = new Router();
  * ROTAS DA APLICAÇÃO
  * ============================================
 */
-$router->get('/', 'IndexController@index');
-$router->get('/login', 'IndexController@login');
-$router->get('/sobre', 'IndexController@sobre');
-$router->get('/servicos', 'IndexController@servicos');
-$router->get('/contato', 'IndexController@contato');
-    
-$router->post('/auth/login', 'LoginController@login');
+$router->get('/', 'VitrineController@index');
+$router->get('/vitrine', 'VitrineController@index');
 
-
-$router->get('/dashboard', 'DashboardController@index', 'AuthMiddleware@handle');
 
 return $router;

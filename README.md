@@ -136,7 +136,7 @@ Principais arquivos/folders:
 - `core/RouterBase.php` — lógica de roteamento, dispatch e middleware.
 - `core/Database.php` — singleton PDO, `switchParams()` e `runMigration()`.
 - `core/Generator/` — scripts CLI para gerar/remover MVC.
-- `src/Utils/Decryption.php` e `public/js/r4.js` — criptografia AES-GCM (frontend/backend).
+- `src/Utils/Decryption.php` e `public/libr4/net.js` (R4.crypto) — criptografia AES-GCM (frontend/backend).
 
 --------------------------------------------------------------------------------
 
@@ -176,7 +176,7 @@ class HomeController extends ctrl
 
 ## Criptografia (frontend ↔ backend)
 
-- O frontend contém `public/js/r4.js` que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
+- O frontend contém a libr4 (`public/libr4/net.js`, `R4.crypto`/`R4.http`) que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
 - O backend usa `src/Utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
 - A chave base está definida em `BASE_CRIPTOGRAFIA` no `.env` e é injetada nas views pelo `public/index.php`.
 
@@ -200,3 +200,8 @@ php -S localhost:8000 -t public
 ```
 
 --------------------------------------------------------------------------------
+
+## libr4 (R4 dev) e vitrine
+
+- `public/libr4/` — biblioteca JS sem dependências, estilo ExtJS: `core.js` (R4, `R4.define`, `R4.create`), `net.js` (`R4.crypto`, `R4.http`), `components.js` (viewport, panel, toolbar, button, tabpanel, treepanel, grid, window, textfield, `R4.msg`) e `libr4.css` (tema por variáveis `--r4-*`, modo escuro com `.r4-dark`).
+- `public/showcase/` — a vitrine (rotas `/` e `/vitrine`). O menu é gerado de `R4.registry` e `R4.modules`; para exibir um item novo, registre-o com `R4.define`/`R4.module` e acrescente exemplos em `public/showcase/demos.js` (`R4Demos.<nome> = [{ title, fn(el, out) }]`).

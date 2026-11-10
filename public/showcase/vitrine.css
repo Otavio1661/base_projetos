@@ -1,0 +1,11 @@
+/* Estilos exclusivos da página da vitrine (o resto vem da libr4.css) */
+body{margin:0;background:var(--r4-bg)}
+.vt-top{padding:4px 14px}
+.vt-logo{color:var(--r4-acc);font-size:18px;letter-spacing:.02em}
+.vt-sub{color:var(--r4-mut)}
+.vt-demo{border:1px dashed var(--r4-line);border-radius:var(--r4-radius);padding:14px;background:var(--r4-panel)}
+.vt-out{margin-top:8px;max-height:260px}
+.vt-chip{display:inline-block;margin:2px;padding:3px 10px;border-radius:12px;background:var(--r4-head);color:var(--r4-txt);text-decoration:none}
+.vt-chip:hover{background:var(--r4-sel)}
+.r4-tabbody .r4-body{max-width:1000px}
+code{font-family:var(--r4-mono);font-size:13px;background:var(--r4-head);padding:1px 5px;border-radius:4px}

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>libr4 - Vitrine</title>
+  <link rel="stylesheet" href="<?= asset('/libr4/libr4.css') ?>">
+  <link rel="stylesheet" href="<?= asset('/showcase/vitrine.css') ?>">
+  <script>try { if (localStorage.getItem('r4-dark')) document.documentElement.classList.add('r4-dark'); } catch (e) {}</script>
+</head>
+<body>
+  <script src="<?= asset('/libr4/core.js') ?>"></script>
+  <script src="<?= asset('/libr4/net.js') ?>"></script>
+  <script src="<?= asset('/libr4/components.js') ?>"></script>
+  <script src="<?= asset('/showcase/demos.js') ?>"></script>
+  <script src="<?= asset('/showcase/app.js') ?>"></script>
+</body>
+</html>

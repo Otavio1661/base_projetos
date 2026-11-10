@@ -34,15 +34,13 @@ function asset($path)
 $GLOBALS['asset'] = 'asset';
 
 /**
- * Função para injetar configurações de criptografia e script r4.js no HTML
- * Adiciona automaticamente o script com BASE_CRIPTOGRAFIA e r4.js antes de fechar </head>
+ * Função para injetar a chave de criptografia (BASE_CRIPTOGRAFIA) no HTML
+ * Adiciona o script com BASE_CRIPTOGRAFIA antes de fechar </head>; a libr4 lê window.BASE_CRIPTOGRAFIA
  */
 function injectCryptoConfig($content)
 {
     $cryptoScript = '<script>window.BASE_CRIPTOGRAFIA = "' . Config::BASE_CRIPTOGRAFIA . '";</script>';
-    $r4Script = '<script src="/js/r4.js"></script>';
-    $injection = $cryptoScript . "\n" . $r4Script;
-    return str_replace('</head>', $injection . "\n</head>", $content);
+    return str_replace('</head>', $cryptoScript . "\n</head>", $content);
 }
 
 // Iniciar buffer de saída para processar HTML antes de enviar

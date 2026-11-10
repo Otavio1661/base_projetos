@@ -1,1 +1,0 @@
-SELECT * FROM usuario WHERE nome = :username and senha = :password
