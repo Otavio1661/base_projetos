@@ -36,6 +36,9 @@
     window: (a, b) => plain(a) ? a : { title: a, html: b }
   };
 
+  /** Módulos registram o atalho do seu componente: R4.quickMap.chart = (dados, extra) => ({ ... }) */
+  R4.quickMap = QUICK;
+
   function make(x) {
     if (R4[x] || (R4.registry[x] && R4.registry[x].meta.hidden)) return;
     R4[x] = function (target, a, b) {

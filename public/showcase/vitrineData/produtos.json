@@ -1,0 +1,802 @@
+[
+ {
+  "id": 1,
+  "sku": "SKU-1000",
+  "nome": "Headset Pro 200",
+  "categoria": "Redes",
+  "preco": 3573.35,
+  "estoque": 224,
+  "ativo": true,
+  "atualizadoEm": "2026-03-06"
+ },
+ {
+  "id": 2,
+  "sku": "SKU-1001",
+  "nome": "Webcam Plus 100",
+  "categoria": "Periféricos",
+  "preco": 1754.98,
+  "estoque": 91,
+  "ativo": true,
+  "atualizadoEm": "2026-03-20"
+ },
+ {
+  "id": 3,
+  "sku": "SKU-1002",
+  "nome": "Webcam X 800",
+  "categoria": "Redes",
+  "preco": 4072.26,
+  "estoque": 297,
+  "ativo": true,
+  "atualizadoEm": "2026-09-13"
+ },
+ {
+  "id": 4,
+  "sku": "SKU-1003",
+  "nome": "Hub USB Pro 400",
+  "categoria": "Acessórios",
+  "preco": 4871.97,
+  "estoque": 43,
+  "ativo": true,
+  "atualizadoEm": "2026-08-22"
+ },
+ {
+  "id": 5,
+  "sku": "SKU-1004",
+  "nome": "Notebook X 400",
+  "categoria": "Periféricos",
+  "preco": 4145.94,
+  "estoque": 126,
+  "ativo": false,
+  "atualizadoEm": "2026-05-20"
+ },
+ {
+  "id": 6,
+  "sku": "SKU-1005",
+  "nome": "Hub USB Lite 800",
+  "categoria": "Notebooks",
+  "preco": 5150.92,
+  "estoque": 270,
+  "ativo": true,
+  "atualizadoEm": "2026-01-16"
+ },
+ {
+  "id": 7,
+  "sku": "SKU-1006",
+  "nome": "Roteador Lite 800",
+  "categoria": "Notebooks",
+  "preco": 5096.93,
+  "estoque": 118,
+  "ativo": false,
+  "atualizadoEm": "2026-10-10"
+ },
+ {
+  "id": 8,
+  "sku": "SKU-1007",
+  "nome": "Headset Lite 500",
+  "categoria": "Periféricos",
+  "preco": 4787.8,
+  "estoque": 111,
+  "ativo": true,
+  "atualizadoEm": "2026-03-08"
+ },
+ {
+  "id": 9,
+  "sku": "SKU-1008",
+  "nome": "Caixa de som Pro 900",
+  "categoria": "Áudio",
+  "preco": 2572.45,
+  "estoque": 248,
+  "ativo": true,
+  "atualizadoEm": "2026-01-07"
+ },
+ {
+  "id": 10,
+  "sku": "SKU-1009",
+  "nome": "Pen drive Max 100",
+  "categoria": "Monitores",
+  "preco": 3667.57,
+  "estoque": 299,
+  "ativo": true,
+  "atualizadoEm": "2026-06-12"
+ },
+ {
+  "id": 11,
+  "sku": "SKU-1010",
+  "nome": "Hub USB Max 200",
+  "categoria": "Redes",
+  "preco": 4147.06,
+  "estoque": 15,
+  "ativo": true,
+  "atualizadoEm": "2026-07-14"
+ },
+ {
+  "id": 12,
+  "sku": "SKU-1011",
+  "nome": "Hub USB Plus 900",
+  "categoria": "Periféricos",
+  "preco": 3051.31,
+  "estoque": 172,
+  "ativo": true,
+  "atualizadoEm": "2026-08-02"
+ },
+ {
+  "id": 13,
+  "sku": "SKU-1012",
+  "nome": "Cabo HDMI Max 900",
+  "categoria": "Periféricos",
+  "preco": 1721.77,
+  "estoque": 169,
+  "ativo": true,
+  "atualizadoEm": "2026-10-06"
+ },
+ {
+  "id": 14,
+  "sku": "SKU-1013",
+  "nome": "Mouse Pro 300",
+  "categoria": "Monitores",
+  "preco": 2408.87,
+  "estoque": 229,
+  "ativo": true,
+  "atualizadoEm": "2026-08-13"
+ },
+ {
+  "id": 15,
+  "sku": "SKU-1014",
+  "nome": "Webcam Plus 900",
+  "categoria": "Monitores",
+  "preco": 106.76,
+  "estoque": 280,
+  "ativo": true,
+  "atualizadoEm": "2026-02-28"
+ },
+ {
+  "id": 16,
+  "sku": "SKU-1015",
+  "nome": "Cabo HDMI Lite 100",
+  "categoria": "Monitores",
+  "preco": 840.2,
+  "estoque": 84,
+  "ativo": true,
+  "atualizadoEm": "2026-04-13"
+ },
+ {
+  "id": 17,
+  "sku": "SKU-1016",
+  "nome": "Notebook Lite 300",
+  "categoria": "Notebooks",
+  "preco": 3863.48,
+  "estoque": 151,
+  "ativo": false,
+  "atualizadoEm": "2026-03-02"
+ },
+ {
+  "id": 18,
+  "sku": "SKU-1017",
+  "nome": "Roteador Plus 300",
+  "categoria": "Áudio",
+  "preco": 3186.44,
+  "estoque": 297,
+  "ativo": true,
+  "atualizadoEm": "2026-06-12"
+ },
+ {
+  "id": 19,
+  "sku": "SKU-1018",
+  "nome": "Monitor Lite 500",
+  "categoria": "Notebooks",
+  "preco": 2203.87,
+  "estoque": 214,
+  "ativo": true,
+  "atualizadoEm": "2026-09-25"
+ },
+ {
+  "id": 20,
+  "sku": "SKU-1019",
+  "nome": "Pen drive Lite 900",
+  "categoria": "Redes",
+  "preco": 147.47,
+  "estoque": 113,
+  "ativo": true,
+  "atualizadoEm": "2026-01-28"
+ },
+ {
+  "id": 21,
+  "sku": "SKU-1020",
+  "nome": "Cabo HDMI Lite 400",
+  "categoria": "Notebooks",
+  "preco": 6326.11,
+  "estoque": 19,
+  "ativo": false,
+  "atualizadoEm": "2026-01-27"
+ },
+ {
+  "id": 22,
+  "sku": "SKU-1021",
+  "nome": "Notebook X 500",
+  "categoria": "Acessórios",
+  "preco": 3519.57,
+  "estoque": 20,
+  "ativo": true,
+  "atualizadoEm": "2026-05-26"
+ },
+ {
+  "id": 23,
+  "sku": "SKU-1022",
+  "nome": "Roteador X 400",
+  "categoria": "Acessórios",
+  "preco": 756.87,
+  "estoque": 36,
+  "ativo": true,
+  "atualizadoEm": "2026-08-18"
+ },
+ {
+  "id": 24,
+  "sku": "SKU-1023",
+  "nome": "Hub USB Max 600",
+  "categoria": "Periféricos",
+  "preco": 5414.27,
+  "estoque": 112,
+  "ativo": true,
+  "atualizadoEm": "2026-10-28"
+ },
+ {
+  "id": 25,
+  "sku": "SKU-1024",
+  "nome": "Mouse Plus 900",
+  "categoria": "Áudio",
+  "preco": 2421.22,
+  "estoque": 27,
+  "ativo": true,
+  "atualizadoEm": "2026-09-02"
+ },
+ {
+  "id": 26,
+  "sku": "SKU-1025",
+  "nome": "Caixa de som Lite 200",
+  "categoria": "Notebooks",
+  "preco": 4141.57,
+  "estoque": 17,
+  "ativo": true,
+  "atualizadoEm": "2026-11-12"
+ },
+ {
+  "id": 27,
+  "sku": "SKU-1026",
+  "nome": "Cabo HDMI Pro 400",
+  "categoria": "Periféricos",
+  "preco": 1516.54,
+  "estoque": 243,
+  "ativo": true,
+  "atualizadoEm": "2026-09-19"
+ },
+ {
+  "id": 28,
+  "sku": "SKU-1027",
+  "nome": "SSD Pro 300",
+  "categoria": "Áudio",
+  "preco": 1264.17,
+  "estoque": 227,
+  "ativo": true,
+  "atualizadoEm": "2026-02-28"
+ },
+ {
+  "id": 29,
+  "sku": "SKU-1028",
+  "nome": "Monitor Lite 800",
+  "categoria": "Notebooks",
+  "preco": 595.18,
+  "estoque": 72,
+  "ativo": true,
+  "atualizadoEm": "2026-06-09"
+ },
+ {
+  "id": 30,
+  "sku": "SKU-1029",
+  "nome": "Mouse Pro 300",
+  "categoria": "Redes",
+  "preco": 5569.36,
+  "estoque": 241,
+  "ativo": true,
+  "atualizadoEm": "2026-04-26"
+ },
+ {
+  "id": 31,
+  "sku": "SKU-1030",
+  "nome": "Teclado Lite 300",
+  "categoria": "Redes",
+  "preco": 463.53,
+  "estoque": 237,
+  "ativo": true,
+  "atualizadoEm": "2026-06-25"
+ },
+ {
+  "id": 32,
+  "sku": "SKU-1031",
+  "nome": "Mouse X 700",
+  "categoria": "Periféricos",
+  "preco": 3553.65,
+  "estoque": 109,
+  "ativo": true,
+  "atualizadoEm": "2026-09-13"
+ },
+ {
+  "id": 33,
+  "sku": "SKU-1032",
+  "nome": "Caixa de som Max 800",
+  "categoria": "Redes",
+  "preco": 3479.93,
+  "estoque": 297,
+  "ativo": true,
+  "atualizadoEm": "2026-08-24"
+ },
+ {
+  "id": 34,
+  "sku": "SKU-1033",
+  "nome": "Mouse X 400",
+  "categoria": "Periféricos",
+  "preco": 217.42,
+  "estoque": 34,
+  "ativo": false,
+  "atualizadoEm": "2026-11-18"
+ },
+ {
+  "id": 35,
+  "sku": "SKU-1034",
+  "nome": "Webcam Pro 600",
+  "categoria": "Periféricos",
+  "preco": 2757.63,
+  "estoque": 139,
+  "ativo": true,
+  "atualizadoEm": "2026-03-14"
+ },
+ {
+  "id": 36,
+  "sku": "SKU-1035",
+  "nome": "Monitor Pro 200",
+  "categoria": "Notebooks",
+  "preco": 2270.98,
+  "estoque": 266,
+  "ativo": true,
+  "atualizadoEm": "2026-05-05"
+ },
+ {
+  "id": 37,
+  "sku": "SKU-1036",
+  "nome": "Webcam X 100",
+  "categoria": "Monitores",
+  "preco": 5171.43,
+  "estoque": 44,
+  "ativo": true,
+  "atualizadoEm": "2026-06-28"
+ },
+ {
+  "id": 38,
+  "sku": "SKU-1037",
+  "nome": "Teclado X 500",
+  "categoria": "Redes",
+  "preco": 5423.05,
+  "estoque": 4,
+  "ativo": true,
+  "atualizadoEm": "2026-03-06"
+ },
+ {
+  "id": 39,
+  "sku": "SKU-1038",
+  "nome": "SSD Pro 700",
+  "categoria": "Áudio",
+  "preco": 1585.99,
+  "estoque": 55,
+  "ativo": true,
+  "atualizadoEm": "2026-08-16"
+ },
+ {
+  "id": 40,
+  "sku": "SKU-1039",
+  "nome": "Hub USB Max 300",
+  "categoria": "Monitores",
+  "preco": 3675.36,
+  "estoque": 104,
+  "ativo": true,
+  "atualizadoEm": "2026-06-28"
+ },
+ {
+  "id": 41,
+  "sku": "SKU-1040",
+  "nome": "Headset Pro 700",
+  "categoria": "Acessórios",
+  "preco": 254.93,
+  "estoque": 296,
+  "ativo": true,
+  "atualizadoEm": "2026-03-18"
+ },
+ {
+  "id": 42,
+  "sku": "SKU-1041",
+  "nome": "Monitor Pro 300",
+  "categoria": "Notebooks",
+  "preco": 1281.94,
+  "estoque": 12,
+  "ativo": true,
+  "atualizadoEm": "2026-09-12"
+ },
+ {
+  "id": 43,
+  "sku": "SKU-1042",
+  "nome": "Cabo HDMI Plus 400",
+  "categoria": "Notebooks",
+  "preco": 1163.01,
+  "estoque": 117,
+  "ativo": true,
+  "atualizadoEm": "2026-06-01"
+ },
+ {
+  "id": 44,
+  "sku": "SKU-1043",
+  "nome": "Notebook Plus 500",
+  "categoria": "Notebooks",
+  "preco": 3170.39,
+  "estoque": 219,
+  "ativo": true,
+  "atualizadoEm": "2026-04-21"
+ },
+ {
+  "id": 45,
+  "sku": "SKU-1044",
+  "nome": "Caixa de som Max 300",
+  "categoria": "Áudio",
+  "preco": 4577.14,
+  "estoque": 267,
+  "ativo": true,
+  "atualizadoEm": "2026-12-13"
+ },
+ {
+  "id": 46,
+  "sku": "SKU-1045",
+  "nome": "Teclado Lite 500",
+  "categoria": "Notebooks",
+  "preco": 129.02,
+  "estoque": 186,
+  "ativo": false,
+  "atualizadoEm": "2026-11-08"
+ },
+ {
+  "id": 47,
+  "sku": "SKU-1046",
+  "nome": "SSD Max 700",
+  "categoria": "Notebooks",
+  "preco": 6110.12,
+  "estoque": 94,
+  "ativo": false,
+  "atualizadoEm": "2026-07-07"
+ },
+ {
+  "id": 48,
+  "sku": "SKU-1047",
+  "nome": "SSD Max 600",
+  "categoria": "Acessórios",
+  "preco": 5569.85,
+  "estoque": 182,
+  "ativo": true,
+  "atualizadoEm": "2026-03-24"
+ },
+ {
+  "id": 49,
+  "sku": "SKU-1048",
+  "nome": "Mouse Pro 500",
+  "categoria": "Redes",
+  "preco": 3512.11,
+  "estoque": 173,
+  "ativo": true,
+  "atualizadoEm": "2026-11-13"
+ },
+ {
+  "id": 50,
+  "sku": "SKU-1049",
+  "nome": "Teclado Max 800",
+  "categoria": "Periféricos",
+  "preco": 1386.67,
+  "estoque": 148,
+  "ativo": true,
+  "atualizadoEm": "2026-06-05"
+ },
+ {
+  "id": 51,
+  "sku": "SKU-1050",
+  "nome": "Teclado Lite 600",
+  "categoria": "Redes",
+  "preco": 3139.4,
+  "estoque": 66,
+  "ativo": true,
+  "atualizadoEm": "2026-11-06"
+ },
+ {
+  "id": 52,
+  "sku": "SKU-1051",
+  "nome": "Webcam Pro 800",
+  "categoria": "Áudio",
+  "preco": 2021.81,
+  "estoque": 258,
+  "ativo": true,
+  "atualizadoEm": "2026-10-07"
+ },
+ {
+  "id": 53,
+  "sku": "SKU-1052",
+  "nome": "Teclado Plus 500",
+  "categoria": "Monitores",
+  "preco": 2707.98,
+  "estoque": 277,
+  "ativo": true,
+  "atualizadoEm": "2026-02-04"
+ },
+ {
+  "id": 54,
+  "sku": "SKU-1053",
+  "nome": "Caixa de som Lite 200",
+  "categoria": "Áudio",
+  "preco": 286.23,
+  "estoque": 64,
+  "ativo": true,
+  "atualizadoEm": "2026-12-27"
+ },
+ {
+  "id": 55,
+  "sku": "SKU-1054",
+  "nome": "SSD Max 100",
+  "categoria": "Monitores",
+  "preco": 6331.92,
+  "estoque": 75,
+  "ativo": true,
+  "atualizadoEm": "2026-07-10"
+ },
+ {
+  "id": 56,
+  "sku": "SKU-1055",
+  "nome": "Notebook X 300",
+  "categoria": "Áudio",
+  "preco": 806.05,
+  "estoque": 134,
+  "ativo": true,
+  "atualizadoEm": "2026-02-09"
+ },
+ {
+  "id": 57,
+  "sku": "SKU-1056",
+  "nome": "Webcam X 500",
+  "categoria": "Monitores",
+  "preco": 6327.54,
+  "estoque": 81,
+  "ativo": true,
+  "atualizadoEm": "2026-03-12"
+ },
+ {
+  "id": 58,
+  "sku": "SKU-1057",
+  "nome": "Teclado Pro 700",
+  "categoria": "Notebooks",
+  "preco": 5095.79,
+  "estoque": 213,
+  "ativo": true,
+  "atualizadoEm": "2026-12-06"
+ },
+ {
+  "id": 59,
+  "sku": "SKU-1058",
+  "nome": "Roteador X 300",
+  "categoria": "Acessórios",
+  "preco": 3985.97,
+  "estoque": 239,
+  "ativo": true,
+  "atualizadoEm": "2026-07-19"
+ },
+ {
+  "id": 60,
+  "sku": "SKU-1059",
+  "nome": "SSD Plus 300",
+  "categoria": "Monitores",
+  "preco": 1827.73,
+  "estoque": 77,
+  "ativo": true,
+  "atualizadoEm": "2026-02-27"
+ },
+ {
+  "id": 61,
+  "sku": "SKU-1060",
+  "nome": "Mouse Pro 100",
+  "categoria": "Áudio",
+  "preco": 554.55,
+  "estoque": 116,
+  "ativo": true,
+  "atualizadoEm": "2026-11-23"
+ },
+ {
+  "id": 62,
+  "sku": "SKU-1061",
+  "nome": "Mouse X 400",
+  "categoria": "Monitores",
+  "preco": 4525.32,
+  "estoque": 267,
+  "ativo": true,
+  "atualizadoEm": "2026-01-12"
+ },
+ {
+  "id": 63,
+  "sku": "SKU-1062",
+  "nome": "Teclado Max 900",
+  "categoria": "Áudio",
+  "preco": 1465.09,
+  "estoque": 133,
+  "ativo": true,
+  "atualizadoEm": "2026-07-20"
+ },
+ {
+  "id": 64,
+  "sku": "SKU-1063",
+  "nome": "Mouse Max 400",
+  "categoria": "Acessórios",
+  "preco": 5541.48,
+  "estoque": 297,
+  "ativo": false,
+  "atualizadoEm": "2026-02-15"
+ },
+ {
+  "id": 65,
+  "sku": "SKU-1064",
+  "nome": "Webcam Max 700",
+  "categoria": "Periféricos",
+  "preco": 694.99,
+  "estoque": 273,
+  "ativo": false,
+  "atualizadoEm": "2026-03-07"
+ },
+ {
+  "id": 66,
+  "sku": "SKU-1065",
+  "nome": "Monitor Lite 200",
+  "categoria": "Áudio",
+  "preco": 1967.15,
+  "estoque": 99,
+  "ativo": true,
+  "atualizadoEm": "2026-05-12"
+ },
+ {
+  "id": 67,
+  "sku": "SKU-1066",
+  "nome": "Cabo HDMI Plus 400",
+  "categoria": "Periféricos",
+  "preco": 4501.86,
+  "estoque": 147,
+  "ativo": true,
+  "atualizadoEm": "2026-02-25"
+ },
+ {
+  "id": 68,
+  "sku": "SKU-1067",
+  "nome": "Webcam Pro 800",
+  "categoria": "Redes",
+  "preco": 4457.7,
+  "estoque": 39,
+  "ativo": false,
+  "atualizadoEm": "2026-11-01"
+ },
+ {
+  "id": 69,
+  "sku": "SKU-1068",
+  "nome": "Teclado Max 400",
+  "categoria": "Áudio",
+  "preco": 6328.96,
+  "estoque": 121,
+  "ativo": true,
+  "atualizadoEm": "2026-08-22"
+ },
+ {
+  "id": 70,
+  "sku": "SKU-1069",
+  "nome": "Roteador X 200",
+  "categoria": "Acessórios",
+  "preco": 6394.67,
+  "estoque": 10,
+  "ativo": true,
+  "atualizadoEm": "2026-10-23"
+ },
+ {
+  "id": 71,
+  "sku": "SKU-1070",
+  "nome": "SSD Pro 500",
+  "categoria": "Redes",
+  "preco": 1286.6,
+  "estoque": 6,
+  "ativo": false,
+  "atualizadoEm": "2026-06-17"
+ },
+ {
+  "id": 72,
+  "sku": "SKU-1071",
+  "nome": "Mouse Plus 700",
+  "categoria": "Periféricos",
+  "preco": 2598.25,
+  "estoque": 296,
+  "ativo": true,
+  "atualizadoEm": "2026-01-08"
+ },
+ {
+  "id": 73,
+  "sku": "SKU-1072",
+  "nome": "Caixa de som Max 800",
+  "categoria": "Notebooks",
+  "preco": 614.55,
+  "estoque": 291,
+  "ativo": true,
+  "atualizadoEm": "2026-12-09"
+ },
+ {
+  "id": 74,
+  "sku": "SKU-1073",
+  "nome": "Caixa de som X 500",
+  "categoria": "Periféricos",
+  "preco": 5843.41,
+  "estoque": 63,
+  "ativo": false,
+  "atualizadoEm": "2026-09-08"
+ },
+ {
+  "id": 75,
+  "sku": "SKU-1074",
+  "nome": "SSD Plus 400",
+  "categoria": "Notebooks",
+  "preco": 1669.78,
+  "estoque": 158,
+  "ativo": true,
+  "atualizadoEm": "2026-09-17"
+ },
+ {
+  "id": 76,
+  "sku": "SKU-1075",
+  "nome": "Cabo HDMI Max 200",
+  "categoria": "Periféricos",
+  "preco": 4572.42,
+  "estoque": 222,
+  "ativo": true,
+  "atualizadoEm": "2026-04-04"
+ },
+ {
+  "id": 77,
+  "sku": "SKU-1076",
+  "nome": "Notebook X 400",
+  "categoria": "Áudio",
+  "preco": 224.38,
+  "estoque": 117,
+  "ativo": true,
+  "atualizadoEm": "2026-05-11"
+ },
+ {
+  "id": 78,
+  "sku": "SKU-1077",
+  "nome": "Notebook Plus 400",
+  "categoria": "Redes",
+  "preco": 1246.43,
+  "estoque": 49,
+  "ativo": false,
+  "atualizadoEm": "2026-11-07"
+ },
+ {
+  "id": 79,
+  "sku": "SKU-1078",
+  "nome": "Roteador Pro 900",
+  "categoria": "Áudio",
+  "preco": 3858.29,
+  "estoque": 36,
+  "ativo": true,
+  "atualizadoEm": "2026-11-07"
+ },
+ {
+  "id": 80,
+  "sku": "SKU-1079",
+  "nome": "Notebook X 300",
+  "categoria": "Acessórios",
+  "preco": 197.18,
+  "estoque": 191,
+  "ativo": false,
+  "atualizadoEm": "2026-09-23"
+ }
+]

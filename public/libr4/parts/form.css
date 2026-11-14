@@ -1,0 +1,136 @@
+/* ============================================
+ * libr4 parts/form.css — formulários (R4 dev)
+ * form, campos, select, checkbox/switch/radio, textarea, number, senha, máscara,
+ * fieldset e formrow. Só variáveis --r4-* (funciona no tema escuro).
+ * ============================================ */
+
+/* ---------- form ---------- */
+.r4-form{display:flex;flex-direction:column;gap:14px;margin:0}
+.r4-form.r4-busy{cursor:progress}
+.r4-form-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;padding-top:2px}
+.r4-form-msg{font-size:13px}
+.r4-btn-busy{cursor:progress}
+.r4-spinner{display:inline-block;width:12px;height:12px;flex:none;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:r4-spin .7s linear infinite}
+@keyframes r4-spin{to{transform:rotate(360deg)}}
+
+/* ---------- casca dos campos ---------- */
+.r4-fld{min-width:0}
+.r4-req{color:var(--r4-err);font-weight:600}
+.r4-help{font-size:12px;color:var(--r4-mut)}
+.r4-field-error{font-size:12px;color:var(--r4-err);line-height:1.35}
+.r4-invalid .r4-input,.r4-input[aria-invalid="true"]{border-color:var(--r4-err)}
+.r4-invalid .r4-input:focus,.r4-invalid .r4-select-trigger:focus{outline-color:var(--r4-err)}
+.r4-input::placeholder{color:var(--r4-mut);opacity:.8}
+.r4-input:disabled,.r4-disabled .r4-input,.r4-disabled .r4-select-trigger{opacity:.6;cursor:not-allowed;background:var(--r4-bg)}
+.r4-input[readonly],.r4-readonly .r4-select-trigger{background:var(--r4-bg)}
+.r4-dark .r4-input{color-scheme:dark}
+
+/* grupo com adornos (prefixo/sufixo, mostrar senha, botões de número) */
+.r4-input-group{display:flex;align-items:stretch;min-width:0}
+.r4-input-group>.r4-input{flex:1;min-width:0}
+.r4-input-group>:not(:first-child){border-top-left-radius:0;border-bottom-left-radius:0}
+.r4-input-group>:not(:last-child){border-top-right-radius:0;border-bottom-right-radius:0}
+.r4-input-group>:not(:first-child):not(.r4-input){border-left:0}
+.r4-input-group>.r4-input:not(:first-child){margin-left:-1px}
+.r4-addon{display:flex;align-items:center;padding:0 10px;border:1px solid var(--r4-line);border-radius:var(--r4-radius);background:var(--r4-head);color:var(--r4-mut);font-size:13px;white-space:nowrap}
+.r4-input-group>.r4-addon:first-child{border-right:0}
+.r4-addon-btn{cursor:pointer;font:inherit;font-size:12px;color:var(--r4-txt)}
+.r4-addon-btn:hover:not(:disabled){background:var(--r4-hover)}
+.r4-addon-btn:focus-visible{outline:2px solid var(--r4-acc);outline-offset:-2px}
+.r4-addon-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ---------- select ---------- */
+.r4-select-box{position:relative;min-width:0}
+.r4-select-trigger{display:flex;align-items:center;gap:6px;min-height:34px;cursor:pointer;user-select:none;text-align:left}
+.r4-select-trigger:focus{outline:2px solid var(--r4-acc);outline-offset:-1px}
+.r4-select-value{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.r4-select-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r4-placeholder{color:var(--r4-mut)}
+.r4-select-arrow{color:var(--r4-mut);font-size:12px;transition:transform .15s;flex:none}
+.r4-open .r4-select-arrow{transform:rotate(180deg)}
+.r4-loading .r4-select-arrow{animation:r4-spin 1s linear infinite}
+.r4-select-clear{border:0;background:none;color:var(--r4-mut);cursor:pointer;font:inherit;font-size:16px;line-height:1;padding:0 2px;flex:none}
+.r4-select-clear:hover{color:var(--r4-err)}
+.r4-select-pop{position:fixed;z-index:1100;display:flex;flex-direction:column;min-width:180px;max-height:300px;background:var(--r4-panel);color:var(--r4-txt);border:1px solid var(--r4-line);border-radius:var(--r4-radius);box-shadow:0 10px 28px rgba(10,14,30,.22);overflow:hidden;font:14px/1.5 var(--r4-font)}
+.r4-select-search{margin:6px;width:auto;flex:none}
+.r4-select-list{list-style:none;margin:0;padding:4px 0;overflow:auto;flex:1;min-height:0}
+.r4-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer}
+.r4-option.r4-active{background:var(--r4-hover)}
+.r4-option[aria-selected="true"]{font-weight:600;color:var(--r4-acc)}
+.r4-option[aria-disabled="true"]{opacity:.5;cursor:default}
+.r4-option-check{position:relative;width:16px;height:16px;flex:none;border:1.5px solid var(--r4-line);border-radius:4px;background:var(--r4-panel)}
+.r4-option[aria-selected="true"]>.r4-option-check{background:var(--r4-acc);border-color:var(--r4-acc)}
+.r4-option[aria-selected="true"]>.r4-option-check::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--r4-acc-txt);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.r4-select-note{padding:6px 12px;font-size:12px;color:var(--r4-mut);border-top:1px solid var(--r4-line)}
+.r4-chip{display:inline-flex;align-items:center;gap:2px;max-width:100%;padding:0 2px 0 8px;border-radius:10px;background:var(--r4-sel);color:var(--r4-txt);font-size:12px;line-height:20px}
+.r4-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r4-chip-x{border:0;background:none;color:var(--r4-mut);cursor:pointer;font:inherit;font-size:14px;line-height:1;padding:0 5px;border-radius:50%}
+.r4-chip-x:hover{color:var(--r4-err)}
+.r4-multi .r4-select-trigger{padding-top:4px;padding-bottom:4px}
+
+/* ---------- checkbox / radio / switch ---------- */
+.r4-check{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;max-width:100%}
+.r4-check-input{position:absolute;left:0;top:50%;width:18px;height:18px;margin:-9px 0 0;opacity:0;cursor:inherit}
+.r4-check-box{position:relative;display:inline-block;width:18px;height:18px;flex:none;border:1.5px solid var(--r4-line);border-radius:4px;background:var(--r4-panel);transition:background .15s,border-color .15s}
+.r4-check:hover .r4-check-box{border-color:var(--r4-acc)}
+.r4-check-input:checked+.r4-check-box{background:var(--r4-acc);border-color:var(--r4-acc)}
+.r4-check-input:checked+.r4-check-box::after{content:'';position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--r4-acc-txt);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.r4-check-input:focus-visible+.r4-check-box{outline:2px solid var(--r4-acc);outline-offset:2px}
+.r4-check-input:disabled~*{opacity:.55}
+.r4-check-input:disabled,.r4-disabled .r4-check{cursor:not-allowed}
+.r4-readonly .r4-check{cursor:default}
+.r4-invalid .r4-check-box{border-color:var(--r4-err)}
+.r4-radio .r4-check-box{border-radius:50%}
+.r4-radio .r4-check-input:checked+.r4-check-box{background:var(--r4-panel)}
+.r4-radio .r4-check-input:checked+.r4-check-box::after{left:3px;top:3px;width:9px;height:9px;border:0;border-radius:50%;background:var(--r4-acc);transform:none}
+.r4-radio-group{display:flex;flex-direction:column;gap:6px;padding:2px 0}
+.r4-radio-group.r4-inline{flex-direction:row;flex-wrap:wrap;gap:6px 18px}
+/* switch */
+.r4-switchfield .r4-check-input{width:36px;height:20px;margin-top:-10px}
+.r4-switchfield .r4-check-box{width:36px;height:20px;border:0;border-radius:10px;background:var(--r4-line)}
+.r4-switchfield .r4-check-box::after,.r4-switchfield .r4-check-input:checked+.r4-check-box::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border:0;border-radius:50%;background:var(--r4-panel);box-shadow:0 1px 3px rgba(0,0,0,.3);transform:none;transition:left .15s}
+.r4-switchfield .r4-check-input:checked+.r4-check-box{background:var(--r4-acc)}
+.r4-switchfield .r4-check-input:checked+.r4-check-box::after{left:18px}
+
+/* ---------- textarea ---------- */
+.r4-textarea{display:block;resize:vertical;min-height:60px;line-height:1.5}
+.r4-counter{font-size:11px;color:var(--r4-mut);text-align:right;margin-top:-2px}
+.r4-counter.r4-near{color:var(--r4-err)}
+
+/* ---------- número ---------- */
+.r4-number{text-align:right;font-variant-numeric:tabular-nums}
+.r4-spin{display:flex;flex-direction:column;flex:none;border:1px solid var(--r4-line);border-radius:var(--r4-radius);overflow:hidden}
+.r4-spin>button{flex:1;border:0;background:var(--r4-head);color:var(--r4-mut);cursor:pointer;padding:0 8px;font-size:8px;line-height:1}
+.r4-spin>button+button{border-top:1px solid var(--r4-line)}
+.r4-spin>button:hover{background:var(--r4-hover);color:var(--r4-txt)}
+.r4-disabled .r4-spin>button{cursor:not-allowed;opacity:.6}
+.r4-money{font-variant-numeric:tabular-nums}
+
+/* ---------- senha ---------- */
+.r4-strength{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--r4-mut)}
+.r4-strength-bar{flex:1;height:4px;border-radius:2px;background:var(--r4-line);overflow:hidden}
+.r4-strength-bar>span{display:block;width:0;height:100%;background:var(--r4-err);transition:width .2s,background .2s}
+.r4-strength[data-level="0"]>.r4-strength-bar>span{width:8%}
+.r4-strength[data-level="1"]>.r4-strength-bar>span{width:25%}
+.r4-strength[data-level="2"]>.r4-strength-bar>span{width:50%;background:color-mix(in srgb,var(--r4-err) 50%,var(--r4-ok))}
+.r4-strength[data-level="3"]>.r4-strength-bar>span{width:75%;background:color-mix(in srgb,var(--r4-err) 15%,var(--r4-ok))}
+.r4-strength[data-level="4"]>.r4-strength-bar>span{width:100%;background:var(--r4-ok)}
+.r4-strength-text{min-width:84px;text-align:right}
+
+/* ---------- fieldset / formrow ---------- */
+.r4-fieldset{min-width:0;margin:0;padding:10px 14px 14px;border:1px solid var(--r4-line);border-radius:var(--r4-radius)}
+.r4-legend{padding:0 6px;font-weight:600;font-size:13px;color:var(--r4-txt)}
+.r4-legend-btn{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
+.r4-legend-btn:focus-visible{outline:2px solid var(--r4-acc);outline-offset:2px;border-radius:3px}
+.r4-legend-arrow{color:var(--r4-mut);font-size:11px;transition:transform .15s}
+.r4-fieldset.r4-collapsed{padding-bottom:4px}
+.r4-fieldset.r4-collapsed .r4-legend-arrow{transform:rotate(-90deg)}
+.r4-fieldset-body{display:flex;flex-direction:column;gap:14px}
+.r4-formrow{display:grid;gap:12px 14px;align-items:start;min-width:0}
+.r4-formrow>*{min-width:0}
+@media(max-width:560px){.r4-formrow{grid-template-columns:1fr!important}.r4-form-actions{justify-content:stretch}.r4-form-actions>.r4-btn{flex:1;justify-content:center}}
+
+@media(prefers-reduced-motion:reduce){
+  .r4-spinner,.r4-loading .r4-select-arrow{animation-duration:2.4s}
+  .r4-check-box,.r4-check-box::after,.r4-strength-bar>span,.r4-select-arrow{transition:none!important}
+}

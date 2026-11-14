@@ -1,0 +1,10 @@
+/* libr4 parts/tabs.css — abas reordenáveis e barra de rolagem fina */
+.r4-tabstrip{scrollbar-width:thin;scrollbar-color:var(--r4-line) transparent}
+.r4-tabstrip::-webkit-scrollbar{height:6px}
+.r4-tabstrip::-webkit-scrollbar-thumb{background:var(--r4-line);border-radius:3px}
+.r4-tabstrip::-webkit-scrollbar-track{background:transparent}
+.r4-tab{user-select:none;flex:none}
+.r4-tab:focus-visible{outline:2px solid var(--r4-acc);outline-offset:-2px}
+.r4-tab.r4-dragging{position:relative;z-index:5;cursor:grabbing;background:var(--r4-panel);border-color:var(--r4-acc);box-shadow:0 6px 16px rgba(0,0,0,.25);opacity:.95;transition:none}
+.r4-tabs-sorting{cursor:grabbing}
+.r4-tabs-sorting .r4-tab:not(.r4-dragging){transition:transform .12s}

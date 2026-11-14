@@ -1,0 +1,74 @@
+[
+ {
+  "mes": "Jan",
+  "receita": 36502.83,
+  "despesa": 29813.62,
+  "pedidos": 153
+ },
+ {
+  "mes": "Fev",
+  "receita": 46440.96,
+  "despesa": 28844.52,
+  "pedidos": 104
+ },
+ {
+  "mes": "Mar",
+  "receita": 31295.01,
+  "despesa": 14466.61,
+  "pedidos": 81
+ },
+ {
+  "mes": "Abr",
+  "receita": 45328.37,
+  "despesa": 28048.65,
+  "pedidos": 148
+ },
+ {
+  "mes": "Mai",
+  "receita": 44909.02,
+  "despesa": 18365.22,
+  "pedidos": 148
+ },
+ {
+  "mes": "Jun",
+  "receita": 36500.65,
+  "despesa": 28776.27,
+  "pedidos": 159
+ },
+ {
+  "mes": "Jul",
+  "receita": 50433.01,
+  "despesa": 24418.47,
+  "pedidos": 132
+ },
+ {
+  "mes": "Ago",
+  "receita": 30567.75,
+  "despesa": 19528.88,
+  "pedidos": 305
+ },
+ {
+  "mes": "Set",
+  "receita": 38384.22,
+  "despesa": 18814.12,
+  "pedidos": 105
+ },
+ {
+  "mes": "Out",
+  "receita": 51442.99,
+  "despesa": 11736.49,
+  "pedidos": 114
+ },
+ {
+  "mes": "Nov",
+  "receita": 58145.65,
+  "despesa": 24008.9,
+  "pedidos": 291
+ },
+ {
+  "mes": "Dez",
+  "receita": 30996.75,
+  "despesa": 10858.35,
+  "pedidos": 238
+ }
+]

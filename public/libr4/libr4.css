@@ -1,3 +1,9 @@
+@import url('parts/tabs.css');
+@import url('parts/form.css');
+@import url('parts/files.css');
+@import url('parts/ui.css');
+@import url('parts/chart.css');
+@import url('parts/theme.css');
 /* ============================================
  * libr4.css — R4 dev
  * Tema padrão dos componentes. Tudo passa por variáveis --r4-*,

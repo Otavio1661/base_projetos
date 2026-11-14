@@ -1,0 +1,70 @@
+{
+ "planos": [
+  {
+   "valor": "básico",
+   "texto": "Básico"
+  },
+  {
+   "valor": "pro",
+   "texto": "Pro"
+  },
+  {
+   "valor": "empresa",
+   "texto": "Empresa"
+  }
+ ],
+ "status": [
+  {
+   "valor": "ativo",
+   "texto": "Ativo"
+  },
+  {
+   "valor": "inativo",
+   "texto": "Inativo"
+  },
+  {
+   "valor": "pendente",
+   "texto": "Pendente"
+  }
+ ],
+ "perfis": [
+  {
+   "valor": "admin",
+   "texto": "Admin"
+  },
+  {
+   "valor": "editor",
+   "texto": "Editor"
+  },
+  {
+   "valor": "leitor",
+   "texto": "Leitor"
+  }
+ ],
+ "categorias": [
+  {
+   "valor": "perifericos",
+   "texto": "Periféricos"
+  },
+  {
+   "valor": "monitores",
+   "texto": "Monitores"
+  },
+  {
+   "valor": "notebooks",
+   "texto": "Notebooks"
+  },
+  {
+   "valor": "audio",
+   "texto": "Áudio"
+  },
+  {
+   "valor": "redes",
+   "texto": "Redes"
+  },
+  {
+   "valor": "acessorios",
+   "texto": "Acessórios"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+/* libr4 parts/theme.css — temas, densidade e <r4-themeswitch>
+ *
+ * --r4-density (definida por R4.theme; 0.75 | 1 | 1.25). Outros módulos podem usar:
+ *   padding: calc(8px * var(--r4-density, 1));
+ *   ou as variáveis prontas --r4-pad-y / --r4-pad-x / --r4-gap.
+ * Abaixo a densidade já é aplicada aos componentes do núcleo (valor 1 = aparência original).
+ */
+:root{--r4-density:1;--r4-pad-y:calc(6px * var(--r4-density));--r4-pad-x:calc(12px * var(--r4-density));--r4-gap:calc(8px * var(--r4-density))}
+
+.r4-btn{padding:calc(6px * var(--r4-density,1)) calc(14px * var(--r4-density,1))}
+.r4-input{padding:calc(6px * var(--r4-density,1)) calc(10px * var(--r4-density,1))}
+.r4-header{padding:calc(8px * var(--r4-density,1)) calc(12px * var(--r4-density,1))}
+.r4-toolbar{padding:calc(6px * var(--r4-density,1)) calc(10px * var(--r4-density,1))}
+.r4-table th{padding:calc(8px * var(--r4-density,1)) calc(12px * var(--r4-density,1))}
+.r4-table td{padding:calc(7px * var(--r4-density,1)) calc(12px * var(--r4-density,1))}
+.r4-node{padding:calc(5px * var(--r4-density,1)) 12px}
+.r4-pad{padding:calc(14px * var(--r4-density,1))}
+.r4-card{padding:calc(16px * var(--r4-density,1))}
+
+/* themeswitch */
+.r4-themeswitch{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px}
+.r4-ts-modes{display:inline-flex}
+.r4-ts-modes .r4-ts-btn{border-radius:0;margin-left:-1px;gap:6px}
+.r4-ts-modes .r4-ts-btn:first-child{border-radius:var(--r4-radius) 0 0 var(--r4-radius);margin-left:0}
+.r4-ts-modes .r4-ts-btn:last-child{border-radius:0 var(--r4-radius) var(--r4-radius) 0}
+.r4-ts-btn[aria-pressed="true"]{background:var(--r4-acc);border-color:var(--r4-acc);color:var(--r4-acc-txt);position:relative;z-index:1}
+.r4-ts-btn[aria-pressed="true"]:hover:not(:disabled){background:var(--r4-acc);filter:brightness(1.1)}
+.r4-ts-ico{font-size:1.05em;line-height:1}
+.r4-ts-field{display:flex;flex-direction:column;gap:4px}
+.r4-ts-select{width:auto;min-width:140px}
+.r4-ts-color{width:44px;height:34px;padding:2px;border:1px solid var(--r4-line);border-radius:var(--r4-radius);background:var(--r4-panel);cursor:pointer}
+.r4-ts-color:focus-visible,.r4-ts-select:focus-visible{outline:2px solid var(--r4-acc);outline-offset:2px}
+@media(max-width:480px){.r4-ts-modes .r4-ts-txt{display:none}.r4-ts-select{min-width:0}}

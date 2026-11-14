@@ -1,0 +1,61 @@
+[
+ {
+  "id": "dash",
+  "text": "Painel"
+ },
+ {
+  "text": "Cadastros",
+  "children": [
+   {
+    "id": "cli",
+    "text": "Clientes",
+    "badge": "60"
+   },
+   {
+    "id": "prod",
+    "text": "Produtos",
+    "badge": "80"
+   },
+   {
+    "id": "usr",
+    "text": "Usuários"
+   }
+  ]
+ },
+ {
+  "text": "Vendas",
+  "children": [
+   {
+    "id": "ped",
+    "text": "Pedidos"
+   },
+   {
+    "text": "Relatórios",
+    "children": [
+     {
+      "id": "rel-m",
+      "text": "Mensal"
+     },
+     {
+      "id": "rel-c",
+      "text": "Por categoria"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "text": "Configurações",
+  "expanded": false,
+  "children": [
+   {
+    "id": "cfg-g",
+    "text": "Geral"
+   },
+   {
+    "id": "cfg-s",
+    "text": "Segurança"
+   }
+  ]
+ }
+]

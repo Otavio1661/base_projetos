@@ -60,5 +60,12 @@ $router = new Router();
 $router->get('/', 'VitrineController@index');
 $router->get('/vitrine', 'VitrineController@index');
 
+// API de teste da vitrine (só com APP_DEBUG=true)
+$router->get('/vitrine/api/clientes', 'VitrineApiController@clientes');
+$router->post('/vitrine/api/echo', 'VitrineApiController@echo');
+$router->post('/vitrine/api/cadastro', 'VitrineApiController@cadastro');
+$router->get('/vitrine/api/lento', 'VitrineApiController@lento');
+$router->get('/vitrine/api/falha', 'VitrineApiController@falha');
+
 
 return $router;

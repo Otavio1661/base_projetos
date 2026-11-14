@@ -1,0 +1,30 @@
+[
+ {
+  "id": "receita",
+  "titulo": "Receita",
+  "valor": 384250.9,
+  "variacao": 12.4,
+  "formato": "money"
+ },
+ {
+  "id": "pedidos",
+  "titulo": "Pedidos",
+  "valor": 2184,
+  "variacao": 5.1,
+  "formato": "number"
+ },
+ {
+  "id": "ticket",
+  "titulo": "Ticket médio",
+  "valor": 175.9,
+  "variacao": -2.3,
+  "formato": "money"
+ },
+ {
+  "id": "conversao",
+  "titulo": "Conversão",
+  "valor": 3.8,
+  "variacao": 0.6,
+  "formato": "percent"
+ }
+]

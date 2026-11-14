@@ -14,7 +14,7 @@ R4.ready(() => {
   ];
   const groups = {};
   entries.forEach(e => (groups[e.meta.group] ||= []).push(e));
-  const order = ['Núcleo', 'Componentes', 'Funções prontas', 'HTML declarativo'];
+  const order = ['Núcleo', 'Componentes', 'Formulários', 'Dados', 'Interface', 'Gráficos', 'Funções prontas', 'HTML declarativo', 'Dados de teste'];
   const nodes = Object.keys(groups).sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99).map(g => ({
     text: g, badge: groups[g].length,
     children: groups[g].sort((a, b) => a.id.localeCompare(b.id)).map(e => ({ id: e.id, text: e.kind === 'xtype' ? e.id : e.meta.title, badge: demos[e.id] ? '' : 'sem demo' }))
@@ -202,7 +202,7 @@ R4.ready(() => {
       { region: 'north', xtype: 'toolbar', cls: 'vt-top', items: [
         { xtype: 'panel', header: false, padding: false, html: '<b class="vt-logo">libr4</b> <span class="vt-sub">vitrine · ' + esc(R4.brand) + '</span>', style: { border: 0, background: 'transparent' } },
         '->',
-        { text: '◐ Tema', handler: () => { document.documentElement.classList.toggle('r4-dark'); try { localStorage.setItem('r4-dark', document.documentElement.classList.contains('r4-dark') ? '1' : ''); } catch (e) {} } }
+        { xtype: 'themeswitch', presets: true }
       ] },
       { region: 'west', xtype: 'treepanel', id: 'vt-tree', nodes, style: { borderRight: '1px solid var(--r4-line)' },
         listeners: { select: (t, n) => open(n.id) } },

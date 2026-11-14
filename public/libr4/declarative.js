@@ -56,6 +56,11 @@
   const ALLOWED_ATTRS = new Set(['region', 'hidden', 'key', 'text', 'closable']);
   const STRUCT = new Set(['r4-col', 'r4-node', 'r4-tab', 'r4-tbar', 'r4-fill', 'r4-sep']);
   const seenTags = new Set();
+  /** Hook para módulos: R4.declare('select', (host, cfg, h) => cfg) lê filhos próprios do <r4-select>. */
+  R4.declarative = {};
+  R4.declare = (xtype, fn) => { R4.declarative[xtype] = fn; };
+  /** Registra tags-filhas estruturais (ex.: r4-option) para não gerarem aviso de tag desconhecida. */
+  R4.structural = (...tags) => tags.forEach(t => STRUCT.add(t));
   function checkTags(root) {
     root.querySelectorAll('*').forEach(n => {
       const t = n.localName;
@@ -107,6 +112,7 @@
     }
     if (Object.keys(dom).length) cfg.domAttrs = dom;
     const kids = [...host.children], tag = t => kids.filter(k => k.localName === t);
+    if (R4.declarative[xtype]) return R4.declarative[xtype](host, cfg, { toCfg, itemsFrom, coerce, isTag, camel, defs }) || cfg;
     if (xtype === 'button') { if (cfg.text == null) cfg.text = host.textContent.trim(); return cfg; }
     if (xtype === 'textfield') return cfg;
     if (xtype === 'grid') { cfg.columns = tag('r4-col').map(colCfg); return cfg; }
