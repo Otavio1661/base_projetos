@@ -42,7 +42,10 @@
     },
     number: (n, d = 2) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }),
     money: n => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-    date: (v, opts) => new Date(v).toLocaleDateString('pt-BR', opts),
+    date(v, opts) {   // 'AAAA-MM-DD' é data local (sem deslocar um dia por fuso)
+      const m = typeof v === 'string' && /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(v);
+      return (m ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(v)).toLocaleDateString('pt-BR', opts);
+    },
     /** Cria elemento: util.el('div', {class:'x', onclick:fn}, 'texto' | [filhos]) */
     el(tag, attrs, kids) {
       const e = document.createElement(tag);
@@ -100,6 +103,7 @@
       if (!host) throw new Error('R4: renderTo não encontrado: ' + target);
       this.el = this.build();
       this.el.id = this.id;
+      if (this.domAttrs) for (const k in this.domAttrs) this.el.setAttribute(k, this.domAttrs[k]);
       this.el.classList.add('r4-cmp');
       if (this.cls) this.el.classList.add(...String(this.cls).split(' '));
       if (this.style) Object.assign(this.el.style, this.style);

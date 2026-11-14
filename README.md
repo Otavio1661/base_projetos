@@ -205,3 +205,25 @@ php -S localhost:8000 -t public
 
 - `public/libr4/` — biblioteca JS sem dependências, estilo ExtJS: `core.js` (R4, `R4.define`, `R4.create`), `net.js` (`R4.crypto`, `R4.http`), `components.js` (viewport, panel, toolbar, button, tabpanel, treepanel, grid, window, textfield, `R4.msg`) e `libr4.css` (tema por variáveis `--r4-*`, modo escuro com `.r4-dark`).
 - `public/showcase/` — a vitrine (rotas `/` e `/vitrine`). O menu é gerado de `R4.registry` e `R4.modules`; para exibir um item novo, registre-o com `R4.define`/`R4.module` e acrescente exemplos em `public/showcase/demos.js` (`R4Demos.<nome> = [{ title, fn(el, out) }]`).
+
+### Modo HTML (declarativo)
+
+```html
+<link rel="stylesheet" href="/libr4/libr4.css">
+<script src="/libr4/libr4.js"></script>
+
+<r4-panel title="Clientes" collapsible>
+  <r4-tbar><r4-button variant="primary" r4-click="modal:#novo">Novo</r4-button></r4-tbar>
+  <r4-grid src="/api/clientes" page-size="10" filter>
+    <r4-col field="nome" header="Nome"></r4-col>
+    <r4-col field="valor" header="Valor" format="money" align="right"></r4-col>
+  </r4-grid>
+</r4-panel>
+<div class="r4-card r4-shadow" r4-anim="fade-up" r4-hover="lift">...</div>
+```
+
+Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-confirm`, `r4-anim`, `r4-hover` e as classes `r4-*` funcionam em qualquer elemento. Detalhes e exemplos ao vivo na vitrine, grupo "HTML declarativo". Ações próprias: `R4.action('nome', (arg, el, ev) => {})`.
+
+**Layout:** use `<r4-div cols="3" gap="3">` (colunas) ou `<r4-div flex justify="between">` (flex) em vez de classes de grid; em telas pequenas as colunas empilham sozinhas. Erros de digitação (`pagesize`, `<r4-buton>`, `r4-click="toats:..."`) geram aviso no console com sugestão. Na vitrine, os componentes têm painel de propriedades ao vivo e botões de copiar.
+
+**Funções prontas:** todo componente também é função — `R4.grid('#tabela', linhas)` (colunas automáticas), `R4.button('#x', 'Salvar', fn)`, `R4.panel('#x', 'Título', html)`, `R4.window('Aviso', html)`, `R4.render('#x', html)`. Veja o grupo "Funções prontas" na vitrine.

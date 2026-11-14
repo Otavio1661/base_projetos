@@ -86,7 +86,7 @@
 
   /* ================= textfield ================= */
   R4.define('textfield', {
-    config: { label: '', value: '', placeholder: '', inputType: 'text' },
+    config: { label: '', name: '', value: '', placeholder: '', inputType: 'text' },
     build() {
       this.input = el('input', { class: 'r4-input', type: this.inputType, value: this.value, placeholder: this.placeholder,
         oninput: () => this.fire('change', this, this.input.value),
@@ -234,7 +234,7 @@
 
   /* ================= grid ================= */
   R4.define('grid', {
-    config: { columns: [], data: [], pageSize: 0, filter: true, emptyText: 'Nenhum registro.', striped: true },
+    config: { columns: [], data: [], pageSize: 0, filter: true, emptyText: 'Nenhum registro.', striped: true, src: '', method: 'GET', encrypt: false, params: null },
     build() {
       const root = el('div', { class: 'r4-grid' });
       this.sortKey = null; this.sortDir = 1; this.page = 0; this.q = '';
@@ -250,7 +250,17 @@
       root.append(this.pager);
       return root;
     },
-    afterRender() { this.refresh(); },
+    afterRender() { this.refresh(); this.src && this.load(); },
+    /** Busca this.src via R4.http; aceita array puro ou {retorno|data|rows: [...]} */
+    async load() {
+      if (!this.src) return this;
+      try {
+        const r = await R4.http.request(this.src, { method: this.method, encrypt: this.encrypt, data: this.params });
+        this.loadData(Array.isArray(r) ? r : (r && (r.retorno || r.data || r.rows)) || []);
+      } catch (e) { this.fire('loaderror', this, e); this.emptyText = 'Falha ao carregar.'; this.refresh(); }
+      return this;
+    },
+    reload() { return this.load(); },
     loadData(d) { this.data = d; this.page = 0; this.refresh(); this.fire('load', this, d); return this; },
     _rows() {
       let rows = this.data;
@@ -265,6 +275,12 @@
       return rows;
     },
     refresh() {
+      if (!this.columns.length && this.data.length) this.columns = Object.keys(this.data[0]);
+      this.columns = this.columns.map(c => {
+        if (typeof c === 'string') c = { header: c.replace(/[_-]+/g, ' ').replace(/^./, m => m.toUpperCase()), dataIndex: c };
+        if (c.format && !c.renderer) { const f = c.format; c.renderer = v => esc(String((R4.formats[f] || String)(v))); }
+        return c;
+      });
       this.thead.replaceChildren(el('tr', {}, this.columns.map(c => {
         const th = el('th', { text: c.header, style: c.width ? { width: c.width + 'px' } : null });
         if (c.sortable !== false) {
@@ -310,18 +326,19 @@
   }, {
     title: 'grid', description: 'Tabela de dados com ordenação por coluna, filtro, paginação e renderers. Renderiza só a página visível.',
     props: [
-      { name: 'columns', type: 'Array<{header,dataIndex,width,align,sortable,renderer}>', default: '[]', desc: 'Definição das colunas. renderer(valor, linha) devolve HTML.' },
+      { name: 'columns', type: 'Array<string | {header,dataIndex,width,align,sortable,format,renderer}>', default: '[]', desc: 'Colunas. Vazio = automáticas a partir das chaves. format: money, number, date, bytes, bool, upper. renderer(valor, linha) devolve HTML.' },
       { name: 'data', type: 'Array<object>', default: '[]', desc: 'Registros.' },
       { name: 'pageSize', type: 'number', default: '0', desc: 'Linhas por página (0 = sem paginação).' },
       { name: 'filter', type: 'boolean', default: 'true', desc: 'Barra de filtro.' },
+      { name: 'src / method / encrypt / params', type: 'string / string / boolean / object', default: "'' / 'GET' / false / null", desc: 'Carrega os dados de uma URL via R4.http ao renderizar. reload() busca de novo.' },
       { name: 'loadData(array)', type: 'método', desc: 'Substitui os dados.' }
     ],
-    events: ['rowclick', 'load']
+    events: ['rowclick', 'load', 'loaderror']
   });
 
   /* ================= window ================= */
   R4.define('window', {
-    config: { title: '', html: '', items: [], buttons: [], width: 420, modal: true, closable: true },
+    config: { title: '', html: '', items: [], buttons: [], width: 420, modal: true, closable: true, closeAction: 'destroy' },
     build() {
       const win = el('div', { class: 'r4-window', style: { width: this.width + 'px' }, role: 'dialog' });
       const head = el('div', { class: 'r4-header' }, [el('span', { class: 'r4-title', text: this.title })]);
@@ -347,13 +364,17 @@
       document.addEventListener('keydown', this._esc);
       this.fire('show', this); return this;
     },
-    close() { document.removeEventListener('keydown', this._esc); this.fire('close', this); this.destroy(); }
+    close() {
+      document.removeEventListener('keydown', this._esc); this.fire('close', this);
+      this.closeAction === 'hide' ? (this.el.hidden = true) : this.destroy();
+    }
   }, {
     title: 'window', description: 'Janela modal com título, corpo, botões no rodapé. Fecha com Esc, clique fora ou ×.',
     props: [
       { name: 'title / html / items', type: 'mixed', desc: 'Conteúdo da janela.' },
       { name: 'buttons', type: 'Array<{text,handler,variant,close}>', default: '[]', desc: 'Botões do rodapé; fecham a janela, exceto close:false.' },
       { name: 'width', type: 'number', default: '420', desc: 'Largura em px.' },
+      { name: 'closeAction', type: "'destroy'|'hide'", default: "'destroy'", desc: 'hide mantém a janela para reabrir com show().' },
       { name: 'show() / close()', type: 'método', desc: 'Abre e fecha.' }
     ],
     events: ['show', 'close']
@@ -396,4 +417,62 @@
     ]
   });
   R4.msg = R4.modules.msg.api;
+
+  /* ================= div (layout) ================= */
+  const gapOf = v => (/^[0-4]$/.test(v) ? ['0', '4px', '8px', '16px', '24px'][+v] : v);
+  R4.define('div', {
+    config: { html: '', cols: '', gap: '2', flex: false, column: false, wrap: false, align: '', justify: '', pad: '', keep: false, items: [] },
+    build() {
+      const d = el('div', { class: 'r4-div' });
+      const s = d.style;
+      if (this.cols) {
+        d.classList.add('r4-div-cols');
+        s.gridTemplateColumns = /^\d+$/.test(this.cols) ? 'repeat(' + this.cols + ', minmax(0, 1fr))' : this.cols;
+        if (this.keep) d.classList.add('r4-div-keep');
+      } else if (this.flex || this.column) {
+        s.display = 'flex'; if (this.column) s.flexDirection = 'column'; if (this.wrap) s.flexWrap = 'wrap';
+      }
+      s.gap = gapOf(this.gap);
+      if (this.align) s.alignItems = this.align;
+      if (this.justify) s.justifyContent = { between: 'space-between', around: 'space-around' }[this.justify] || this.justify;
+      if (this.pad) s.padding = gapOf(this.pad);
+      if (this.html) d.innerHTML = this.html;
+      this.renderItems(d, this.items);
+      return d;
+    },
+    setHtml(h) { this.el.innerHTML = h; return this; }
+  }, {
+    title: 'div', group: 'Componentes',
+    description: 'Contêiner de layout. Com cols vira colunas (grid), com flex/column vira linha/coluna. Em telas pequenas as colunas empilham sozinhas (use keep para impedir).',
+    props: [
+      { name: 'cols', type: "'2' | '3' | '1fr 2fr' ...", default: "''", desc: 'Número de colunas iguais, ou um modelo livre ("200px 1fr").' },
+      { name: 'gap', type: "'0'..'4' | '12px'", default: "'2'", desc: 'Espaço entre os filhos (0, 4, 8, 16, 24px ou um valor CSS).' },
+      { name: 'flex / column', type: 'boolean', default: 'false', desc: 'Linha ou coluna em flexbox.' },
+      { name: 'wrap', type: 'boolean', default: 'false', desc: 'Quebra de linha no flex.' },
+      { name: 'align', type: "'start' | 'center' | 'end' | 'stretch'", default: "''", desc: 'Alinhamento cruzado.' },
+      { name: 'justify', type: "'start' | 'center' | 'end' | 'between' | 'around'", default: "''", desc: 'Distribuição no eixo principal.' },
+      { name: 'pad', type: "'0'..'4' | '10px'", default: "''", desc: 'Espaçamento interno.' },
+      { name: 'keep', type: 'boolean', default: 'false', desc: 'Mantém as colunas também no celular.' }
+    ]
+  });
+
+  /* ================= playground (painel de propriedades da vitrine) ================= */
+  // controls: nome -> array (lista de opções) | valor inicial (boolean/number/string)
+  const PG = (x, pg) => { R4.registry[x].meta.playground = pg; };
+  PG('button', { html: '<r4-button{attrs}>Clique aqui</r4-button>', cfg: { text: 'Clique aqui' },
+    controls: { variant: ['default', 'primary', 'danger'], icon: '', disabled: false } });
+  PG('panel', { html: '<r4-panel{attrs}>Conteúdo do painel</r4-panel>', cfg: { html: 'Conteúdo do painel' },
+    controls: { title: 'Meu painel', collapsible: false, collapsed: false, padding: true } });
+  PG('textfield', { html: '<r4-textfield{attrs}></r4-textfield>', cfg: {},
+    controls: { label: 'Nome', placeholder: 'Digite...', value: '', inputType: ['text', 'password', 'email', 'number'] } });
+  PG('div', { html: '<r4-div{attrs}>\n  <div class="r4-card">1</div>\n  <div class="r4-card">2</div>\n  <div class="r4-card">3</div>\n</r4-div>',
+    cfg: { html: '<div class="r4-card">1</div><div class="r4-card">2</div><div class="r4-card">3</div>' },
+    controls: { cols: '3', gap: ['2', '0', '1', '3', '4'], flex: false, column: false, wrap: false, align: ['', 'start', 'center', 'end'], justify: ['', 'start', 'center', 'end', 'between'], pad: '', keep: false } });
+  PG('grid', { html: `<r4-grid{attrs} data='[{"nome":"Ana","valor":1200},{"nome":"Bruno","valor":830.5},{"nome":"Carla","valor":2210},{"nome":"Davi","valor":95}]'>\n  <r4-col field="nome" header="Nome"></r4-col>\n  <r4-col field="valor" header="Valor" format="money" align="right"></r4-col>\n</r4-grid>`,
+    cfg: { data: [{ nome: 'Ana', valor: 1200 }, { nome: 'Bruno', valor: 830.5 }, { nome: 'Carla', valor: 2210 }, { nome: 'Davi', valor: 95 }],
+      columns: [{ header: 'Nome', dataIndex: 'nome' }, { header: 'Valor', dataIndex: 'valor', align: 'right' }] },
+    controls: { pageSize: 0, filter: true, striped: true, emptyText: 'Nenhum registro.' } });
+  PG('treepanel', { html: '<r4-treepanel{attrs} style="height:180px">\n  <r4-node text="Frutas"><r4-node id="pg-a" text="Maçã"></r4-node><r4-node id="pg-b" text="Banana"></r4-node></r4-node>\n</r4-treepanel>',
+    cfg: { nodes: [{ text: 'Frutas', children: [{ id: 'a', text: 'Maçã' }, { id: 'b', text: 'Banana' }] }] },
+    controls: { filterable: true, placeholder: 'Buscar...' } });
 })(window.R4);
