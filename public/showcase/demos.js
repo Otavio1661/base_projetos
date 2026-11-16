@@ -98,7 +98,7 @@ window.R4Demos = {
   http: [
     { title: 'Corpo criptografado (fetch simulado)', async fn(el, out) {
       const real = window.fetch; let enviado;
-      window.fetch = async (url, o) => { enviado = { url, method: o.method, body: JSON.parse(o.body) }; return { json: async () => ({ ok: true }) }; };
+      window.fetch = async (url, o) => { enviado = { url, method: o.method, body: JSON.parse(o.body) }; return { ok: true, text: async () => JSON.stringify({ ok: true }) }; };
       try {
         const resposta = await R4.http.post('/api/exemplo', { nome: 'R4' });
         out({ enviado, resposta, corpoDescriptografado: await R4.crypto.decrypt(enviado.body) });
