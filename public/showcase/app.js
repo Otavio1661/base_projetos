@@ -5,6 +5,16 @@
  * Os textos fixos da vitrine vêm de R4.t('vt.*') (showcase/i18n.js) e acompanham o idioma:
  * HTML gerado usa o atributo r4-i18n e elementos criados usam R4.util.tx (ambos se retraduzem sozinhos).
  */
+// Modo demonstração (VITRINE_PUBLICA): a API de teste (/vitrine/api/*) não existe; exemplos que dependem dela mostram um aviso claro.
+const VIT = window.R4_VITRINE || { api: true, publica: false };
+if (VIT.api === false) {
+  const fetchOriginal = window.fetch;
+  window.fetch = function (u) {
+    let p = ''; try { p = new URL(typeof u === 'string' ? u : (u && u.url) || '', location.href).pathname; } catch (e) { /* url inválida: o fetch original reclama */ }
+    if (p.startsWith('/vitrine/api/')) return Promise.reject(new Error('Este exemplo usa a API de teste, disponível só em desenvolvimento (APP_DEBUG=true).'));
+    return fetchOriginal.apply(this, arguments);
+  };
+}
 R4.ready(() => {
   const { el, esc, tx } = R4.util;
   const demos = window.R4Demos || {};
@@ -180,6 +190,7 @@ R4.ready(() => {
   const homeHtml = () => `
       <h2 style="margin:0 0 6px">libr4 <small style="color:var(--r4-mut)">v${R4.version} · ${esc(R4.brand)}</small></h2>
       <p>${esc(vt('homeP1'))} <code>R4.create({ xtype: 'grid', ... })</code> ${esc(vt('homeP2'))} <code>&lt;r4-grid page-size="10"&gt;</code>. ${esc(vt('homeP3'))}</p>
+      ${VIT.publica ? '<div class="r4-alert r4-mb-3"><b>Modo demonstração.</b> Os exemplos que usam a API de teste (upload, servidor, criptografia ponta a ponta) só funcionam em desenvolvimento.</div>' : ''}
       <r4-button variant="primary" icon="play" r4-click="toast:${R4.util.escArg(vt('toastActive'))}">${esc(vt('testTag'))} &lt;r4-button&gt;</r4-button>
       <div class="r4-h">${esc(vt('found'))} (${entries.length})</div>
       <p>${entries.map(e => `<a href="#${esc(e.id)}" class="vt-chip">${esc(e.meta.title)}</a>`).join(' ')}</p>

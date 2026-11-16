@@ -7,6 +7,7 @@
   <?php $min = isset($_GET['min']) && $_GET['min'] === '1'; /* ?min=1: usa o pacote minificado de libr4/dist */ ?>
   <link rel="stylesheet" href="<?= asset($min ? '/libr4/dist/libr4.min.css' : '/libr4/libr4.css') ?>">
   <link rel="stylesheet" href="<?= asset('/showcase/vitrine.css') ?>">
+  <script>window.R4_VITRINE = <?= json_encode(['api' => \App\Config::APP_DEBUG === true, 'publica' => \App\Config::APP_DEBUG !== true], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
   <?php /* anti-flash: leitura direta e validada do tema salvo (r4:theme = {v:1,d:{mode,...},e:expira}); sem depender do R4.store; aceita a chave antiga r4-theme até a migração */ ?>
   <script>try { var g = function (k) { return JSON.parse(localStorage.getItem(k) || 'null'); }, e = g('r4:theme'), t = e && e.v === 1 && e.e > Date.now() && e.d && typeof e.d === 'object' ? e.d : g('r4-theme'); if (t && (t.mode === 'dark' || (t.mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches))) document.documentElement.classList.add('r4-dark'); } catch (x) {}</script>
 </head>

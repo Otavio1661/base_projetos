@@ -44,6 +44,7 @@ O `.env` é lido como INI: uma linha `CHAVE=valor` por variável, **sem comentá
 | `APP_HOSTS` | vazio | hosts, vírgula (aceita `*.dominio` e `:porta`) | Hosts aceitos no cabeçalho `Host` (anti Host-header injection): fora da lista → 400. Vazio = não valida (aviso no log em produção). |
 | `HSTS_MAX_AGE` | `15552000` (180 dias) | 0 a 63072000 | `Strict-Transport-Security` (só em HTTPS + `required`). `0` desliga. |
 | `HSTS_SUBDOMAINS` | `false` | `true`/`false` | Acrescenta `; includeSubDomains` (só ligue se TODOS os subdomínios tiverem HTTPS). |
+| `VITRINE_PUBLICA` | `false` | `true`/`false` | **Modo demonstração**: libera só `/vitrine` (sem ligar o debug). `/vitrine/testes` e `/vitrine/api/*` continuam só com `APP_DEBUG=true`. Veja "Vitrine pública". |
 | `MAX_POST_BYTES` | `2097152` | bytes | Teto do corpo lido por `getPost()`. |
 | `BASE_CRIPTOGRAFIA` | — | — | **Deprecada**: ignorada; se presente, só gera aviso no log. |
 
@@ -137,3 +138,14 @@ correspondente vai para as páginas (`window.R4_SERVER_KEY`) e para `GET /r4/cha
 A criptografia v2 da libr4 não entrega segredo nenhum ao navegador (só a chave pública) e amarra cada pacote ao endpoint e ao tempo,
 mas **não substitui o HTTPS**: sem TLS um atacante ativo pode se passar pelo servidor. Detalhes e limites em `docs/SEGURANCA.md`
 (seções 5 e 5.1).
+
+## Vitrine pública (demonstração)
+
+Para mostrar a vitrine na web **sem** ligar o debug:
+
+1. No `.env` do servidor de demonstração: `VITRINE_PUBLICA=true` (mantenha `APP_ENV=production`, `APP_DEBUG=false`, `HTTPS_MODE=required`).
+2. O que passa a existir: `/vitrine` (e `/`, que hoje abre a vitrine). O que **não** existe: `/vitrine/testes` e toda a API de teste (`/vitrine/api/*` → 404). Os exemplos que dependem dessa API mostram o aviso "disponível só em desenvolvimento"; tabelas e gráficos que leem os JSON estáticos de `vitrineData` funcionam normalmente.
+3. **Proteja o acesso** (recomendado): senha no nginx — `htpasswd -c /etc/nginx/.htpasswd demo` e, no `server {}`: `auth_basic "Vitrine"; auth_basic_user_file /etc/nginx/.htpasswd;` — ou `allow SEU.IP; deny all;`.
+4. O nginx já limita ~30 requisições/s por IP (`limit_req`, resposta 429). Ajuste `rate`/`burst` em `docker/nginx/default.conf` se precisar.
+5. O playground executa o código que a própria pessoa digita (só no navegador dela); a CSP libera `'unsafe-eval'` apenas na rota `/vitrine`.
+6. Rode `php tools/build.php` e confira `?min=1` antes de publicar; valide o `nginx.conf` com `nginx -t`.

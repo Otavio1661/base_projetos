@@ -18,4 +18,10 @@ class Config
     public const DB_USERNAME = DB_USERNAME;
     public const DB_PASSWORD = DB_PASSWORD;
     // ----------------------------------------------------------------
+
+    /** /vitrine (documentação ao vivo): liberada com APP_DEBUG=true OU com VITRINE_PUBLICA=true (modo demonstração). */
+    public static function vitrineLiberada(): bool
+    {
+        return self::APP_DEBUG === true || (defined('VITRINE_PUBLICA') && constant('VITRINE_PUBLICA') === true);
+    }
 }

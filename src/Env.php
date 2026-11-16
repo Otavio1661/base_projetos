@@ -108,6 +108,7 @@
 
     /* ---------- criptografia v2 (Core\Security\Crypto) ---------- */
     $env['CRYPTO_OBRIGATORIA'] = $booleano('CRYPTO_OBRIGATORIA', false);
+    $env['VITRINE_PUBLICA'] = $booleano('VITRINE_PUBLICA', false);   // libera só /vitrine (sem API de teste, sem testes) sem ligar o debug
     $env['CRYPTO_JANELA_SEG'] = $inteiro('CRYPTO_JANELA_SEG', 300, 30, 3600);
 
     foreach (['CRYPTO_PRIVATE_KEY', 'CRYPTO_PRIVATE_KEY_ANTERIOR'] as $nome) {
