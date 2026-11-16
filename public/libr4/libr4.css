@@ -103,6 +103,9 @@
 .r4-empty{text-align:center;color:var(--r4-mut);padding:20px!important}
 .r4-pager{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px;padding:8px;border-top:1px solid var(--r4-line);color:var(--r4-mut)}
 .r4-pager-nav{display:inline-flex;align-items:center;gap:8px}
+.r4-row-wait td{color:transparent;position:relative}
+.r4-row-wait td::after{content:'';position:absolute;left:8px;right:8px;top:50%;height:10px;margin-top:-5px;background:var(--r4-line);opacity:.55;border-radius:2px}
+.r4-vr-info{font-variant-numeric:tabular-nums}
 .r4-pager-size{display:inline-flex;align-items:center;gap:6px}
 .r4-pager-size-select{width:auto;min-width:4.5em;padding:3px 6px}
 .r4-table td.r4-hit{background:var(--r4-hit);color:var(--r4-hit-txt)}

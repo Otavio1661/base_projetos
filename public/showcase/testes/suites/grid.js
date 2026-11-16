@@ -790,7 +790,7 @@
       const x = t.create({ xtype: 'grid', src: '/api/g-ps', remote: true, pageSize: 10, pageSizeSelector: true, pageSizes: [10, 0], columns: ['id'] });
       await t.waitFor(() => linhas(x).length === 10, 2000, 'x');
       x.setPageSize(0);
-      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('size') === '0', 2000, 'Todos enviado ao servidor (ele decide o limite)');
+      await t.waitFor(() => x._vr() && m.calls.at(-1).url.searchParams.get('size') === '100', 2000, 'Todos vira janela remota: pede blocos de 100 linhas (o servidor limita em 500)');
     });
 
     test('seletor: ordenar, filtrar e exportar mantêm o tamanho escolhido', t => {
@@ -802,6 +802,76 @@
       assert.eq(g.getPageSize(), 50);
       assert.ok(linhas(g).length <= 50);
       assert.eq(sel(g).value, '50');
+    });
+
+    /* ======== janela remota: remoto + "Todos" (milhões de linhas, DOM enxuto) ======== */
+    const servidor = (total, atraso = 0) => req => {
+      const p = req.url.searchParams, page = +p.get('page'), size = +p.get('size'), q = p.get('q'), desc = p.get('dir') === 'desc';
+      const n = q ? 40 : total, ini = (page - 1) * size, fim = Math.min(n, ini + size), out = [];
+      for (let i = ini; i < fim; i++) { const id = desc ? n - i : i + 1; out.push({ id, nome: (q ? 'Achado ' : 'Linha ') + id }); }
+      return { body: { status: 200, total: n, retorno: out }, delay: atraso };
+    };
+    const trsDados = g => [...g.tbody.querySelectorAll('tr')].filter(tr => tr.cells.length > 1 && !tr.hidden);
+    const idsVis = g => trsDados(g).filter(tr => !tr.classList.contains('r4-row-wait')).map(tr => +tr.cells[0].textContent);
+
+    test('janela remota: "Todos" no modo remoto mostra o total, mantém só ~30 linhas no DOM e limita a altura da rolagem (300 mil linhas)', async t => {
+      const m = t.mockFetch({ '/api/g-jan': servidor(300000) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-jan', remote: true, pageSize: 10, pageSizeSelector: true, pageSizes: '10,50,all', columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Nome', dataIndex: 'nome' }] });
+      await t.waitFor(() => trsDados(g).length === 10, 2000, 'página de 10');
+      assert.eq(g._vr(), false, 'paginado: não é janela');
+      g.setPageSize(0);
+      await t.waitFor(() => g._vr() && idsVis(g).length > 5, 3000, 'janela montada');
+      assert.eq(m.calls.at(-1).url.searchParams.get('size'), '100', 'pede blocos de 100 linhas');
+      assert.ok(trsDados(g).length < 60, 'DOM enxuto: ' + trsDados(g).length + ' linhas para 300 mil');
+      assert.ok(g.scroller.scrollHeight < 8100000, 'altura da rolagem limitada (' + g.scroller.scrollHeight + ' px, e não ' + 300000 * 36 + ')');
+      assert.contains(g.pager, '300.000', 'total no rodapé');
+      assert.eq(sel(g).value, 'all');
+      assert.eq(idsVis(g)[0], 1, 'começa na linha 1');
+    });
+
+    test('janela remota: rolar até o fim busca o último bloco; rolar pro meio mostra linhas ainda não carregadas como espera e depois preenche', async t => {
+      const m = t.mockFetch({ '/api/g-jan2': servidor(300000, 60) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-jan2', remote: true, pageSizes: 'all', columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Nome', dataIndex: 'nome' }] });
+      g.setPageSize(0);
+      await t.waitFor(() => idsVis(g).length > 5, 3000, 'início');
+      const max = () => g.scroller.scrollHeight - g.scroller.clientHeight;
+      g.scroller.scrollTop = max();
+      await t.waitFor(() => idsVis(g).includes(300000), 4000, 'última linha (300000) apareceu');
+      assert.ok(m.calls.some(c => c.url.searchParams.get('page') === '3000'), 'pediu o último bloco (página 3000)');
+      g.scroller.scrollTop = Math.floor(max() / 2);
+      await t.waitFor(() => trsDados(g).some(tr => tr.classList.contains('r4-row-wait')) || idsVis(g).some(i => i > 140000), 1500, 'espera ou dado do meio');
+      await t.waitFor(() => { const v = idsVis(g); return v.length > 5 && v[0] > 140000 && v[0] < 160000; }, 4000, 'meio preenchido');
+      assert.ok(trsDados(g).length < 60, 'DOM continua enxuto');
+      assert.ok(g.pager.textContent.includes('de 300.000'), 'rodapé mostra a posição');
+      g.scroller.scrollTop = 0;
+      await t.waitFor(() => idsVis(g)[0] === 1, 3000, 'voltou ao topo');
+    });
+
+    test('janela remota: ordenar e buscar pedem ao servidor (sort/dir/q), voltam ao topo e usam o novo total', async t => {
+      const m = t.mockFetch({ '/api/g-jan3': servidor(300000) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-jan3', remote: true, pageSizes: 'all', columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Nome', dataIndex: 'nome' }] });
+      g.setPageSize(0);
+      await t.waitFor(() => idsVis(g).length > 5, 3000, 'início');
+      g.scroller.scrollTop = 1e6;
+      g.sort('id', 'desc');
+      await t.waitFor(() => { const q = m.calls.at(-1).url.searchParams; return q.get('sort') === 'id' && q.get('dir') === 'desc'; }, 3000, 'ordenou no servidor');
+      await t.waitFor(() => idsVis(g)[0] === 300000, 3000, 'maior id primeiro');
+      assert.eq(g.scroller.scrollTop, 0, 'ordenar volta ao topo');
+      g.setFilter('Achado');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('q') === 'achado', 3000, 'busca no servidor');
+      await t.waitFor(() => g.pager.textContent.includes('40 registros') || g.pager.textContent.includes('de 40'), 3000, 'novo total (40)');
+      assert.ok(g.scroller.scrollHeight < 5000, 'poucas linhas: sem rolagem escalada');
+      assert.ok(trsDados(g).some(tr => tr.querySelector('td.r4-hit')), 'destaque da busca também na janela');
+    });
+
+    test('janela remota: tamanho que cabe sem escala (500 linhas) rola normalmente até a última', async t => {
+      t.mockFetch({ '/api/g-jan4': servidor(500) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-jan4', remote: true, pageSizes: 'all', columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Nome', dataIndex: 'nome' }] });
+      g.setPageSize(0);
+      await t.waitFor(() => idsVis(g).length > 5, 3000, 'início');
+      g.scroller.scrollTop = g.scroller.scrollHeight;
+      await t.waitFor(() => idsVis(g).includes(500), 3000, 'última linha (500)');
+      assert.ok(g.scroller.scrollHeight >= 500 * 36 - 200, 'altura real (sem escala)');
     });
   });
 })();

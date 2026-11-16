@@ -1,5 +1,5 @@
 /* Transações: tabela de 2 milhões de linhas. Paginação, ordenação e busca rodam no SERVIDOR (grid remote);
- * o navegador só recebe a página pedida (10 a 100 linhas). Gráficos de resumo vêm de /erp/api/transacoes/resumo. */
+ * o navegador só recebe o trecho pedido (10 a 100 linhas, ou a janela visível no modo "Todos"). Gráficos de resumo vêm de /erp/api/transacoes/resumo. */
 (function () {
   'use strict';
   const { el } = R4.util;
@@ -7,7 +7,7 @@
     const { Erp } = ctx;
     Erp.titulo(alvo, Erp.t('transacoes'), [Erp.mk({ xtype: 'badge', text: 'Servidor', variant: 'primary', outline: true })]);
     const aviso = R4.create({ xtype: 'alert', variant: 'info', title: 'Busca, ordenação e paginação no servidor',
-      html: 'Esta tabela tem milhões de linhas e o navegador nunca as recebe todas: cada clique em ordenar, página ou busca pede só a página atual ao PHP. As células que contêm o termo buscado ficam destacadas. O seletor de linhas vai até 100 (sem "Todos", de propósito).', renderTo: alvo });
+      html: 'Esta tabela tem milhões de linhas e o navegador nunca as recebe todas: cada clique em ordenar, página ou busca pede só o trecho necessário ao PHP. As células que contêm o termo buscado ficam destacadas. Em "Todos" a barra de rolagem representa as 2 milhões de linhas: o DOM guarda só as ~30 linhas visíveis e busca no servidor o bloco para onde você rola.', renderTo: alvo });
     const kp = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: '12px' } });
     alvo.append(kp);
     const cardG = el('div', { class: 'erp-grid2' }), cA = el('div', { class: 'erp-card' }), cB = el('div', { class: 'erp-card' });
@@ -16,7 +16,7 @@
     const vivos = [aviso];
 
     const grid = R4.create(Erp.gridOpts({
-      src: '/erp/api/transacoes', pageSizes: '10,30,50,100', renderTo: holder, selectable: '',
+      src: '/erp/api/transacoes', pageSizes: '10,30,50,100,all', height: 520, renderTo: holder, selectable: '',
       columns: [
         { header: '#', dataIndex: 'id', width: 90, align: 'right' },
         { header: 'Cliente', dataIndex: 'cliente', width: 200 },

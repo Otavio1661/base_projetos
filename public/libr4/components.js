@@ -256,6 +256,8 @@
    */
   const COLL = new Intl.Collator('pt-BR', { numeric: true });
   const BUF = 8;   // linhas extras acima/abaixo da janela virtual
+  const MAXPX = 8e6;   // altura máxima do "espaço rolável" (px). Navegadores travam entre ~17 e ~33 milhões de px; acima disto a rolagem é ESCALADA
+  const VCH = 100;     // linhas por pedido ao servidor no modo janela remota (o servidor limita em 500)
   const toNum = v => typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' && isFinite(v) ? +v : NaN;
   const nums = v => { const o = []; for (const x of v) { const n = toNum(x); if (n === n) o.push(n); } return o; };
   const AGG = {
@@ -344,6 +346,7 @@
     /** Busca this.src (JSON); aceita array puro ou {retorno|data|rows: [...]} (remote: {total, retorno}). Em erro, this.data fica intacto. */
     async load() {
       if (!this.src) return this;
+      if (this._vr()) return this._vrReset();
       const seq = ++this._seq;
       this._busy(true);
       try {
@@ -501,7 +504,7 @@
       this._mode = this.selectable === 'multi' ? 'multi' : this.selectable ? 'single' : '';
       this._multi = this._mode === 'multi'; this._off = this._multi ? 1 : 0;
       this._cols = this.columns.filter(c => !c.hidden);
-      this._v = !!(this.virtual || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
+      this._v = !!(this.virtual || this._vr() || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
       this.el.classList.toggle('r4-grid-v', this._v);
       this.table.classList.toggle('r4-fixed', this._v || !!this._fixed);
       const h = this._v || this.height ? (this.height || 420) + 'px' : '';
@@ -517,6 +520,8 @@
     },
     _update(head = true) { this._compute(); head && this._buildHead(); this._render(); },
     _size() { return this._todos ? 0 : this.pageSize || (this.remote ? 25 : 0); },
+    /** Modo JANELA REMOTA: remoto + "Todos". A barra de rolagem representa TODAS as linhas do servidor e só o trecho visível é montado e buscado. */
+    _vr() { return !!(this.remote && this._size() === 0); },
     /** Tamanhos oferecidos: pageSizes (array ou texto "10,30,all"; 0/all/todos = todas). Padrão 10, 30, 50, 100 e Todas (no modo remoto sem Todas). O tamanho atual sempre entra na lista. */
     _sizes() {
       let l = this.pageSizes;
@@ -549,7 +554,7 @@
     },
     /** Reavalia a virtualização depois de mudar o tamanho da página (sem refazer cabeçalho). */
     _reflags() {
-      this._v = !!(this.virtual || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
+      this._v = !!(this.virtual || this._vr() || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
       this.el.classList.toggle('r4-grid-v', this._v);
       this.table.classList.toggle('r4-fixed', this._v || !!this._fixed);
       const h = this._v || this.height ? (this.height || 420) + 'px' : '';
@@ -586,7 +591,8 @@
     _render() {
       const view = this._view, size = this._size();
       let rows = view, base = 0, total = view.length;
-      if (this.remote) { total = this._total; base = this.page * size; }
+      if (this._vr()) { rows = this._wrows || []; total = this._err ? 0 : this._total; base = 0; }
+      else if (this.remote) { total = this._total; base = this.page * size; }
       else if (size) {
         this.page = Math.max(0, Math.min(this.page, Math.ceil(total / size) - 1));
         base = this.page * size; rows = view.slice(base, base + size);
@@ -625,6 +631,12 @@
     _fill(tr, row) {
       tr._row = row; tr._pv = this._pv;
       const cols = this._cols, off = this._off;
+      if (row == null && this._vr()) {   // janela remota: a linha ainda está a caminho do servidor
+        tr.classList.add('r4-row-wait');
+        for (let j = 0; j < cols.length; j++) { const td = tr.cells[j + off]; if (!cols[j].actions) td.textContent = ''; else td.replaceChildren(); }
+        return;
+      }
+      tr.classList.remove('r4-row-wait');
       for (let j = 0; j < cols.length; j++) {
         const c = cols[j], td = tr.cells[j + off];
         if (c.actions) { td.replaceChildren(...this._actionBtns(c, row)); continue; }
@@ -665,13 +677,32 @@
       if (this._editor) this._endEdit(true, true);
       const rows = this._rows, n = rows.length, rh = this.rowHeight, pool = this._pool, tb = this.tbody;
       let a = 0, b = n;
+      let scaled = false;
       if (this._v) {
         const sc = this.scroller, vh = sc.clientHeight || this.height || 420;
-        const top = Math.max(0, sc.scrollTop - (this.thead.offsetHeight || 0));
-        b = Math.min(n, Math.ceil((top + vh) / rh) + BUF);
-        a = Math.max(0, Math.min(Math.floor(top / rh) - BUF, b - Math.ceil(vh / rh) - BUF));
-        a -= a % 2;   // início sempre par: as listras não "piscam" ao rolar
-        this._topTd.style.height = a * rh + 'px'; this._botTd.style.height = (n - b) * rh + 'px';
+        if (n * rh > MAXPX) {
+          // ROLAGEM ESCALADA (milhões de linhas): a barra cobre MAXPX px, não n*rh. A linha do topo vem da PROPORÇÃO da rolagem
+          // (frac * linhas) e o trecho montado é posicionado junto da janela visível (espaçador de cima + deslocamento fino).
+          scaled = true;
+          const view = Math.max(rh, vh - (this.thead.offsetHeight || 0)), maxScroll = Math.max(1, MAXPX - view);
+          const frac = Math.min(1, Math.max(0, sc.scrollTop / maxScroll));
+          const rowF = frac * Math.max(0, n - view / rh), a0 = Math.floor(rowF), fino = (rowF - a0) * rh;
+          b = Math.min(n, a0 + Math.ceil(view / rh) + 1 + BUF);
+          a = Math.max(0, a0 - BUF); a -= a % 2;
+          const y = sc.scrollTop - fino - (a0 - a) * rh, top = Math.max(0, y);
+          this.tbody.style.transform = y < 0 ? 'translateY(' + y + 'px)' : '';
+          this._topTd.style.height = top + 'px';
+          this._botTd.style.height = Math.max(0, MAXPX - top - (b - a) * rh) + 'px';
+          this._first = a0;
+        } else {
+          const top = Math.max(0, sc.scrollTop - (this.thead.offsetHeight || 0));
+          b = Math.min(n, Math.ceil((top + vh) / rh) + BUF);
+          a = Math.max(0, Math.min(Math.floor(top / rh) - BUF, b - Math.ceil(vh / rh) - BUF));
+          a -= a % 2;   // início sempre par: as listras não "piscam" ao rolar
+          this._topTd.style.height = a * rh + 'px'; this._botTd.style.height = (n - b) * rh + 'px';
+          this._first = Math.floor(top / rh);
+          if (this.tbody.style.transform) this.tbody.style.transform = '';
+        }
       }
       this._tTop.hidden = this._tBot.hidden = !this._v;
       this._win = [a, b];
@@ -688,6 +719,74 @@
         this._mark(tr);
       }
       this._syncTab(false);
+      if (this._vr()) { this._vrInfoUpdate(a, b); this._vrNeed(a, b); }
+    },
+    /* ---------- janela remota (remoto + "Todos") ---------- */
+    /** Zera a janela (nova busca, ordenação ou "Todos"): pede o 1º bloco, descobre o total e prepara o vetor esparso de linhas. */
+    async _vrReset() {
+      const seq = ++this._seq;
+      this._chunks = new Map(); this._pend = new Set(); this._wrows = []; this._total = 0; this._count = 0; this._view = [];
+      clearTimeout(this._vrT);
+      if (this.scroller) this.scroller.scrollTop = 0;
+      this._busy(true);
+      try {
+        const r = await this._vrRequest(0);
+        if (seq !== this._seq || this._dead) return this;
+        this._err = null;
+        this._total = Math.max(0, +r.total || r.rows.length);
+        this._wrows = new Array(this._total);   // vetor esparso: só os blocos vistos ficam preenchidos
+        r.rows.forEach((row, i) => { this._wrows[i] = row; });
+        this._chunks.set(0, true);
+        this._render();
+        this.fire('load', this, r.rows);
+      } catch (e) {
+        if (seq !== this._seq || this._dead) return this;
+        this._err = e; this.fire('loaderror', this, e); this._render();
+      } finally { if (seq === this._seq && !this._dead) this._busy(false); }
+      return this;
+    },
+    /** Pede o bloco ci (VCH linhas) ao servidor com a mesma ordenação/busca atuais. Devolve {rows, total}. */
+    async _vrRequest(ci) {
+      const s = this._sorters()[0];
+      const p = { page: ci + 1, size: VCH, sort: s ? s.key : null, dir: s ? (s.dir > 0 ? 'asc' : 'desc') : null, q: this.q || null };
+      let url = this.src, data = this.params;
+      if (/^get$/i.test(this.method)) url = withQuery(this.src, Object.assign({}, this.params, p)); else data = Object.assign({}, this.params, p);
+      const r = await this._request(url, data);
+      const rows = Array.isArray(r) ? r : r && (r.retorno || r.data || r.rows);
+      if (!Array.isArray(rows)) throw new Error((r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message)) || T('r4.grid.noList', 0, 'Resposta sem lista de registros.'));
+      return { rows, total: r && r.total };
+    },
+    /** Depois de rolar: agenda (debounce) a busca dos blocos que a janela atual ainda não tem. Rolar rápido não dispara pedidos inúteis. */
+    _vrNeed(a, b) {
+      if (!this._chunks || !this._total) return;
+      const c0 = Math.floor(a / VCH), c1 = Math.floor((Math.max(a, b - 1)) / VCH);
+      for (let c = c0; c <= c1; c++) if (this._chunks.has(c)) { this._chunks.delete(c); this._chunks.set(c, true); }   // "usado agora": sai da frente da fila de descarte
+      clearTimeout(this._vrT);
+      this._vrT = setTimeout(() => {
+        if (this._dead || !this._vr()) return;
+        const [wa, wb] = this._win, seq = this._seq;
+        for (let c = Math.floor(wa / VCH); c <= Math.floor((Math.max(wa, wb - 1)) / VCH); c++) {
+          if (c * VCH >= this._total || this._chunks.has(c) || this._pend.has(c) || this._pend.size >= 4) continue;
+          this._pend.add(c);
+          this._vrRequest(c).then(r => {
+            this._pend.delete(c);
+            if (seq !== this._seq || this._dead) return;
+            r.rows.forEach((row, i) => { this._wrows[c * VCH + i] = row; });
+            this._chunks.set(c, true);
+            while (this._chunks.size > 150) {   // memória limitada: descarta os blocos mais antigos (voltam do servidor se forem revistos)
+              const old = this._chunks.keys().next().value; this._chunks.delete(old);
+              for (let i = 0; i < VCH; i++) this._wrows[old * VCH + i] = undefined;
+            }
+            this._schedule(); this._vrNeed(this._win[0], this._win[1]);
+          }, () => { this._pend.delete(c); });
+        }
+      }, 60);
+    },
+    _vrInfoUpdate(a, b) {
+      if (!this._vrInfo || !this._total) return;
+      const f = this._first || 0, last = Math.min(this._total, f + Math.max(1, Math.ceil((this.scroller.clientHeight - (this.thead.offsetHeight || 0)) / this.rowHeight)));
+      this._vrInfo.textContent = T('r4.grid.vrInfo', { a: R4.util.number(f + 1, 0), b: R4.util.number(last, 0), n: R4.util.number(this._total, 0) },
+        R4.util.number(f + 1, 0) + ' a ' + R4.util.number(last, 0) + ' de ' + R4.util.number(this._total, 0) + ' registros');
     },
     _schedule() { if (!this._raf) this._raf = requestAnimationFrame(() => { this._raf = 0; !this._dead && this._paint(); }); },
     _onScroll() { if (this._v) this._schedule(); },
@@ -715,6 +814,8 @@
       this.pager.hidden = !show;
       if (!show) return;
       this._renderSizeSel();
+      if (!size && this._vr()) { this._vrInfo = el('span', { class: 'r4-vr-info' }); this._pNav.replaceChildren(this._vrInfo); this._vrInfoUpdate(0, 0); return; }
+      this._vrInfo = null;
       if (!size) { this._pNav.replaceChildren(el('span', { text: T('r4.grid.count', { n: total, total: R4.util.number(total, 0) }, R4.util.number(total, 0) + ' registros') })); return; }
       const pages = Math.max(1, Math.ceil(total / size));
       this._pNav.replaceChildren(
@@ -1194,7 +1295,7 @@
       { name: 'filter', type: 'boolean', default: 'true', desc: 'Barra de filtro (busca em todas as colunas, com atraso de digitação).' },
       { name: 'highlight', type: 'boolean', default: 'true', desc: 'Com filtro ativo, marca (classe r4-hit, cor --r4-hit) cada CÉLULA que contém o termo — mostra em qual coluna a linha casou. highlight="false" desliga.' },
       { name: 'pageSizeSelector', type: 'boolean', default: 'false', desc: 'Mostra o seletor "Linhas por página" no rodapé (page-size-selector). Funciona local e remoto.' },
-      { name: 'pageSizes', type: 'Array<number|"all">', default: '[] (10, 30, 50, 100, Todos)', desc: 'Opções do seletor; 0 ou "all" = Todos (page-sizes="10,30,50,100,all"). No modo remoto o padrão NÃO inclui Todos: só aparece se estiver aqui e o servidor decide o limite. O tamanho atual (pageSize) entra na lista se faltar.' },
+      { name: 'pageSizes', type: 'Array<number|"all">', default: '[] (10, 30, 50, 100, Todos)', desc: 'Opções do seletor; 0 ou "all" = Todos (page-sizes="10,30,50,100,all"). No modo remoto o padrão NÃO inclui Todos: só aparece se estiver aqui e ativa a JANELA REMOTA (rolagem sobre todas as linhas do servidor, DOM enxuto, blocos de 100 pedidos conforme a rolagem; acima de ~220 mil linhas a rolagem é escalada). O tamanho atual (pageSize) entra na lista se faltar.' },
       { name: 'striped / emptyText / height', type: "boolean / string / number", default: "true / '' / 0", desc: 'Listras, texto de vazio (vazio = "Nenhum registro." no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420).' },
       { name: 'virtual', type: 'boolean', default: 'false', desc: 'Renderiza só as linhas visíveis (altura fixa rowHeight). Liga sozinho sem paginação acima de virtualThreshold linhas.' },
       { name: 'virtualThreshold / rowHeight', type: 'number / number', default: '1000 / 36', desc: 'Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual.' },

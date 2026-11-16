@@ -81,7 +81,6 @@ $router->get('/vitrine/api/sql-seguro', 'VitrineApiController@sqlSeguro');
 $router->get('/erp/login', 'ErpController@login');
 $router->post('/erp/api/login', 'ErpAuthController@login');
 $router->post('/erp/api/cadastro', 'ErpAuthController@cadastro');
-$router->get('/erp/api/avatar/ver', 'ErpAuthController@avatarVer');   // imagem de perfil (só <img>, content-type fixo)
 
 $router->group('/erp', 'ErpAuth@handle', function ($r) {
     $r->get('', 'ErpController@app');
@@ -89,6 +88,7 @@ $router->group('/erp', 'ErpAuth@handle', function ($r) {
     $r->post('/api/logout', 'ErpAuthController@logout');
     $r->post('/api/perfil', 'ErpAuthController@perfil');
     $r->post('/api/avatar', 'ErpAuthController@avatar');
+    $r->get('/api/avatar/ver', 'ErpAuthController@avatarVer');   // imagem de perfil: SÓ com sessão (o <img> envia o cookie), content-type fixo
     $r->get('/api/dashboard', 'ErpController@dashboard');
     foreach (['clientes' => 'ErpClientesController', 'produtos' => 'ErpProdutosController', 'pedidos' => 'ErpPedidosController'] as $rec => $ctl) {
         $r->get("/api/$rec", "$ctl@listar");
