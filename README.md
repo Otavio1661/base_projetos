@@ -273,3 +273,7 @@ php tools/build.php      # gera public/libr4/dist/ (determinístico, sem datas)
 A lista de módulos vem de `public/libr4/libr4.js` (o build falha com mensagem clara se um módulo listado não existir); rode o build de novo sempre que alterar a lib. Saída: `libr4.min.js`, `libr4.min.css` e `manifest.json` (`bytes`, `gzip` e `sha384` de cada arquivo). Para SRI, use o `sha384` do manifest: `integrity="sha384-..." crossorigin="anonymous"` nas duas tags. Sirva com gzip/brotli ligado (o `docker/nginx/default.conf` já tem `gzip on`). Na vitrine (APP_DEBUG=true), `/vitrine?min=1` carrega o pacote minificado.
 
 A lib não depende de Node em nenhum momento; o Node só é usado em `tools/` para testes de desenvolvimento.
+
+## Produção e `.env`
+
+O `.env` real **nunca** vai para o Git (só `Exemplo.env` e `Exemplo.producao.env`). Em produção o debug é desligado automaticamente e a aplicação só sobe com `BASE_CRIPTOGRAFIA` de 32+ caracteres. Passo a passo e checklist em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).

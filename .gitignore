@@ -9,3 +9,9 @@ vendor
 
 # arquivos enviados por usuários (Core\Security\Upload grava aqui, fora de public/)
 storage/
+
+# variações do .env nunca sobem (só Exemplo.env e Exemplo.producao.env)
+.env.*
+*.env
+!Exemplo.env
+!Exemplo.producao.env
