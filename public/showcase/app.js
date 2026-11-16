@@ -14,7 +14,7 @@ R4.ready(() => {
   ];
   const groups = {};
   entries.forEach(e => (groups[e.meta.group] ||= []).push(e));
-  const order = ['Núcleo', 'Componentes', 'Formulários', 'Dados', 'Interface', 'Gráficos', 'Funções prontas', 'HTML declarativo', 'Dados de teste'];
+  const order = ['Núcleo', 'Componentes', 'Formulários', 'Dados', 'Interface', 'Gráficos', 'Receitas', 'Funções prontas', 'HTML declarativo', 'Dados de teste'];
   const nodes = Object.keys(groups).sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99).map(g => ({
     text: g, badge: groups[g].length,
     children: groups[g].sort((a, b) => a.id.localeCompare(b.id)).map(e => ({ id: e.id, text: e.kind === 'xtype' ? e.id : e.meta.title, badge: demos[e.id] ? '' : 'sem demo' }))
