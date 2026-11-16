@@ -154,6 +154,16 @@
           '<div class="r4-text-lg r4-bold r4-text-primary">' + R4.util.esc(k.formato === 'money' ? R4.util.money(k.valor) : k.formato === 'percent' ? R4.util.number(k.valor, 1) + '%' : R4.util.number(k.valor, 0)) + '</div>' +
           '<span class="r4-tag">' + (k.variacao > 0 ? '▲ ' : '▼ ') + R4.util.number(Math.abs(k.variacao), 1) + '%</span></div>').join('') + '</r4-div>');
       } },
+      { title: 'API com paginação, busca e ordenação NO SERVIDOR (remote)', html: `
+<r4-grid src="${VitrineData.api.clientes}" remote page-size="8" filter>
+  <r4-col field="nome" header="Cliente"></r4-col>
+  <r4-col field="cidade" header="Cidade"></r4-col>
+  <r4-col field="saldo" header="Saldo" format="money" align="right"></r4-col>
+</r4-grid>` },
+      { title: 'API lenta (mostra o estado de carregando)', html: `
+<r4-grid src="${VitrineData.api.lento}?ms=1500" page-size="5" filter="false"></r4-grid>` },
+      { title: 'API com erro (mensagem + Tentar de novo)', html: `
+<r4-grid src="${VitrineData.api.falha}?code=503"></r4-grid>` },
       { title: 'Volume: 20 mil linhas geradas na hora', fn(el, out) {
         const t = performance.now();
         const rows = VitrineData.rows(20000);

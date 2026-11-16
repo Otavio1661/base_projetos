@@ -1,1 +1,82 @@
-/* libr4 parts/files.css — estilos de arquivos (CSV/JSON/XLSX, download, leitura) e exportação do grid */
+/* libr4 parts/files.css — grid avançado (virtual, seleção, edição, rodapé, menus, estados) + filedrop.
+ * Importado no topo de libr4.css: as regras aqui usam seletores mais específicos quando precisam vencer as de lá. */
+
+/* ---------- grid: estrutura ---------- */
+.r4-grid{position:relative}
+.r4-grid-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.r4-grid-bar .r4-input{flex:1 1 160px}
+.r4-grid-tool{padding:4px 10px;font-size:13px}
+.r4-grid .r4-table th{z-index:2;position:sticky}
+.r4-grid .r4-table th:focus,.r4-grid .r4-table td:focus{outline:2px solid var(--r4-acc);outline-offset:-2px}
+.r4-grid .r4-table th:focus:not(:focus-visible),.r4-grid .r4-table td:focus:not(:focus-visible){outline:0;box-shadow:inset 0 0 0 1px var(--r4-acc)}
+.r4-th-text{vertical-align:middle}
+.r4-sort{color:var(--r4-acc);font-size:12px}
+/* hover e selecionado vencem as listras (em libr4.css as listras têm prioridade sobre .r4-selected) */
+.r4-grid .r4-table tbody tr:hover>td{background:var(--r4-hover)}
+.r4-grid .r4-table tbody tr.r4-selected>td{background:var(--r4-sel)}
+.r4-grid .r4-table tbody tr.r4-msgrow:hover>td{background:transparent}
+.r4-check-cell{width:40px;text-align:center!important;padding-left:0!important;padding-right:0!important}
+.r4-check-cell input{cursor:pointer;margin:0;vertical-align:middle;accent-color:var(--r4-acc)}
+
+/* larguras fixas (virtual ou depois de redimensionar) */
+.r4-table.r4-fixed{table-layout:fixed}
+.r4-table.r4-fixed td,.r4-table.r4-fixed th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r4-col-resize{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:3;touch-action:none}
+.r4-col-resize::after{content:"";position:absolute;top:25%;bottom:25%;left:3px;border-left:1px solid var(--r4-line)}
+.r4-col-resize:hover::after,.r4-resizing .r4-col-resize::after{border-left:2px solid var(--r4-acc)}
+.r4-resizing{cursor:col-resize;user-select:none}
+
+/* virtual: altura de linha fixa e previsível (= rowHeight) */
+.r4-grid-v .r4-table tbody td{height:var(--r4-rh,36px);padding-top:0;padding-bottom:0;line-height:calc(var(--r4-rh,36px) - 1px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r4-grid-v .r4-table tbody td.r4-empty{height:auto;line-height:1.5;white-space:normal}
+.r4-vspace{padding:0!important;border:0!important;height:0}
+.r4-grid-v .r4-grid-scroll{overscroll-behavior:contain;will-change:scroll-position}
+
+/* edição */
+.r4-editable{cursor:cell}
+.r4-table td.r4-editing{padding:2px 4px!important;overflow:visible}
+.r4-cell-editor{padding:3px 6px;min-width:60px;height:auto;line-height:1.4}
+
+/* ações */
+.r4-actions{white-space:nowrap}
+.r4-grid-act{padding:2px 8px;font-size:12px;margin-right:4px;line-height:1.4}
+.r4-grid-act:last-child{margin-right:0}
+
+/* rodapé de resumo */
+.r4-grid tfoot td{position:sticky;bottom:0;z-index:1;background:var(--r4-head);color:var(--r4-head-txt);font-weight:600;padding:7px 12px;border-top:1px solid var(--r4-line);white-space:nowrap}
+
+/* estados: carregando / vazio / erro */
+.r4-grid-mask{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:color-mix(in srgb,var(--r4-panel) 65%,transparent);color:var(--r4-txt);font-weight:600}
+.r4-grid-spin{width:20px;height:20px;border-radius:50%;border:3px solid var(--r4-line);border-top-color:var(--r4-acc);animation:r4-spin .8s linear infinite}
+@keyframes r4-spin{to{transform:rotate(360deg)}}
+.r4-grid-err{color:var(--r4-err)!important}
+.r4-grid-retry{margin-left:6px;color:var(--r4-txt)}
+
+/* menus (colunas / exportar) — ficam no body, posição fixa */
+.r4-grid-menu{position:fixed;z-index:1500;min-width:190px;max-height:60vh;overflow:auto;padding:4px;display:flex;flex-direction:column;
+  background:var(--r4-panel);color:var(--r4-txt);border:1px solid var(--r4-line);border-radius:var(--r4-radius);box-shadow:0 10px 28px rgba(0,0,0,.22)}
+.r4-grid-mi{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.r4-grid-mi:hover,.r4-grid-mi:focus{background:var(--r4-hover);outline:0}
+.r4-grid-mi:focus-visible{box-shadow:inset 0 0 0 2px var(--r4-acc)}
+.r4-grid-mi input{margin:0;accent-color:var(--r4-acc)}
+.r4-print-frame{position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden}
+
+/* ---------- filedrop ---------- */
+.r4-filedrop{display:flex;flex-direction:column;gap:8px}
+.r4-fd-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:22px 16px;text-align:center;cursor:pointer;
+  border:2px dashed var(--r4-line);border-radius:var(--r4-radius);background:var(--r4-panel);color:var(--r4-mut);transition:border-color .15s,background .15s}
+.r4-fd-zone:hover,.r4-fd-over{border-color:var(--r4-acc);background:var(--r4-hover);color:var(--r4-txt)}
+.r4-fd-ico{font-size:26px;line-height:1;color:var(--r4-acc)}
+.r4-fd-hint{font-size:12px}
+.r4-fd-input{display:none}
+.r4-filedrop.r4-disabled .r4-fd-zone{opacity:.55;cursor:not-allowed}
+.r4-fd-msg{white-space:pre-line;padding:8px 12px;border:1px solid var(--r4-err);border-radius:var(--r4-radius);color:var(--r4-err);background:var(--r4-panel);font-size:13px}
+.r4-fd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.r4-fd-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--r4-line);border-radius:var(--r4-radius);background:var(--r4-panel)}
+.r4-fd-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r4-fd-size{font-size:12px;color:var(--r4-mut)}
+.r4-fd-rm{border:0;background:transparent;color:var(--r4-mut);font-size:18px;line-height:1;cursor:pointer;padding:0 4px;border-radius:4px}
+.r4-fd-rm:hover{color:var(--r4-err)}
+.r4-fd-rm:focus-visible,.r4-fd-zone .r4-btn:focus-visible{outline:2px solid var(--r4-acc);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.r4-grid-spin{animation-duration:2.4s}.r4-fd-zone{transition:none}}

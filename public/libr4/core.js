@@ -117,7 +117,8 @@
     show() { this.el && (this.el.hidden = false); return this; }
     hide() { this.el && (this.el.hidden = true); return this; }
     destroy() {
-      if (!this.fire('beforedestroy', this)) return;
+      if (this._destroyed || !this.fire('beforedestroy', this)) return;
+      this._destroyed = true;
       (this._children || []).forEach(c => c.destroy());
       this.el && this.el.remove();
       delete R4.instances[this.id];

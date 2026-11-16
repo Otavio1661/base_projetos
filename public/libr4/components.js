@@ -97,7 +97,7 @@
     setValue(v) { this.input.value = v; return this; },
     focus() { this.input.focus(); return this; }
   }, {
-    title: 'textfield', description: 'Campo de texto com rótulo e eventos change/enter.',
+    title: 'textfield', group: 'Formulários', description: 'Campo de texto com rótulo e eventos change/enter.',
     props: [
       { name: 'label', type: 'string', default: "''", desc: 'Rótulo acima do campo.' },
       { name: 'value', type: 'string', default: "''", desc: 'Valor inicial.' },
@@ -324,7 +324,7 @@
     },
 
     /* ---------- dados ---------- */
-    /** Busca this.src via R4.http; aceita array puro ou {retorno|data|rows: [...]} (remote: {total, retorno}) */
+    /** Busca this.src (JSON); aceita array puro ou {retorno|data|rows: [...]} (remote: {total, retorno}). Em erro, this.data fica intacto. */
     async load() {
       if (!this.src) return this;
       const seq = ++this._seq;
@@ -337,13 +337,13 @@
           if (/^get$/i.test(this.method)) url = withQuery(this.src, Object.assign({}, this.params, p));
           else data = Object.assign({}, this.params, p);
         }
-        const r = await R4.http.request(url, { method: this.method, encrypt: this.encrypt, data });
+        const r = await this._request(url, data);
         if (seq !== this._seq || this._dead) return this;
         const rows = Array.isArray(r) ? r : r && (r.retorno || r.data || r.rows);
-        if (!Array.isArray(rows)) {
-          const msg = r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message);
-          if (msg || (r && +r.status >= 400)) throw new Error(msg || 'HTTP ' + r.status);
-        }
+        const msg = r && !Array.isArray(r) && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message);
+        // status de erro no corpo ({status: 500, ...}) também é falha — this.data só muda em caso de sucesso
+        if ((r && !Array.isArray(r) && +r.status >= 400) || (!Array.isArray(rows) && msg)) throw new Error(msg || 'HTTP ' + r.status);
+        if (rows != null && !Array.isArray(rows)) throw new Error('Resposta sem lista de registros.');
         this._err = null;
         if (this.remote) this._setRemote(rows || [], r && r.total);
         else this.loadData(rows || []);
@@ -356,6 +356,23 @@
         if (seq === this._seq && !this._dead) this._busy(false);
       }
       return this;
+    },
+    /**
+     * Requisição JSON verificando o status HTTP (R4.http.request não expõe res.ok).
+     * Mesmo formato do R4.http: corpo criptografado com R4.crypto quando encrypt=true.
+     */
+    async _request(url, data) {
+      const get = /^get$/i.test(this.method);
+      const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data) : data);
+      const res = await fetch(url, { method: this.method, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
+      let r = null, bad = false;
+      try { r = await res.json(); } catch (e) { bad = true; }
+      if (!res.ok) {
+        const m = r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message);
+        throw new Error('HTTP ' + res.status + (m ? ': ' + m : ''));
+      }
+      if (bad) throw new Error('A resposta não é JSON válido.');
+      return r;
     },
     reload() { return this.load(); },
     loadData(d) {
@@ -530,7 +547,7 @@
           ? [el('span', { text: this.errorText + (this._err.message ? ' (' + this._err.message + ')' : '') }), ' ',
             this.src ? el('button', { type: 'button', class: 'r4-btn r4-grid-retry', text: '↻ Tentar de novo' }) : '']
           : [this._loading ? this.loadingText : this.emptyText]));
-      }
+      } else if (this._msgTd.firstChild) this._msgTd.replaceChildren();
       this._renderSummary(sum);
       this._renderPager();
       this._syncAll();
@@ -1072,7 +1089,7 @@
       { name: 'virtualThreshold / rowHeight', type: 'number / number', default: '1000 / 36', desc: 'Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual.' },
       { name: 'selectable', type: "'' | 'single' | 'multi'", default: "''", desc: "multi adiciona coluna de caixas (a do cabeçalho seleciona todos os filtrados), Ctrl+clique alterna e Shift+clique seleciona intervalo." },
       { name: 'idProperty', type: 'string', default: "'id'", desc: 'Campo que identifica a linha na seleção (mantém a seleção entre páginas do modo remoto).' },
-      { name: 'src / method / encrypt / params', type: 'string / string / boolean / object', default: "'' / 'GET' / false / null", desc: 'Carrega os dados de uma URL via R4.http ao renderizar (mostra "carregando" e, em falha, erro com botão Tentar de novo). reload() busca de novo.' },
+      { name: 'src / method / encrypt / params', type: 'string / string / boolean / object', default: "'' / 'GET' / false / null", desc: 'Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra "carregando"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo.' },
       { name: 'remote', type: 'boolean', default: 'false', desc: 'Paginação, ordenação e filtro no servidor: envia page (1…), size, sort, dir (asc|desc), q e lê {total, retorno}. Multi-coluna envia só o critério principal.' },
       { name: 'resizable / columnMenu', type: 'boolean', default: 'false', desc: 'Arrastar a borda do cabeçalho (ou Alt+←/→ no cabeçalho) muda a largura; menu "Colunas" mostra/oculta colunas.' },
       { name: 'exportable / exportName', type: "boolean / string", default: "false / 'dados'", desc: 'Botão "Exportar" (CSV, Excel, JSON, imprimir) com as linhas filtradas/ordenadas e colunas visíveis.' },

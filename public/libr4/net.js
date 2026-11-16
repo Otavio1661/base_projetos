@@ -71,7 +71,17 @@
       const body = data == null || method === 'GET' ? undefined
         : JSON.stringify(encrypt ? await R4.crypto.encrypt(data) : data);
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body });
-      return res.json();
+      // lê o corpo como texto e tenta JSON (resposta vazia/HTML não derruba com SyntaxError obscuro)
+      const text = await res.text();
+      let parsed = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch (e) { /* não era JSON */ }
+      if (!res.ok) {
+        const err = new Error((parsed && typeof parsed.retorno === 'string' && parsed.retorno) || 'Erro HTTP ' + res.status);
+        err.status = res.status; err.data = parsed;     // o corpo (ex.: {erros:{...}}) fica em err.data
+        throw err;
+      }
+      if (parsed === null && text) throw new Error('A resposta não é JSON válido');
+      return parsed;
     },
     get: (url, opts) => R4.http.request(url, { ...opts, method: 'GET' }),
     post: (url, data, opts) => R4.http.request(url, { ...opts, method: 'POST', data })
