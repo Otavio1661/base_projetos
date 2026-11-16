@@ -11,15 +11,63 @@ namespace App\Utils;
  */
 final class JsonDb
 {
+    /** Teto do arquivo de uma tabela (bytes): acima disso a leitura é recusada (o arquivo inteiro vai para a memória). */
+    private const MAX_BYTES = 33554432;   // 32 MB
     private static array $cache = [];
+    /** Raiz alternativa no lugar de storage/ (só scripts de linha de comando e testes; nunca vem da requisição). */
+    public static ?string $raiz = null;
+
+    private static function raiz(): string
+    {
+        return self::$raiz ?? dirname(__DIR__, 2) . '/storage';
+    }
 
     public static function dir(): string
     {
-        $d = dirname(__DIR__, 2) . '/storage/data';
+        $d = self::raiz() . '/data';
         if (!is_dir($d)) {
-            @mkdir($d, 0750, true);
+            @mkdir($d, 0700, true);   // só o usuário do PHP lê/grava (nada aqui é servido por URL)
         }
         return $d;
+    }
+
+    /** storage/cache (limite de tentativas de login, contagens da tabela grande). */
+    public static function cacheDir(): string
+    {
+        $d = self::raiz() . '/cache';
+        if (!is_dir($d)) {
+            @mkdir($d, 0700, true);
+        }
+        return $d;
+    }
+
+    /**
+     * Coleta de lixo de storage/cache/<prefixo>*.json: apaga os mais velhos que $idade segundos e, se ainda
+     * sobrarem mais que $max, os mais antigos. Roda em ~1 de cada $chance chamadas (barato no caminho comum).
+     * Sem isto, cada IP novo (login) ou cada busca nova (transações) deixaria um arquivo para sempre.
+     */
+    public static function limparCache(string $prefixo, int $idade, int $max, int $chance = 50): void
+    {
+        if (!preg_match('/^[a-z][a-z0-9-]{0,30}$/', $prefixo) || ($chance > 1 && random_int(1, $chance) !== 1)) {
+            return;
+        }
+        $lista = glob(self::cacheDir() . '/' . $prefixo . '*.json') ?: [];
+        $agora = time();
+        $vivos = [];
+        foreach ($lista as $f) {
+            $m = @filemtime($f);
+            if ($m !== false && $m < $agora - $idade) {
+                @unlink($f);
+            } elseif ($m !== false) {
+                $vivos[$f] = $m;
+            }
+        }
+        if (count($vivos) > $max) {
+            asort($vivos);
+            foreach (array_slice(array_keys($vivos), 0, count($vivos) - $max) as $f) {
+                @unlink($f);
+            }
+        }
     }
 
     private static function arquivo(string $tabela): string
@@ -30,25 +78,39 @@ final class JsonDb
         return self::dir() . '/' . $tabela . '.json';
     }
 
+    /** Lê e decodifica a tabela. Arquivo ausente/vazio → []; grande demais ou corrompido → exceção (nunca "vira vazio"). */
+    private static function ler(string $f): array
+    {
+        if (!is_file($f)) {
+            return [];
+        }
+        $tam = filesize($f);
+        if ($tam === false || $tam > self::MAX_BYTES) {
+            throw new \RuntimeException('Tabela grande demais: ' . basename($f));
+        }
+        $txt = (string) file_get_contents($f);
+        if (trim($txt) === '') {
+            return [];
+        }
+        $a = json_decode($txt, true, 64);
+        if (!is_array($a) || !array_is_list($a)) {
+            throw new \RuntimeException('Tabela corrompida: ' . basename($f));
+        }
+        return $a;
+    }
+
     public static function todos(string $tabela): array
     {
         if (isset(self::$cache[$tabela])) {
             return self::$cache[$tabela];
         }
-        $f = self::arquivo($tabela);
-        if (!is_file($f)) {
+        // a escrita é atômica (temporário + rename), então a leitura nunca vê um arquivo pela metade
+        try {
+            return self::$cache[$tabela] = self::ler(self::arquivo($tabela));
+        } catch (\RuntimeException $e) {
+            error_log('[JsonDb] ' . $e->getMessage());
             return [];
         }
-        $h = fopen($f, 'rb');
-        if (!$h) {
-            return [];
-        }
-        flock($h, LOCK_SH);
-        $txt = stream_get_contents($h);
-        flock($h, LOCK_UN);
-        fclose($h);
-        $a = json_decode((string) $txt, true);
-        return self::$cache[$tabela] = is_array($a) ? $a : [];
     }
 
     public static function gravar(string $tabela, array $linhas): void
@@ -60,30 +122,51 @@ final class JsonDb
     public static function mutar(string $tabela, callable $fn): ?array
     {
         $f = self::arquivo($tabela);
-        $lock = fopen($f . '.lock', 'cb');
-        if (!$lock) {
+        $lock = @fopen($f . '.lock', 'cb');
+        if (!$lock || !flock($lock, LOCK_EX)) {
             throw new \RuntimeException('Sem acesso ao armazenamento.');
         }
-        flock($lock, LOCK_EX);
+        @chmod($f . '.lock', 0600);
         try {
             unset(self::$cache[$tabela]);
-            $atual = [];
-            if (is_file($f)) {
-                $a = json_decode((string) file_get_contents($f), true);
-                $atual = is_array($a) ? $a : [];
-            }
+            // corrompido → exceção: NÃO segue com [] (gravaria por cima e perderia todos os registros)
+            $atual = self::ler($f);
             $novo = $fn($atual);
             if ($novo !== null) {
-                $tmp = $f . '.' . bin2hex(random_bytes(4)) . '.tmp';
-                file_put_contents($tmp, json_encode(array_values($novo), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
-                @chmod($tmp, 0640);
-                rename($tmp, $f);
+                self::gravarAtomico($f, array_values($novo));
                 unset(self::$cache[$tabela]);
             }
             return $novo;
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
+        }
+    }
+
+    /**
+     * Grava em <arquivo>.<aleatório>.tmp, confere que TODOS os bytes foram escritos, força ao disco (fsync) e só então
+     * troca pelo original com rename (atômico). Disco cheio ou erro no meio → o original fica intacto e sobe exceção.
+     */
+    private static function gravarAtomico(string $f, array $linhas): void
+    {
+        $json = json_encode($linhas, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!is_string($json)) {
+            throw new \RuntimeException('Falha ao serializar a tabela.');
+        }
+        $tmp = $f . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        $h = @fopen($tmp, 'xb');
+        if (!$h) {
+            throw new \RuntimeException('Sem acesso ao armazenamento.');
+        }
+        $ok = fwrite($h, $json) === strlen($json) && fflush($h);
+        if ($ok && function_exists('fsync')) {
+            $ok = @fsync($h);
+        }
+        fclose($h);
+        @chmod($tmp, 0600);
+        if (!$ok || !@rename($tmp, $f)) {
+            @unlink($tmp);
+            throw new \RuntimeException('Falha ao gravar a tabela.');
         }
     }
 

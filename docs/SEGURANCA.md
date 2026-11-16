@@ -8,6 +8,7 @@ Testes automatizados: `node tools/testes-seguranca.js` e `php tools/testes-trans
 Criptografia v2 (nenhum segredo no navegador) e política HTTPS: seções 5 e 5.1.
 Anti-CSRF por origem e sessão sob demanda: seções 5.2 e 5.3. CSP sem `'unsafe-inline'` em scripts: seção 7.
 Injeção de SQL, de arquivos e de prompt (servidor + cliente): seção 13.
+Mini ERP de demonstração (`/erp`): revisão de segurança, achados e correções na seção 14.
 Como relatar uma vulnerabilidade: [`SECURITY.md`](../SECURITY.md).
 
 ---
@@ -694,3 +695,73 @@ Os campos de texto agora devolvem o valor **aparado e normalizado** e têm `maxl
 - [ ] Modelo de IA sem ferramentas destrutivas; confirmação humana para ações; nenhum segredo no prompt.
 - [ ] Logs registram os sinais (`suspicious` no cliente, `looksLikeInjection` no servidor) sem gravar senhas.
 - [ ] `node tools/testes-seguranca.js` passando antes de publicar.
+
+---
+
+## 14. Mini ERP de demonstração (`/erp`)
+
+Revisão do código do ERP (`src/Controllers/Erp*.php`, `src/Middleware/ErpAuth.php`, `src/Utils/JsonDb.php`, `public/erp/**`,
+`tools/erp-seed*.php`) e do que ele mudou na libr4 (grid remoto/janela, filtro por valores, destaque da busca, `R4.files.interpret`).
+Contrato da API e permissões por cargo: [`docs/ERP.md`](ERP.md).
+
+### 14.1 Achados e correções
+
+| # | Sev. | Onde | Problema | Correção |
+|---|---|---|---|---|
+| E1 | **A** | `ErpAuthController::cadastro` | Cadastro aberto aceitava `cargo: "gestor"`: qualquer pessoa criava conta com o cargo mais alto (escalonamento de privilégio). | Cargo do cadastro só `vendas`/`financeiro`/`estoque` (422 para `gestor`); `ERP_CADASTRO_ABERTO` (validada em `src/Env.php`, padrão `false` em produção) fecha o cadastro (403). |
+| E2 | **A** | `ErpCrudBase`, `ErpClientesController::importar` | Nenhuma checagem de cargo: qualquer conta (inclusive recém-criada) gravava, excluía e importava em tudo. | `ESCRITA` por recurso (tabela em ERP.md); `salvar`/`excluir`/`importar` respondem 403 fora do cargo. Leitura continua para todos. |
+| E3 | M | `ErpAuthController::login` | Enumeração de usuários pelo tempo: e-mail inexistente fazia `password_hash` + `password_verify` (~2x mais lento: 135 ms × 72 ms medidos). | Sempre UM `password_verify` contra `HASH_FALSO` (bcrypt do mesmo custo); medido depois: 263 ms × 275 ms. Mesma mensagem nos dois casos. |
+| E4 | M | `ErpAuthController::login` | Limite de tentativas não atômico (lê, verifica a senha, grava): N requisições paralelas (PHP-FPM) passavam do limite; só por IP; um arquivo por IP para sempre em `storage/cache`. | Contador sob `flock`, contado ANTES de verificar a senha (8 processos paralelos → exatamente 5 passam); + limite por e-mail (10/120 s); + limite de cadastro (10 por IP em 10 min); coleta dos arquivos velhos. X-Forwarded-For só vale de `TRUSTED_PROXIES` (já era assim). |
+| E5 | M | `JsonDb::mutar` | Arquivo corrompido (ou disco cheio no meio da escrita) era lido como `[]` e a próxima gravação apagava todos os registros; retorno de `file_put_contents`/`rename` ignorado. | Corrompido → exceção (nada é sobrescrito); escrita em temporário exclusivo + conferência de bytes + `fsync` + `rename`; teto de 32 MB por tabela; pastas 0700 / arquivos 0600. |
+| E6 | M | `ErpAuthController::avatarVer` | IDOR: qualquer logado via a foto de qualquer usuário por `?id=`. Sem CSP/`Content-Disposition`. | Só o avatar do próprio usuário (outro id → 404); `Content-Disposition: inline`, CSP `default-src 'none'; sandbox`, CORP same-origin, nosniff (já tinha Content-Type fixo). |
+| E7 | M | `ErpTransacoesController` | Cache de contagens: um arquivo por busca/filtro diferente, sem limite (enche o disco); erro de PDO com `APP_DEBUG` mostrava caminho/SQL; banco aberto em leitura-escrita (só `query_only`). | Coleta (vencidos + teto de 2.000 arquivos, prefixo `erp-tx-`); `SQLITE_OPEN_READONLY` + `ATTR_TIMEOUT` 5 s; erro → 500 JSON limpo (detalhe no log); página além do fim não consulta; `page` limitado. |
+| E8 | B | `ErpCrudBase`, `ErpTransacoesController` | `q[]=x`, `sort[]=`, `id[]=` → "Array to string conversion" no corpo (com APP_DEBUG o aviso trazia o caminho do arquivo) e `id[]=1` virava o id 1. `q` sem limite de tamanho. | `qs()`/`qi()`: só texto/dígitos, senão o padrão; `q` até 100 (CRUD) / 60 (transações) caracteres. |
+| E9 | B | `ErpAuth` + `logado()` | A sessão só guardava o id: conta apagada e o id reaproveitado (seed `--forcar` + novo cadastro) herdava a sessão antiga; sessão sem expiração por ociosidade. | Sessão amarrada a uma impressão (id + e-mail + hash da senha) e expira após 8 h sem uso; o middleware confere o usuário real. |
+| E10 | B | Senhas | `PASSWORD_DEFAULT` (bcrypt custo 10) sem rehash; senha até 100 caracteres (bcrypt ignora o que passa de 72 bytes). | bcrypt custo 12 com `password_needs_rehash` no login; cadastro até 72 bytes, letras e números, sem conter o e-mail. Seed usa o mesmo `hashSenha()`. |
+| E11 | B | `importar` | Corpo inválido/grande/cifra recusada virava "Envie uma lista" (422); chaves extras no topo aceitas; sem deduplicação; linhas acima do teto sumiam sem aviso. | 413/400/falha de cifra como no `ctrl::validate`; só a chave `linhas`; e-mail já existente ou repetido no lote → rejeitado; teto informado por linha. |
+| E12 | B | `tools/erp-seed.php` | Criava a conta demo (senha pública, gestor) em qualquer ambiente. | Em produção (ou sem `.env`) recusa sem `--forcar` e só cria a conta demo com `--com-demo`. |
+| E13 | B | Páginas `/erp` | CSP só existia no nginx (o `php -S` de desenvolvimento não mandava nenhuma). | `ErpController` envia a mesma CSP padrão (sem `'unsafe-eval'`) + `X-Frame-Options`. |
+
+### 14.2 Conferido e sem achado
+
+- **Rotas:** todas as `/erp/*` exceto `/erp/login`, `POST /erp/api/login` e `POST /erp/api/cadastro` estão no grupo `ErpAuth` (o
+  roteador compara o caminho exato; o middleware roda antes do controller). Logout é POST (o CSRF por origem cobre).
+- **Sessão:** `Session::regenerar()` no login/cadastro, `use_strict_mode` (ID inventado é descartado), `Session::encerrar()` apaga
+  dados e cookie; `Cache-Control: no-store` nas respostas com sessão.
+- **CRUD:** esquemas `ctrl::validate` com tipos/enums/tamanhos; campo não declarado → 422 (sem mass assignment); `sort` e
+  `filtro[col]` só por allowlist; `excluir` confere existência (404); `/valores` até 1.000 valores, 200 por filtro.
+- **SQL (transações):** tudo por parâmetro (inclusive `LIMIT/OFFSET` e os `IN` do filtro); `ORDER BY`/coluna do `GROUP BY` só da
+  allowlist; busca com `instr()` (sem curingas de `LIKE`); caminho fixo; `load_extension` desligado no pdo_sqlite; ATTACH/escrita recusados.
+- **Upload do avatar:** `Core\Security\Upload` (extensão + MIME real + assinatura + `getimagesize` + limite de pixels), nome aleatório,
+  fora do docroot; o avatar antigo é apagado.
+- **XLSX/zip bomb/XXE:** o servidor nunca recebe o XLSX — o navegador lê (com os limites da libr4) e envia JSON, que o servidor
+  revalida linha a linha. Fórmulas ficam como texto: quem neutraliza é a exportação (`csvSafe`; o XLSX usa `inlineStr`, sem `<f>`).
+- **Front (`public/erp/**`):** todo dado da API entra por `text`/`textContent` (`R4.util.el`, `stat`, `badge`, `progress`, título da
+  `timeline`); os únicos `html` usam `R4.util.esc` ou texto fixo; nenhum `innerHTML` com dado de usuário, nenhum `r4-click`
+  interpolado, nenhuma URL vinda da API em `href`; o login não guarda nada no navegador (só `R4.store` `erp:perfil:aba`).
+- **libr4 (mudanças desses commits):** o destaque da busca só alterna a classe `r4-hit` (compara `textContent`, nunca insere o termo);
+  `renderer` que devolve string vira texto; o popover de valores monta tudo com `text`; `withFilters` usa `URLSearchParams`; a janela
+  remota limita os blocos (100 linhas, 4 em paralelo, cache de 150). `R4.files.interpret`: limites (200 mil linhas, 200 colunas, 5 MB de
+  texto, 5.000 caracteres por célula, profundidade 4) e chaves `__proto__`/`constructor`/`prototype` ignoradas em todos os caminhos.
+- **Infra:** o nginx entrega `/storage` como 404 e o `tools/dev-router.php` só serve arquivos dentro de `public/`; a regra de CSP com
+  `'unsafe-eval'` casa só `/`, `/?...` e `/vitrine...` (não `/erp`); `storage/` (JSON, `.sqlite`, avatares, cache) está no `.gitignore`.
+
+### 14.3 Não corrigido (riscos aceitos / recomendações)
+
+- **Cadastro informa "e-mail já cadastrado"** (enumeração pelo cadastro): inerente a cadastro sem confirmação por e-mail. Mitigado pelo
+  limite por IP e pelo cadastro fechado em produção.
+- **Bloqueio por e-mail** (10 falhas → 120 s) pode ser usado para atrapalhar o login da conta demo; é o preço do limite por e-mail.
+- **Busca na tabela de 2 milhões** sem índice (varredura com `instr`): cada termo novo custa uma varredura (só para logados; o total fica em
+  cache). Em produção real: FTS5 ou índice próprio, e limite de requisições por usuário.
+- **Ids reaproveitáveis:** excluir o maior id e criar outro repete o número (pedidos de um cliente excluído "passam" para o novo).
+  Demonstração; num banco real use sequência/autoincremento.
+- **Conta demo:** a senha é pública por definição; num site público de demonstração os dados podem ser alterados por qualquer visitante.
+- `net.js` usa literais `BigInt` (`1n`): navegador sem BigInt falha ao CARREGAR o arquivo (o comentário diz que "devolve true").
+  Compatibilidade, não segurança.
+
+### 14.4 Testes
+
+- `R4_CASOS="erp:" JSDOM_PATH=... node tools/testes-seguranca.js` (seção 5 do script, HTTP real com cookie): 401 em todas as rotas do grupo
+  (lidas do `src/routes.php`), login/429/X-Forwarded-For/tempo, anti-fixação e logout, cargo `gestor` recusado, 403 por cargo, IDOR do
+  avatar, allowlists e parâmetros malformados, importação maliciosa, CSRF 403/415, CSP das páginas, transações (se o SQLite existir) e XSS
+  no `/erp` (jsdom). Restaura `storage/data/*.json` e apaga as contas/avatares/contadores criados.

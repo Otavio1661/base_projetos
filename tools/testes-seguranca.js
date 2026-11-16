@@ -16,7 +16,9 @@
  * Criptografia v2: os casos "crypto v2" montam o envelope com crypto.webcrypto do Node (interoperabilidade
  * real Node → PHP → Node) e conferem falha fechada (400 JSON limpo) para cada tipo de pacote ruim.
  * Saída: uma linha "PASSOU"/"FALHOU" por caso; código de saída 1 se algum caso falhar
- * (2 se o ambiente não estiver pronto). Nenhum arquivo do projeto é alterado.
+ * (2 se o ambiente não estiver pronto). Nenhum arquivo do projeto fica alterado: a seção 5 (mini ERP, R4_CASOS="erp:")
+ * cria uma conta/cliente/pedido/avatar de teste e, no fim, RESTAURA storage/data/{usuarios,clientes,pedidos}.json,
+ * apaga os avatares novos e os contadores storage/cache/erp-limite-* (precisa de `php tools/erp-seed.php` antes).
  *
  * O que é testado (payloads reais): <img src=x onerror=...>, <script>, "><svg onload=...>,
  * javascript:, __proto__/constructor, =HYPERLINK(...)/@SUM(...), CSV com aspas quebradas,
@@ -1161,6 +1163,227 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
       && /location ~\* \^\/\(storage\|uploads\)/.test(ng) && /phtml\|phar/.test(ng) && /client_max_body_size 10m/.test(ng) && /^storage\/?$/m.test(gi) && /^storage\/?\s*$/m.test(di);
     check('config: PDO utf8mb4/EMULATE_PREPARES=false, render com EXTR_SKIP, nginx bloqueia storage e .phtml/.phar, storage/ ignorado', ok);
   });
+
+  /* ===================== 5. mini ERP (/erp): sessão, autorização, entradas, importação, CSRF ===================== */
+  // HTTP real com cookie. Os arquivos de dados que os casos alteram (usuarios/clientes/pedidos.json), os contadores de
+  // tentativas (storage/cache/erp-limite-*) e os avatares criados são RESTAURADOS/APAGADOS no fim desta seção.
+  const ERPDATA = path.join(ROOT, 'storage', 'data'), ERPCACHE = path.join(ROOT, 'storage', 'cache'), AVDIR = path.join(ROOT, 'storage', 'erp-avatares');
+  const erpTem = FILTRO ? FILTRO.test('erp:') : true;
+  const guarda = {};
+  const zerarLimites = () => { try { fs.readdirSync(ERPCACHE).filter(f => /^erp-limite-/.test(f)).forEach(f => fs.unlinkSync(path.join(ERPCACHE, f))); } catch (e) { /* sem cache */ } };
+  const avAntes = fs.existsSync(AVDIR) ? fs.readdirSync(AVDIR) : [];
+  if (erpTem) {
+    for (const t of ['usuarios', 'clientes', 'pedidos']) { const f = path.join(ERPDATA, t + '.json'); if (fs.existsSync(f)) guarda[t] = fs.readFileSync(f); }
+    zerarLimites();
+  }
+  /** fetch com "pote" de cookie: { s, t, j, h, jar } — jar é a string Cookie atualizada pelos Set-Cookie da resposta. */
+  const erp = async (metodo, p, { jar = '', body, headers = {}, raw } = {}) => {
+    const h = Object.assign({}, headers);
+    if (jar) h.Cookie = jar;
+    if (body !== undefined && !raw && !h['Content-Type']) h['Content-Type'] = 'application/json';
+    const r = await fetch(BASE + p, { method: metodo, headers: h, body: body === undefined ? undefined : (raw ? body : JSON.stringify(body)), redirect: 'manual' });
+    const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) { /* */ }
+    let novo = jar;
+    for (const c of (r.headers.getSetCookie ? r.headers.getSetCookie() : [])) {
+      const [kv] = c.split(';'); const [k] = kv.split('=');
+      const resto = novo.split('; ').filter(x => x && !x.startsWith(k + '='));
+      if (!/expires=Thu, 01 Jan 1970|Max-Age=0|=deleted/i.test(c) && kv.slice(k.length + 1) !== '') resto.push(kv);
+      novo = resto.join('; ');
+    }
+    return { s: r.status, t, j, h: r.headers, jar: novo, setCookie: r.headers.getSetCookie ? r.headers.getSetCookie() : [] };
+  };
+  const erpSujo = t => /Warning|Notice|Deprecated|Fatal|Stack trace|\.php on line|<br \/>|<b>|[A-Z]:\\\\|\/var\/www/i.test(t);
+  const loginDemo = async () => { const r = await erp('POST', '/erp/api/login', { body: { email: 'demo@r4dev.com.br', senha: 'Demo@1234' } }); return r.s === 200 ? r.jar : ''; };
+  const png1x1 = () => {   // PNG válido 1x1 (assinatura + IHDR + IDAT + IEND)
+    const ch = (tipo, dados) => { const len = Buffer.alloc(4); len.writeUInt32BE(dados.length); const td = Buffer.concat([Buffer.from(tipo), dados]); const c = Buffer.alloc(4); c.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, c]); };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
+    return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), ch('IHDR', ihdr), ch('IDAT', zlib.deflateSync(Buffer.from([0, 200, 30, 30]))), ch('IEND', Buffer.alloc(0))]);
+  };
+  const multipartAv = bytes => { const bd = '----r4erp' + Date.now(); return { body: Buffer.concat([Buffer.from('--' + bd + '\r\nContent-Disposition: form-data; name="arquivo"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n'), bytes, Buffer.from('\r\n--' + bd + '--\r\n')]), ct: 'multipart/form-data; boundary=' + bd }; };
+
+  await caso('erp: sem sessão → 401 JSON em TODAS as rotas /erp/api do grupo protegido (lidas do src/routes.php) e 302 na página', async () => {
+    const src = fs.readFileSync(path.join(ROOT, 'src/routes.php'), 'utf8');
+    const grupo = src.slice(src.indexOf("group('/erp'"));
+    const recs = (/foreach \(\[([^\]]+)\] as \$rec/.exec(grupo) || [, ''])[1].match(/'(\w+)'\s*=>/g).map(x => x.replace(/'|\s*=>/g, ''));
+    const rotas = [];
+    for (const m of grupo.matchAll(/\$r->(get|post)\((['"])([^'"]*)\2/g)) {
+      const caminhos = m[3].includes('$rec') ? recs.map(r => m[3].replace('$rec', r)) : [m[3]];
+      caminhos.forEach(c => rotas.push([m[1].toUpperCase(), '/erp' + c]));
+    }
+    const ruins = [];
+    for (const [met, p] of rotas) {
+      const r = await erp(met, p, met === 'POST' ? { body: { id: 1, nome: 'x' } } : {});
+      if (p === '/erp') { if (r.s !== 302 || !/\/erp\/login$/.test(r.h.get('location') || '')) ruins.push(met + ' ' + p + '=' + r.s); continue; }
+      if (r.s !== 401 || !r.j || r.j.status !== 401 || erpSujo(r.t)) ruins.push(met + ' ' + p + '=' + r.s + ' ' + r.t.slice(0, 60));
+    }
+    // cookie inventado também não passa (session.use_strict_mode)
+    const inventado = await erp('GET', '/erp/api/eu', { jar: 'R4SID=abcdefghijklmnopqrstuvwxyz012345' });
+    check('erp: sem sessão → 401 JSON em TODAS as rotas /erp/api do grupo protegido (lidas do src/routes.php) e 302 na página',
+      rotas.length >= 25 && !ruins.length && inventado.s === 401, rotas.length + ' rotas; ' + ruins.join(' | '));
+  });
+  await caso('erp: login — mesma resposta e tempo parecido para e-mail inexistente x senha errada; 429 após 5 falhas; X-Forwarded-For não burla', async () => {
+    zerarLimites();
+    await loginDemo();   // garante o hash da conta demo no custo atual (rehash no login)
+    zerarLimites();
+    const tempo = async email => { const t0 = Date.now(); const r = await erp('POST', '/erp/api/login', { body: { email, senha: 'errada-123' } }); return { r, ms: Date.now() - t0 }; };
+    const a = await tempo('demo@r4dev.com.br'), b = await tempo('ninguem.aqui@exemplo.com');
+    const outras = [];
+    for (let i = 0; i < 3; i++) outras.push((await erp('POST', '/erp/api/login', { body: { email: 'demo@r4dev.com.br', senha: 'x' + i }, headers: { 'X-Forwarded-For': '203.0.113.' + (i + 1) } })).s);
+    const sexta = await erp('POST', '/erp/api/login', { body: { email: 'demo@r4dev.com.br', senha: 'Demo@1234' }, headers: { 'X-Forwarded-For': '198.51.100.7' } });
+    zerarLimites();
+    const razao = Math.max(a.ms, b.ms) / Math.max(1, Math.min(a.ms, b.ms));
+    check('erp: login — mesma resposta e tempo parecido para e-mail inexistente x senha errada; 429 após 5 falhas; X-Forwarded-For não burla',
+      a.r.s === 401 && b.r.s === 401 && a.r.t === b.r.t && razao < 1.8 && outras.every(s => s === 401) && sexta.s === 429 && +sexta.h.get('retry-after') > 0,
+      JSON.stringify({ a: a.ms, b: b.ms, outras, sexta: sexta.s, ra: sexta.h.get('retry-after') }));
+  });
+  await caso('erp: sessão — ID novo no login (anti-fixação), cookie HttpOnly/SameSite, logout invalida o cookie antigo, sem cache', async () => {
+    zerarLimites();
+    const fixo = 'R4SID=fixacao0123456789abcdefghijklm';
+    const r = await erp('POST', '/erp/api/login', { jar: fixo, body: { email: 'demo@r4dev.com.br', senha: 'Demo@1234' } });
+    const sc = r.setCookie.join(' | ');
+    const eu = await erp('GET', '/erp/api/eu', { jar: r.jar });
+    const sai = await erp('POST', '/erp/api/logout', { jar: r.jar, body: {} });
+    const depois = await erp('GET', '/erp/api/eu', { jar: r.jar });   // cookie ANTIGO reaproveitado
+    check('erp: sessão — ID novo no login (anti-fixação), cookie HttpOnly/SameSite, logout invalida o cookie antigo, sem cache',
+      r.s === 200 && r.jar && !r.jar.includes('fixacao0123') && /HttpOnly/i.test(sc) && /SameSite=Lax/i.test(sc) && eu.s === 200 && /no-store/.test(eu.h.get('cache-control') || '')
+      && sai.s === 200 && depois.s === 401, JSON.stringify({ s: r.s, sc, eu: eu.s, cc: eu.h.get('cache-control'), depois: depois.s }));
+  });
+  let jarEst = '', idEst = 0;
+  await caso('erp: cadastro — cargo gestor e campos extras recusados (escalonamento / mass assignment), e-mail repetido 422', async () => {
+    zerarLimites();
+    const base = { nome: 'Teste Seguranca', email: 'teste.seguranca.erp@exemplo.com', senha: 'Caixa2026x' };
+    const g = await erp('POST', '/erp/api/cadastro', { body: Object.assign({}, base, { cargo: 'gestor' }) });
+    const x = await erp('POST', '/erp/api/cadastro', { body: Object.assign({}, base, { cargo: 'vendas', senhaHash: 'x', id: 1, admin: true }) });
+    const ok = await erp('POST', '/erp/api/cadastro', { body: Object.assign({}, base, { cargo: 'estoque' }) });
+    const rep = await erp('POST', '/erp/api/cadastro', { body: Object.assign({}, base, { email: base.email.toUpperCase(), cargo: 'vendas' }) });
+    jarEst = ok.jar; idEst = ok.j && ok.j.retorno && ok.j.retorno.usuario ? ok.j.retorno.usuario.id : 0;
+    const aberto = ok.s !== 403;   // com ERP_CADASTRO_ABERTO=false o cadastro inteiro é 403 (também correto)
+    check('erp: cadastro — cargo gestor e campos extras recusados (escalonamento / mass assignment), e-mail repetido 422',
+      aberto ? (g.s === 422 && g.j.erros.cargo && x.s === 422 && x.j.erros.senhaHash && x.j.erros.id && ok.s === 201 && ok.j.retorno.usuario.cargo === 'estoque' && !/senhaHash/.test(ok.t) && rep.s === 422 && rep.j.erros.email)
+        : (g.s === 403 && x.s === 403), [g.s, x.s, ok.s, rep.s].join(','));
+  });
+  await caso('erp: autorização por cargo e IDOR — estoque não altera clientes (403); ninguém vê o avatar de outro usuário', async () => {
+    if (!jarEst) { check('erp: autorização por cargo e IDOR — estoque não altera clientes (403); ninguém vê o avatar de outro usuário', false, 'sem conta de teste (cadastro fechado?)'); return; }
+    const c1 = await erp('POST', '/erp/api/clientes/salvar', { jar: jarEst, body: { nome: 'X', email: 'x@exemplo.com', cidade: 'Y', uf: 'PR', tipo: 'PF' } });
+    const c2 = await erp('POST', '/erp/api/clientes/excluir', { jar: jarEst, body: { id: 1 } });
+    const c3 = await erp('POST', '/erp/api/clientes/importar', { jar: jarEst, body: { linhas: [{ nome: 'X' }] } });
+    const p1 = await erp('POST', '/erp/api/produtos/salvar', { jar: jarEst, body: { sku: '' } });   // estoque PODE: chega na validação (422)
+    const up = multipartAv(png1x1());
+    const av = await erp('POST', '/erp/api/avatar', { jar: jarEst, body: up.body, raw: true, headers: { 'Content-Type': up.ct } });
+    const proprio = await erp('GET', '/erp/api/avatar/ver?id=' + idEst, { jar: jarEst });
+    const demo = await loginDemo();
+    const outro = await erp('GET', '/erp/api/avatar/ver?id=' + idEst, { jar: demo });
+    const semSessao = await erp('GET', '/erp/api/avatar/ver?id=' + idEst);
+    const h = proprio.h;
+    check('erp: autorização por cargo e IDOR — estoque não altera clientes (403); ninguém vê o avatar de outro usuário',
+      c1.s === 403 && c2.s === 403 && c3.s === 403 && p1.s === 422 && av.s === 200 && proprio.s === 200 && h.get('content-type') === 'image/png' && h.get('x-content-type-options') === 'nosniff'
+      && /sandbox/.test(h.get('content-security-policy') || '') && /inline; filename="avatar\.png"/.test(h.get('content-disposition') || '') && outro.s === 404 && semSessao.s === 401,
+      JSON.stringify({ c1: c1.s, c2: c2.s, c3: c3.s, p1: p1.s, av: av.s + av.t.slice(0, 80), proprio: proprio.s, outro: outro.s, semSessao: semSessao.s }));
+  });
+  await caso('erp: listagens — sort/col fora da allowlist, parâmetros em array, size gigante → JSON limpo e limitado', async () => {
+    const jar = await loginDemo();
+    const r1 = await erp('GET', '/erp/api/clientes?q[]=a&sort[]=b&dir[]=c&page[]=1&size[]=2', { jar });
+    const r2 = await erp('GET', '/erp/api/clientes?sort=senhaHash&size=99999&page=-5', { jar });
+    const r3 = await erp('GET', '/erp/api/clientes/valores?col=senhaHash', { jar });
+    const r4 = await erp('GET', '/erp/api/pedidos/valores?col[]=status', { jar });
+    const r5 = await erp('GET', '/erp/api/clientes/obter?id[]=1', { jar });
+    const r6 = await erp('GET', '/erp/api/usuarios', { jar });
+    const r7 = await erp('GET', '/erp/api/clientes?filtro[senhaHash][]=x&filtro[uf][]=PR&filtro[uf][][]=y&size=1', { jar });
+    check('erp: listagens — sort/col fora da allowlist, parâmetros em array, size gigante → JSON limpo e limitado',
+      r1.s === 200 && r1.j && !erpSujo(r1.t) && r2.s === 200 && r2.j.retorno.length <= 5000 && r3.s === 422 && r4.s === 422 && r5.s === 404 && r6.s === 404 && r7.s === 200 && !erpSujo(r7.t),
+      [r1.t.slice(0, 120), r2.s, r3.s, r4.s, r5.s, r6.s, r7.s].join(' | '));
+  });
+  await caso('erp: importação maliciosa — o servidor revalida cada linha (tipos, allowlist, duplicados) e recusa corpo fora do formato', async () => {
+    const jar = await loginDemo();
+    const ok = { nome: 'Importado Teste', email: 'importado.teste@exemplo.com', cidade: 'Umuarama', uf: 'PR', tipo: 'PF' };
+    const linhas = [Object.assign({}, ok, { id: 999999, criadoEm: '1999-01-01', senhaHash: 'x', nome: '=HYPERLINK("http://evil","x")' }), Object.assign({}, ok, { email: 'IMPORTADO.teste@exemplo.com' }),
+      Object.assign({}, ok, { email: 'invalido', nome: P_IMG }), ['lista'], Object.assign({}, ok, { email: 'imp2.teste@exemplo.com', uf: 'XX' })];
+    const r = await erp('POST', '/erp/api/clientes/importar', { jar, body: { linhas } });
+    const busca = await erp('GET', '/erp/api/clientes?q=importado.teste&size=5', { jar });
+    const reg = busca.j && busca.j.retorno && busca.j.retorno[0];
+    const ex = await erp('POST', '/erp/api/clientes/importar', { jar, body: { linhas: [ok], admin: true } });
+    const muitas = await erp('POST', '/erp/api/clientes/importar', { jar, body: { linhas: Array.from({ length: 501 }, () => ok) } });
+    const fundo = await erp('POST', '/erp/api/clientes/importar', { jar, body: '{"linhas":' + '['.repeat(60) + ']'.repeat(60) + '}', raw: true, headers: { 'Content-Type': 'application/json' } });
+    const texto = await erp('POST', '/erp/api/clientes/importar', { jar, body: '{"linhas":[]}', raw: true, headers: { 'Content-Type': 'text/plain' } });
+    check('erp: importação maliciosa — o servidor revalida cada linha (tipos, allowlist, duplicados) e recusa corpo fora do formato',
+      r.s === 200 && r.j.retorno.importados === 1 && r.j.retorno.rejeitados.length === 4 && reg && reg.id !== 999999 && reg.criadoEm !== '1999-01-01' && !('senhaHash' in reg)
+      && ex.s === 422 && muitas.s === 422 && fundo.s === 400 && texto.s === 415 && !erpSujo(r.t + fundo.t),
+      JSON.stringify({ r: r.t.slice(0, 200), ex: ex.s, muitas: muitas.s, fundo: fundo.s, texto: texto.s }));
+  });
+  await caso('erp: CSRF — POST de outra origem 403 (JSON e multipart), Content-Type de formulário 415', async () => {
+    const jar = await loginDemo();
+    const o = await erp('POST', '/erp/api/clientes/excluir', { jar, body: { id: 1 }, headers: { Origin: 'https://evil.example' } });
+    const s = await erp('POST', '/erp/api/perfil', { jar, body: { nome: 'Hack' }, headers: { 'Sec-Fetch-Site': 'cross-site' } });
+    const up = multipartAv(png1x1());
+    const m = await erp('POST', '/erp/api/avatar', { jar, body: up.body, raw: true, headers: { 'Content-Type': up.ct, Origin: 'https://evil.example' } });
+    const f = await erp('POST', '/erp/api/logout', { jar, body: 'a=1', raw: true, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    const eu = await erp('GET', '/erp/api/eu', { jar });   // o logout forjado não derrubou a sessão
+    check('erp: CSRF — POST de outra origem 403 (JSON e multipart), Content-Type de formulário 415',
+      o.s === 403 && s.s === 403 && m.s === 403 && f.s === 415 && eu.s === 200 && eu.j.retorno.usuario.nome !== 'Hack', [o.s, s.s, m.s, f.s, eu.s].join(','));
+  });
+  await caso('erp: páginas com CSP sem unsafe-eval, nosniff e no-store; storage/data nunca servido por URL', async () => {
+    const pg = await erp('GET', '/erp/login');
+    const csp = pg.h.get('content-security-policy') || '';
+    const vazou = [];
+    for (const u of ['/storage/data/usuarios.json', '/../storage/data/usuarios.json', '/%2e%2e/storage/data/usuarios.json', '/erp/..%2f..%2fstorage/data/usuarios.json', '/erp/%2e%2e/%2e%2e/storage/data/usuarios.json']) {
+      const r = await erp('GET', u); if (/senhaHash|\$2y\$/.test(r.t)) vazou.push(u);
+    }
+    check('erp: páginas com CSP sem unsafe-eval, nosniff e no-store; storage/data nunca servido por URL',
+      pg.s === 200 && /script-src 'self'/.test(csp) && !/unsafe-eval/.test(csp) && /frame-ancestors/.test(csp) && pg.h.get('x-content-type-options') === 'nosniff' && /no-store/.test(pg.h.get('cache-control') || '') && !vazou.length,
+      JSON.stringify({ s: pg.s, csp, vazou }));
+  });
+  await caso('erp: transações — sort fora da allowlist, página além do fim, % literal, filtro com aspas (só se o SQLite existir)', async () => {
+    const jar = await loginDemo();
+    const r0 = await erp('GET', '/erp/api/transacoes?size=1', { jar });
+    if (r0.s === 503) { check('erp: transações — sort fora da allowlist, página além do fim, % literal, filtro com aspas (só se o SQLite existir)', !erpSujo(r0.t) && r0.j && r0.j.status === 503, r0.t); return; }
+    const a = await erp('GET', '/erp/api/transacoes?sort=' + encodeURIComponent('id; DROP TABLE transacoes') + '&size=3', { jar });
+    const b = await erp('GET', '/erp/api/transacoes?page=99999999&size=500', { jar });
+    const c = await erp('GET', '/erp/api/transacoes?q=' + encodeURIComponent('%') + '&size=5', { jar });
+    const d = await erp('GET', '/erp/api/transacoes?filtro[cidade][]=' + encodeURIComponent("x' OR '1'='1") + '&size=5', { jar });
+    const e = await erp('GET', '/erp/api/transacoes/valores?col=busca', { jar });
+    check('erp: transações — sort fora da allowlist, página além do fim, % literal, filtro com aspas (só se o SQLite existir)',
+      a.s === 200 && a.j.retorno.map(x => x.id).join() === '1,2,3' && b.s === 200 && b.j.retorno.length === 0 && c.s === 200 && c.j.total < r0.j.total && d.j.total === 0 && e.s === 422,
+      [a.t.slice(0, 80), b.t.slice(0, 60), c.j && c.j.total, d.j && d.j.total, e.s].join(' | '));
+  });
+  await caso('erp: XSS — dado salvo pela API (nome/cidade/obs com HTML) e termo de busca com HTML entram no DOM como texto (jsdom em /erp)', async () => {
+    const jar = await loginDemo();
+    const cli = await erp('POST', '/erp/api/clientes/salvar', { jar, body: { nome: P_IMG, email: 'xss.teste@exemplo.com', cidade: P_SVG, uf: 'PR', tipo: 'PF' } });
+    const idC = cli.j && cli.j.retorno && cli.j.retorno.id;
+    await erp('POST', '/erp/api/pedidos/salvar', { jar, body: { clienteId: idC, data: '2099-12-31', itens: 1, total: 10, status: 'aberto', obs: P_SCRIPT } });
+    const cj = new jsdom.CookieJar();
+    for (const kv of jar.split('; ').filter(Boolean)) await cj.setCookie(kv + '; Path=/', BASE + '/');
+    const logs = { warn: [], error: [], jsdom: [] };
+    const dom = await JSDOM.fromURL(BASE + '/erp#/dashboard', { cookieJar: cj, runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true, virtualConsole: vc(logs),
+      beforeParse: w => prepWindow(w, logs, ww => { const f = ww.fetch; ww.fetch = (u, o) => { o = Object.assign({}, o); const hh = {}; if (o.headers) { if (typeof o.headers.forEach === 'function') o.headers.forEach((v, k) => { hh[k] = v; }); else Object.assign(hh, o.headers); } hh.Cookie = jar; o.headers = hh; return f(u, o); }; }) });
+    const w = dom.window, d = w.document;
+    await sleep(2500);
+    const noPainel = d.body.textContent.includes(P_IMG);
+    w.location.hash = '#/clientes';
+    await sleep(1500);
+    const busca = d.querySelector('.r4-grid-bar input[type="search"]');
+    if (busca) { busca.value = P_IMG; busca.dispatchEvent(new w.Event('input', { bubbles: true })); }
+    await sleep(2000);
+    const naGrade = [...d.querySelectorAll('.r4-grid td')].some(td => td.textContent.includes(P_IMG));
+    const funil = d.querySelector('.r4-th-filter[data-cf="cidade"]');
+    if (funil) funil.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(1500);
+    const ativos = active(d.body);
+    const pwn = !!w.__pwn;
+    dom.window.close();
+    // limpeza: o pedido e o cliente de teste saem pela própria API (os arquivos também são restaurados no fim)
+    check('erp: XSS — dado salvo pela API (nome/cidade/obs com HTML) e termo de busca com HTML entram no DOM como texto (jsdom em /erp)',
+      cli.s === 201 && noPainel && naGrade && !ativos.length && !pwn, JSON.stringify({ cli: cli.s, noPainel, naGrade, ativos: ativos.slice(0, 5), pwn, erros: logs.error.slice(0, 2) }));
+  });
+  await caso('erp: seed recusa produção sem --forcar e só cria a conta de teste com --com-demo (revisão do código)', async () => {
+    const s = fs.readFileSync(path.join(ROOT, 'tools/erp-seed.php'), 'utf8');
+    check('erp: seed recusa produção sem --forcar e só cria a conta de teste com --com-demo (revisão do código)',
+      /\$producao && !\$forcar/.test(s) && /exit\(1\)/.test(s) && /--com-demo/.test(s) && /hashSenha\(/.test(s) && !/PASSWORD_DEFAULT/.test(s));
+  });
+  if (erpTem) {   // restaura os dados e apaga o que os casos criaram
+    for (const t of Object.keys(guarda)) fs.writeFileSync(path.join(ERPDATA, t + '.json'), guarda[t]);
+    zerarLimites();
+    if (fs.existsSync(AVDIR)) fs.readdirSync(AVDIR).filter(n => !avAntes.includes(n)).forEach(n => fs.unlinkSync(path.join(AVDIR, n)));
+  }
 
   /* ---------------- resumo ---------------- */
   const fail = results.filter(r => !r.ok);

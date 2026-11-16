@@ -11,6 +11,7 @@ class ErpPedidosController extends ErpCrudBase
     protected const TABELA = 'pedidos';
     protected const COLUNAS = ['id', 'cliente', 'data', 'itens', 'total', 'status', 'obs'];
     protected const BUSCA = ['id', 'cliente', 'data', 'itens', 'total', 'status', 'obs'];
+    protected const ESCRITA = ['gestor', 'vendas', 'financeiro'];
 
     protected function regras(): array
     {

@@ -16,6 +16,10 @@ abstract class ErpCrudBase extends ctrl
     /** colunas aceitas em sort= e pesquisadas por q= */
     protected const COLUNAS = [];
     protected const BUSCA = [];
+    /** Cargos que podem GRAVAR (salvar, excluir, importar) neste recurso. Ler: qualquer cargo logado. 'gestor' pode tudo. */
+    protected const ESCRITA = ['gestor'];
+    /** Tamanho máximo do termo de busca q= (caracteres). */
+    protected const MAX_Q = 100;
 
     abstract protected function regras(): array;
 
@@ -25,9 +29,33 @@ abstract class ErpCrudBase extends ctrl
         return $d;
     }
 
+    /** Parâmetro de query como TEXTO: array (q[]=x), ausente ou outro tipo → '' (nunca "Array" nem aviso do PHP). */
+    protected static function qs(string $k, int $max = 100): string
+    {
+        $v = $_GET[$k] ?? '';
+        return is_string($v) ? mb_substr($v, 0, $max) : '';
+    }
+
+    /** Parâmetro de query inteiro (só dígitos; senão $padrao). */
+    protected static function qi(string $k, int $padrao): int
+    {
+        $v = $_GET[$k] ?? null;
+        return is_string($v) && preg_match('/^\s*-?[0-9]{1,9}\s*$/', $v) ? (int) $v : $padrao;
+    }
+
     protected static function id(): int
     {
-        return max(0, (int) ($_GET['id'] ?? 0));
+        return max(0, self::qi('id', 0));
+    }
+
+    /** Autorização por cargo: só ESCRITA (ou gestor) altera este recurso; senão 403 e encerra. */
+    protected static function exigirEscrita(): void
+    {
+        $u = ErpAuthController::logado();
+        $cargo = (string) ($u['cargo'] ?? '');
+        if (!$u || ($cargo !== 'gestor' && !in_array($cargo, static::ESCRITA, true))) {
+            ctrl::retorno('Seu cargo não tem permissão para alterar ' . static::TABELA . '.', 403);
+        }
     }
 
     /** filtro[coluna][]=valor (PHP já monta o array): só colunas conhecidas, só texto, no máximo 200 valores por coluna. */
@@ -48,7 +76,7 @@ abstract class ErpCrudBase extends ctrl
     public function listar()
     {
         $r = JsonDb::listar(static::TABELA, [
-            'page' => $_GET['page'] ?? 1, 'size' => $_GET['size'] ?? 25, 'sort' => $_GET['sort'] ?? '', 'dir' => $_GET['dir'] ?? 'asc', 'q' => $_GET['q'] ?? '',
+            'page' => self::qi('page', 1), 'size' => self::qi('size', 25), 'sort' => self::qs('sort', 40), 'dir' => self::qs('dir', 10), 'q' => self::qs('q', static::MAX_Q),
             'filtro' => self::filtros(),
         ], static::COLUNAS, static::BUSCA);
         ctrl::responder(['status' => 200, 'total' => $r['total'], 'retorno' => $r['retorno']]);
@@ -57,11 +85,11 @@ abstract class ErpCrudBase extends ctrl
     /** GET .../valores?col=status[&q=] — valores distintos da coluna com contagem (alimenta o filtro por valores do cabeçalho). */
     public function valores()
     {
-        $col = (string) ($_GET['col'] ?? '');
+        $col = self::qs('col', 40);
         if (!in_array($col, static::COLUNAS, true)) {
             ctrl::retorno('Coluna inválida.', 422);
         }
-        ctrl::retorno(JsonDb::valores(static::TABELA, $col, static::BUSCA, (string) ($_GET['q'] ?? ''), self::filtros()), 200);
+        ctrl::retorno(JsonDb::valores(static::TABELA, $col, static::BUSCA, self::qs('q', static::MAX_Q), self::filtros()), 200);
     }
 
     public function obter()
@@ -72,6 +100,7 @@ abstract class ErpCrudBase extends ctrl
 
     public function salvar()
     {
+        self::exigirEscrita();
         $regras = $this->regras() + ['id' => ['type' => 'int', 'required' => false, 'min' => 1]];
         $d = ctrl::validate($regras);
         $id = (int) ($d['id'] ?? 0);
@@ -89,6 +118,7 @@ abstract class ErpCrudBase extends ctrl
 
     public function excluir()
     {
+        self::exigirEscrita();
         $d = ctrl::validate(['id' => ['type' => 'int', 'required' => true, 'min' => 1]]);
         JsonDb::excluir(static::TABELA, (int) $d['id']) ? ctrl::retorno('ok', 200) : ctrl::retorno('Registro não encontrado.', 404);
     }

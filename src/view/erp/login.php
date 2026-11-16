@@ -9,7 +9,7 @@
   <script src="<?= asset('/showcase/boot.js') ?>"></script>
 </head>
 <body class="erp-login">
-  <div id="erp-root"></div>
+  <div id="erp-root" data-cadastro="<?= !empty($cadastroAberto) ? '1' : '0' ?>" data-demo="<?= !empty($contaDemo) ? '1' : '0' ?>"></div>
   <script src="<?= asset('/libr4/libr4.js') ?>"></script>
   <script src="<?= asset('/erp/login.js') ?>"></script>
 </body>

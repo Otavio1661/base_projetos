@@ -126,6 +126,11 @@
     /* ---------- criptografia v2 (Core\Security\Crypto) ---------- */
     $env['CRYPTO_OBRIGATORIA'] = $booleano('CRYPTO_OBRIGATORIA', false);
     $env['VITRINE_PUBLICA'] = $booleano('VITRINE_PUBLICA', false);   // libera só /vitrine (sem API de teste, sem testes) sem ligar o debug
+    // mini ERP (/erp): cadastro público de contas. Padrão: aberto fora de produção, FECHADO em produção.
+    $env['ERP_CADASTRO_ABERTO'] = $booleano('ERP_CADASTRO_ABERTO', !$producao);
+    if ($env['ERP_CADASTRO_ABERTO'] && $producao) {
+        \Core\Security\Transport::avisoUnico('erp-cadastro', 'ERP_CADASTRO_ABERTO=true em produção: qualquer pessoa cria conta no /erp (cargo nunca gestor). Use só em site de demonstração.');
+    }
     $env['CRYPTO_JANELA_SEG'] = $inteiro('CRYPTO_JANELA_SEG', 300, 30, 3600);
 
     foreach (['CRYPTO_PRIVATE_KEY', 'CRYPTO_PRIVATE_KEY_ANTERIOR'] as $nome) {

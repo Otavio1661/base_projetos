@@ -9,11 +9,17 @@ use Core\Controller as ctrl;
 /** Páginas (login e aplicação) e dashboard do mini ERP de demonstração. */
 class ErpController extends ctrl
 {
+    /**
+     * Cabeçalhos das páginas do ERP. A CSP é a mesma da regra padrão do nginx (sem 'unsafe-eval': o ERP não tem
+     * playground) e vale também no servidor de desenvolvimento (php -S), que não tem nginx na frente.
+     */
     private static function cabecalhos(): void
     {
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: no-referrer');
         header('Cache-Control: no-store');
+        header('X-Frame-Options: SAMEORIGIN');
+        header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'");
     }
 
     public function login()
@@ -23,7 +29,15 @@ class ErpController extends ctrl
             exit;
         }
         self::cabecalhos();
-        ctrl::render('erp/login', ['titulo' => 'Entrar — Mini ERP']);
+        // a tela esconde a aba "Criar conta" com o cadastro fechado e a dica da conta de teste se ela não existir
+        $demo = false;
+        foreach (JsonDb::todos('usuarios') as $u) {
+            if (strcasecmp((string) ($u['email'] ?? ''), 'demo@r4dev.com.br') === 0) {
+                $demo = true;
+                break;
+            }
+        }
+        ctrl::render('erp/login', ['titulo' => 'Entrar — Mini ERP', 'cadastroAberto' => ErpAuthController::cadastroAberto(), 'contaDemo' => $demo]);
     }
 
     public function app()

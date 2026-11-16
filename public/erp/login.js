@@ -29,6 +29,9 @@
 
   const root = document.getElementById('erp-root');
   if (!root) return;
+  // o servidor diz se o cadastro está aberto (ERP_CADASTRO_ABERTO) e se a conta de teste existe; quem decide é ele
+  const cadastroAberto = root.getAttribute('data-cadastro') !== '0';
+  const contaDemo = root.getAttribute('data-demo') !== '0';
   let tabs = null;
 
   function erroDoServidor(form, e) {
@@ -75,8 +78,9 @@
         { type: 'text', name: 'nome', label: t('nome'), required: true, minLength: 3, maxLength: 120, autocomplete: 'name' },
         { type: 'row', items: [
           { type: 'email', name: 'email', label: t('email'), required: true, autocomplete: 'email' },
+          // 'gestor' não se escolhe no cadastro (o servidor recusa): é atribuído por quem administra os dados
           { type: 'select', name: 'cargo', label: t('cargo'), value: 'vendas', required: true,
-            options: ['vendas', 'financeiro', 'estoque', 'gestor'].map(c => ({ value: c, text: t('c_' + c) })) }
+            options: ['vendas', 'financeiro', 'estoque'].map(c => ({ value: c, text: t('c_' + c) })) }
         ] },
         { type: 'password', name: 'senha', label: t('senha'), required: true, minLength: 8, showStrength: true, minStrength: 2, autocomplete: 'new-password' },
         { type: 'password', name: 'confirma', label: t('confirma'), required: true, match: 'senha', validateOn: 'input', autocomplete: 'new-password' }
@@ -87,11 +91,10 @@
       } } };
 
     const painel = el('div');
-    tabs = R4.create({ xtype: 'tabpanel', renderTo: painel, items: [
-      { title: t('entrar'), items: [formLogin] },
-      { title: t('criar'), items: [formCad] }
-    ] });
-    box.append(painel, demo);
+    tabs = R4.create({ xtype: 'tabpanel', renderTo: painel, items: [{ title: t('entrar'), items: [formLogin] }].concat(cadastroAberto ? [{ title: t('criar'), items: [formCad] }] : []) });
+    box.append(painel);
+    if (!contaDemo) { root.append(el('div', { class: 'erp-login' }, [hero, box])); R4.scan && R4.scan(root); return null; }
+    box.append(demo);
     const preencher = R4.create({ xtype: 'button', text: t('preencher'), icon: 'user', renderTo: demo, handler: () => {
       tabs.setActive(0);
       R4.get('erp-form-login').setValues({ email: 'demo@r4dev.com.br', senha: 'Demo@1234' });

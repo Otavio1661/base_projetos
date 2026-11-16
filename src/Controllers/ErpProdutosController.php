@@ -10,6 +10,7 @@ class ErpProdutosController extends ErpCrudBase
     protected const TABELA = 'produtos';
     protected const COLUNAS = ['id', 'sku', 'nome', 'categoria', 'preco', 'estoque', 'ativo'];
     protected const BUSCA = ['sku', 'nome', 'categoria', 'preco', 'estoque'];
+    protected const ESCRITA = ['gestor', 'estoque'];
 
     private static function categorias(): array
     {
