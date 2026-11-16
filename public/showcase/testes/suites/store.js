@@ -471,13 +471,9 @@
       const guardado = {}; chaves.forEach(k => { try { guardado[k] = localStorage.getItem(k); } catch (e) { guardado[k] = null; } });
       t.cleanup(() => chaves.forEach(k => { try { guardado[k] == null ? localStorage.removeItem(k) : localStorage.setItem(k, guardado[k]); } catch (e) { /* */ } }));
       const carrega = async () => {
-        const f = document.createElement('iframe');
-        f.style.display = 'none'; t.box.append(f);
-        const D = f.contentDocument, W = f.contentWindow;
+        const { W, D } = await R4Test.iframeVazio(t.box);
         ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W[k]) W[k] = window[k]; });
-        for (const s of ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
-          await new Promise((ok, no) => { const el = D.createElement('script'); el.src = location.origin + '/libr4/' + s + '.js'; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s)); D.head.append(el); });
-        }
+        await R4Test.carregarLib(D, ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']);
         return W;
       };
       const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };

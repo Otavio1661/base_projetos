@@ -31,10 +31,7 @@
    * (para remover recursos). Devolve { W, D, avisos (console.warn do iframe), buscas (chamadas ao fetch do iframe) }.
    */
   async function mundo(t, { antes, scripts = ['core', 'support', 'net'] } = {}) {
-    const f = document.createElement('iframe');
-    f.style.display = 'none';
-    t.box.append(f);
-    const W = f.contentWindow, D = f.contentDocument;
+    const { f, W, D } = await R4Test.iframeVazio(t.box);
     ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W[k]) W[k] = window[k]; });              // só ambientes sem suporte (jsdom)
     if (!W.crypto || !W.crypto.subtle) Object.defineProperty(W, 'crypto', { value: window.crypto, configurable: true });
     const buscas = [], avisos = [];
@@ -42,14 +39,7 @@
     W.fetch = (u, o) => { buscas.push(String(u)); return fetchReal(u, o); };
     W.console.warn = (...a) => { avisos.push(a.join(' ')); };
     if (antes) antes(W, D);
-    for (const s of scripts) {
-      await new Promise((ok, no) => {
-        const el = D.createElement('script');
-        el.src = location.origin + '/libr4/' + s + '.js';
-        el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s));
-        D.head.append(el);
-      });
-    }
+    await R4Test.carregarLib(D, scripts);
     return { W, D, avisos, buscas, f };
   }
   const meta = (D, conteudo, nome = 'r4-server-key') => { const m = D.createElement('meta'); m.name = nome; m.setAttribute('content', conteudo); D.head.append(m); return m; };
@@ -350,10 +340,7 @@
 
     /* ======== boot.js (anti-flash sem script inline) ======== */
     test('boot.js: aplica r4-dark só com tema salvo VÁLIDO (r4:theme revalidado ou chave antiga r4-theme); lixo é ignorado sem erro', async t => {
-      const f = document.createElement('iframe');
-      f.style.display = 'none';
-      t.box.append(f);
-      const W = f.contentWindow, D = f.contentDocument;
+      const { W, D } = await R4Test.iframeVazio(t.box);
       const erros = [];
       W.addEventListener('error', e => erros.push(e.message));
       let guardado = {}, mql = false, estoura = false;

@@ -2,9 +2,9 @@
     "versao": "2.0.0",
     "arquivos": {
         "libr4.min.js": {
-            "bytes": 448679,
-            "gzip": 151533,
-            "sha384": "sha384-LP1CE8WwUvvT0GufXuleApaGJDaUH4lHtZve7f3jqGGPH6G65IjduqzWd9SccFNK"
+            "bytes": 449132,
+            "gzip": 151766,
+            "sha384": "sha384-cc8eOeDRNxLMZC6KsC0Too1LHrzPFZSp4sZbMRnGvIclMEZX3tAPrqdx0Wypto3o"
         },
         "libr4.min.css": {
             "bytes": 56549,

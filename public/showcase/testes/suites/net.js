@@ -77,15 +77,11 @@
     });
 
     test('crypto: sem chave pública válida recusa cifrar (mensagem clara); com a chave do servidor funciona', async t => {
-      // iframe about:blank com core + net: configura a chave à mão
-      const f = document.createElement('iframe');
-      f.style.display = 'none';
-      t.box.append(f);
-      const W = f.contentWindow, D = f.contentDocument;
+      // iframe vazio (mesma origem) com core + net: configura a chave à mão
+      const { f, W, D } = await R4Test.iframeVazio(t.box);
       ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W[k]) W[k] = window[k]; });   // só ambientes sem suporte (jsdom)
       if (!W.crypto || !W.crypto.subtle) Object.defineProperty(W, 'crypto', { value: window.crypto, configurable: true });
-      const carrega = src => new Promise((ok, no) => { const s = D.createElement('script'); s.src = location.origin + src; s.onload = ok; s.onerror = () => no(new Error('não carregou ' + src)); D.head.append(s); });
-      await carrega('/libr4/core.js'); await carrega('/libr4/net.js');
+      await R4Test.carregarLib(D, ['core', 'net']);
       assert.ok(W.R4 && W.R4.crypto, 'lib carregada no iframe');
       W.R4.config.serverKey = { v: 2, pub: 'AAAA', kid: '00000000' };
       await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /chave pública do servidor/, 'pub inválida');

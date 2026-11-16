@@ -199,16 +199,11 @@
       t.cleanup(() => { try { anterior == null ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, anterior); } catch (e) { /* */ } });
       const agora = Date.now();
       localStorage.setItem(KEY, '{"v":1,"d":{"mode":"dark","primary":"red;}*{display:none}","font":"a}*{x:y","radius":"1;}","__proto__":{"pwnTheme":1}},"e":' + (agora + 1e9) + ',"a":' + agora + ',"b":10}');
-      const f = document.createElement('iframe');
-      f.style.display = 'none';
-      t.box.append(f);
-      const D = f.contentDocument, W = f.contentWindow;
+      const { f, W, D } = await R4Test.iframeVazio(t.box);
       ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W[k]) W[k] = window[k]; });   // só ambientes sem suporte (jsdom)
       const erros = [];
       W.addEventListener('error', e => erros.push(e.message));
-      for (const s of ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
-        await new Promise((ok, no) => { const el = D.createElement('script'); el.src = location.origin + '/libr4/' + s + '.js'; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s)); D.head.append(el); });
-      }
+      await R4Test.carregarLib(D, ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']);
       const estilo = (D.getElementById('r4-theme') || {}).textContent || '';
       assert.deepEq(erros, [], 'nenhum erro ao carregar');
       assert.notOk(/display:none|\*\{|x:y/.test(estilo), 'nenhum CSS injetado');
@@ -219,13 +214,9 @@
       assert.eq(W.Object.prototype.pwnTheme, undefined);
       assert.eq(D.documentElement.classList.contains('r4-dark'), true);
       localStorage.setItem(KEY, 'isto não é json {{{');
-      const f2 = document.createElement('iframe');
-      t.box.append(f2);
-      const D2 = f2.contentDocument, W2 = f2.contentWindow;
+      const { f: f2, W: W2, D: D2 } = await R4Test.iframeVazio(t.box);
       ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W2[k]) W2[k] = window[k]; });
-      for (const s of ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
-        await new Promise((ok, no) => { const el = D2.createElement('script'); el.src = location.origin + '/libr4/' + s + '.js'; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s)); D2.head.append(el); });
-      }
+      await R4Test.carregarLib(D2, ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']);
       assert.eq(W2.R4.theme.get().mode, 'light', 'JSON quebrado: segue o padrão');
     }, { timeout: 15000 });
 

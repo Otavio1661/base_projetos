@@ -128,12 +128,29 @@
     return m === undefined ? null : { info: m, fonte: 'meta' };
   }
 
+  /**
+   * O ponto (04 | x | y, 65 bytes) está na curva P-256 (y² = x³ − 3x + b mod p) e com x, y < p?
+   * Chrome e Firefox recusam um ponto fora da curva em importKey; o WebKit (Safari) ACEITA e até deriva
+   * o segredo (invalid-curve), por isso a conferência é feita aqui, igual em todos os navegadores.
+   * Sem BigInt (navegador muito antigo) devolve true e fica só a validação do próprio navegador.
+   */
+  function pontoNaCurva(raw) {
+    if (typeof BigInt !== 'function') return true;
+    const n = a => BigInt('0x' + hex(a));
+    const P = (1n << 256n) - (1n << 224n) + (1n << 192n) + (1n << 96n) - 1n;
+    const B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn;
+    const x = n(raw.subarray(1, 33)), y = n(raw.subarray(33, 65));
+    if (x >= P || y >= P) return false;
+    return (y * y) % P === (((x * x % P) * x) - 3n * x + B + 3n * P) % P;
+  }
+
   async function importarChave(info, onde) {
     info = normalizarChave(info, onde);
     let raw;
     try { raw = deb64u(info.pub, 65); } catch (e) { throw erro('chave pública do servidor inválida.'); }
     if (raw[0] !== 4) throw erro('chave pública do servidor inválida.');
     if (hex(await subtle().digest('SHA-256', raw)).slice(0, 8) !== info.kid) throw erro('kid não confere com a chave pública do servidor.');
+    if (!pontoNaCurva(raw)) throw erro('chave pública do servidor não é um ponto P-256 válido.');
     let chave;
     try { chave = await subtle().importKey('raw', raw, { name: 'ECDH', namedCurve: 'P-256' }, false, []); }
     catch (e) { throw erro('chave pública do servidor não é um ponto P-256 válido.'); }

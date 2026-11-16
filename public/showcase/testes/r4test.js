@@ -108,6 +108,28 @@
     return { ok: status >= 200 && status < 300, status, statusText: spec.statusText || '', headers: { get: k => hdr[String(k).toLowerCase()] ?? null },
       text: async () => text, json: async () => JSON.parse(text), blob: async () => new Blob([text]), clone: () => respond(spec) };
   };
+  /**
+   * iframe (oculto) com uma página vazia DA MESMA ORIGEM, já carregada: devolve { f, W, D }.
+   * Não use about:blank: lá location.href não é http(s) (a lib não resolve URLs relativas) e o Firefox
+   * TROCA o documento do iframe logo depois de criado — scripts anexados ao documento antigo somem.
+   */
+  T.iframeVazio = async box => {
+    const f = document.createElement('iframe');
+    f.style.display = 'none';
+    f.src = '/showcase/testes/vazio.html';
+    const pronto = new Promise((ok, no) => { f.onload = ok; f.onerror = () => no(new Error('não carregou vazio.html')); });
+    box.append(f);
+    await pronto;
+    return { f, W: f.contentWindow, D: f.contentDocument };
+  };
+  /** Carrega /libr4/<nome>.js em D, em ordem, com o MESMO ?v= da página (atrás de CDN, sem ele vem arquivo velho do cache). */
+  T.carregarLib = async (D, nomes) => {
+    const m = ((document.querySelector('script[src*="/libr4/"]') || {}).src || '').match(/\?[^#]*$/), v = m ? m[0] : '';
+    for (const n of nomes) {
+      await new Promise((ok, no) => { const el = D.createElement('script'); el.src = location.origin + '/libr4/' + n + '.js' + v; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + n)); D.head.append(el); });
+    }
+  };
+
   /** mockFetch({ '/api/x': {status, body, headers, delay}, 'POST /api/y': req => resp, '/api/*': ... }, {passthrough}) */
   T.mockFetch = (routes, opts = {}) => {
     const real = global.fetch, calls = [];
