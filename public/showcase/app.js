@@ -2,10 +2,16 @@
  * Vitrine da libr4 — montada com a própria libr4 (viewport + tree + tabpanel).
  * A árvore é gerada de R4.registry e R4.modules: o que for registrado na lib
  * aparece aqui sozinho, com a documentação do `meta` e as demos de R4Demos.
+ * Os textos fixos da vitrine vêm de R4.t('vt.*') (showcase/i18n.js) e acompanham o idioma:
+ * HTML gerado usa o atributo r4-i18n e elementos criados usam R4.util.tx (ambos se retraduzem sozinhos).
  */
 R4.ready(() => {
-  const { el, esc } = R4.util;
+  const { el, esc, tx } = R4.util;
   const demos = window.R4Demos || {};
+  const vt = (k, p) => R4.t('vt.' + k, p);
+  const ix = k => 'r4-i18n="vt.' + k + '"';                    // atributo para HTML gerado
+  const lab = (k, tag, cls) => tx(el(tag || 'span', cls ? { class: cls } : null), 'vt.' + k, k);  // elemento com texto que acompanha o idioma
+  const hx = k => `${ix(k)}>${esc(vt(k))}`;                    // abre-fecha: <tag ${hx('k')}</tag>
 
   // ---- descoberta automática ----
   const entries = [
@@ -17,22 +23,23 @@ R4.ready(() => {
   const order = ['Núcleo', 'Componentes', 'Formulários', 'Dados', 'Interface', 'Gráficos', 'Receitas', 'Funções prontas', 'HTML declarativo', 'Dados de teste'];
   const nodes = Object.keys(groups).sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99).map(g => ({
     text: g, badge: groups[g].length,
-    children: groups[g].sort((a, b) => a.id.localeCompare(b.id)).map(e => ({ id: e.id, text: e.kind === 'xtype' ? e.id : e.meta.title, badge: demos[e.id] ? '' : 'sem demo' }))
+    children: groups[g].sort((a, b) => a.id.localeCompare(b.id)).map(e => ({ id: e.id, text: e.kind === 'xtype' ? e.id : e.meta.title, badge: demos[e.id] ? '' : vt('noDemo') }))
   }));
 
   // ---- página de documentação de um item ----
   function docPage(e) {
     const m = e.meta, ex = demos[e.id] || [];
     const html = [`<h2 style="margin:0 0 4px">${esc(m.title)}</h2>`,
-      e.kind === 'xtype' ? `<code>xtype: '${esc(e.id)}'</code>` : '<code>módulo</code>',
+      e.kind === 'xtype' ? `<code>xtype: '${esc(e.id)}'</code>` : `<code ${hx('module')}</code>`,
       `<p>${esc(m.description || '')}</p>`];
     if (m.props && m.props.length) {
-      html.push('<div class="r4-h">Configuração e API</div><table class="r4-table r4-striped"><thead><tr><th>Nome</th><th>Tipo</th><th>Padrão</th><th>Descrição</th></tr></thead><tbody>' +
+      html.push(`<div class="r4-h" ${hx('cfgApi')}</div><table class="r4-table r4-striped"><thead><tr><th ${hx('colName')}</th><th ${hx('colType')}</th><th ${hx('colDefault')}</th><th ${hx('colDesc')}</th></tr></thead><tbody>` +
         m.props.map(p => `<tr><td><code>${esc(p.name)}</code></td><td><code>${esc(p.type || '')}</code></td><td>${p.default ? `<code>${esc(p.default)}</code>` : ''}</td><td>${esc(p.desc || '')}</td></tr>`).join('') + '</tbody></table>');
     }
-    if (m.events && m.events.length) html.push('<div class="r4-h">Eventos</div>' + m.events.map(v => `<code>${esc(v)}</code>`).join(' · '));
-    if (m.playground) html.push('<div class="r4-h">Experimente as propriedades</div><p class="r4-text-muted" style="margin:0 0 8px">Mude os controles: o componente, o HTML e o JavaScript atualizam na hora.</p><div class="vt-pg"></div>');
-    html.push(ex.length ? '<div class="r4-h">Exemplos ao vivo</div><div class="vt-examples"></div>' : '<div class="r4-h">Exemplos</div><p>Sem demo cadastrada. Adicione em <code>public/showcase/demos.js</code>.</p>');
+    if (m.events && m.events.length) html.push(`<div class="r4-h" ${hx('events')}</div>` + m.events.map(v => `<code>${esc(v)}</code>`).join(' · '));
+    if (m.playground) html.push(`<div class="r4-h" ${hx('pgTitle')}</div><p class="r4-text-muted" style="margin:0 0 8px" ${hx('pgHint')}</p><div class="vt-pg"></div>`);
+    html.push(ex.length ? `<div class="r4-h" ${hx('liveExamples')}</div><div class="vt-examples"></div>`
+      : `<div class="r4-h" ${hx('examples')}</div><p><span ${hx('noDemoText')}</span> <code>public/showcase/demos.js</code>.</p>`);
     return { title: m.title, key: e.id, closable: true, padding: true, html: html.join(''), ex, xtype: e.id, pg: m.playground };
   }
 
@@ -44,9 +51,10 @@ R4.ready(() => {
 
   function copyText(t) {
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
-      () => R4.toast('Copiado!'), () => R4.toast('Não foi possível copiar — selecione e use Ctrl+C'));
+      () => R4.toast(R4.t('r4.copied')), () => R4.toast(R4.t('r4.copyFail')));
   }
   const kebabCase = s => s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+  const btn = (cls, icon, key, onclick) => el('button', { class: 'r4-btn ' + cls, type: 'button', onclick }, [R4.icon(icon), lab(key)]);
 
   /** Painel de propriedades: controles gerados de meta.playground; o componente e o código mudam ao vivo. */
   function mountPlayground(panel, xtype, pg) {
@@ -81,7 +89,7 @@ R4.ready(() => {
       let input;
       if (Array.isArray(spec)) {
         vals[name] = spec[0];
-        input = el('select', { class: 'r4-input' }, spec.map(o => el('option', { value: o, text: o === '' ? '(nenhum)' : o })));
+        input = el('select', { class: 'r4-input' }, spec.map(o => o === '' ? tx(el('option', { value: '' }), 'vt.none', '(nenhum)') : el('option', { value: o, text: o })));
         input.addEventListener('change', () => { vals[name] = input.value; update(); });
       } else if (typeof spec === 'boolean') {
         vals[name] = spec;
@@ -98,13 +106,13 @@ R4.ready(() => {
     });
 
     const codeHead = (label, getText) => el('div', { class: 'vt-label vt-label-code' }, [
-      el('b', { text: label }), el('span', { class: 'r4-fill' }),
-      el('button', { class: 'r4-btn vt-mini', text: '⧉ Copiar', onclick: () => copyText(getText()) })]);
+      typeof label === 'string' ? el('b', { text: label }) : label, el('span', { class: 'r4-fill' }),
+      btn('vt-mini', 'copy', 'copy', () => copyText(getText()))]);
 
     host.append(
       el('div', { class: 'vt-pg-grid' }, [controls, el('div', { class: 'vt-demo' }, [stage])]),
       codeHead('HTML', () => htmlText), htmlOut,
-      codeHead('JavaScript equivalente', () => jsText), jsOut);
+      codeHead(lab('jsEquiv', 'b'), () => jsText), jsOut);
     update();
   }
 
@@ -116,23 +124,24 @@ R4.ready(() => {
       const stage = el('div', { class: 'vt-stage' });
       const outEl = el('pre', { class: 'r4-code vt-out', hidden: true });
       const status = el('span', { class: 'vt-status' });
+      const setStatus = (cls, key) => { status.className = 'vt-status' + (cls ? ' ' + cls : ''); status.replaceChildren(...(key ? [R4.icon('dot'), lab(key)] : [])); };
       const out = v => { outEl.hidden = false; outEl.className = 'r4-code vt-out'; outEl.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
       const editor = el('textarea', { class: 'vt-editor', spellcheck: 'false', value: original });
       editor.value = original;
       const fit = () => { editor.style.height = 'auto'; editor.style.height = Math.min(editor.scrollHeight + 2, 520) + 'px'; };
 
       const run = () => {
-        cleanStage(stage); outEl.hidden = true; status.textContent = ''; status.className = 'vt-status';
+        cleanStage(stage); outEl.hidden = true; setStatus('');
         try {
           if (isHtml) { stage.innerHTML = editor.value; R4.scan(stage); }
           else {
             const fn = (0, eval)('(' + editor.value + ')');
             Promise.resolve().then(() => fn(stage, out)).catch(err => fail(err));
           }
-          status.textContent = '● executado'; status.className = 'vt-status ok';
+          setStatus('ok', 'ran');
         } catch (err) { fail(err); }
       };
-      const fail = err => { status.textContent = '● erro'; status.className = 'vt-status err'; out('Erro: ' + err.message); outEl.classList.add('err'); };
+      const fail = err => { setStatus('err', 'failed'); out(R4.t('r4.error', { message: err.message })); outEl.classList.add('err'); };
       const live = R4.util.debounce(run, 350);
 
       editor.addEventListener('input', () => { fit(); isHtml && live(); });
@@ -143,16 +152,14 @@ R4.ready(() => {
 
       host.append(
         el('h4', { text: item.title, style: { margin: '18px 0 8px' } }),
-        el('div', { class: 'vt-label' }, [el('b', { text: '1 · Resultado' }), el('span', { class: 'r4-text-muted', text: ' — é isto que a página mostra' })]),
-        el('div', { class: 'vt-demo' }, [stage]),
-        outEl,
+        el('div', { class: 'vt-label' }, [lab('result', 'b'), lab('resultHint', 'span', 'r4-text-muted')]),
+        el('div', { class: 'vt-demo' }, [stage, outEl]),
         el('div', { class: 'vt-label vt-label-code' }, [
-          el('b', { text: '2 · Código' }),
-          el('span', { class: 'r4-text-muted', text: isHtml ? ' — edite e o resultado muda sozinho' : ' — edite e clique em Executar (Ctrl+Enter)' }),
+          lab('code', 'b'), lab(isHtml ? 'codeHintHtml' : 'codeHintJs', 'span', 'r4-text-muted'),
           el('span', { class: 'r4-fill' }), status,
-          isHtml ? null : el('button', { class: 'r4-btn r4-btn-primary vt-mini', text: '▶ Executar', onclick: run }),
-          el('button', { class: 'r4-btn vt-mini', text: '⧉ Copiar', onclick: () => copyText(editor.value) }),
-          el('button', { class: 'r4-btn vt-mini', text: '↺ Restaurar', onclick: () => { editor.value = original; fit(); run(); } })
+          isHtml ? null : btn('r4-btn-primary vt-mini', 'play', 'run', run),
+          btn('vt-mini', 'copy', 'copy', () => copyText(editor.value)),
+          btn('vt-mini', 'undo', 'restore', () => { editor.value = original; fit(); run(); })
         ]),
         editor
       );
@@ -166,22 +173,21 @@ R4.ready(() => {
   }
 
   // ---- UI ----
-  const home = {
-    title: 'Início', key: '__home', html: `
+  // A página Início é refeita ao trocar o idioma (não tem nada digitado pelo usuário).
+  const homeHtml = () => `
       <h2 style="margin:0 0 6px">libr4 <small style="color:var(--r4-mut)">v${R4.version} · ${esc(R4.brand)}</small></h2>
-      <p>Biblioteca de componentes dinâmicos em JavaScript puro, sem dependências, no estilo ExtJS:
-      <code>R4.create({ xtype: 'grid', ... })</code> ou direto em HTML: <code>&lt;r4-grid page-size="10"&gt;</code>. Escolha um item no menu à esquerda.</p>
-      <r4-button variant="primary" r4-click="toast:A camada HTML está ativa!">Testar tag &lt;r4-button&gt;</r4-button>
-      <div class="r4-h">Itens encontrados (${entries.length})</div>
+      <p>${esc(vt('homeP1'))} <code>R4.create({ xtype: 'grid', ... })</code> ${esc(vt('homeP2'))} <code>&lt;r4-grid page-size="10"&gt;</code>. ${esc(vt('homeP3'))}</p>
+      <r4-button variant="primary" icon="play" r4-click="toast:${R4.util.escArg(vt('toastActive'))}">${esc(vt('testTag'))} &lt;r4-button&gt;</r4-button>
+      <div class="r4-h">${esc(vt('found'))} (${entries.length})</div>
       <p>${entries.map(e => `<a href="#${esc(e.id)}" class="vt-chip">${esc(e.meta.title)}</a>`).join(' ')}</p>
-      <div class="r4-h">Como adicionar um componente</div>
+      <div class="r4-h">${esc(vt('howAdd'))}</div>
       <pre class="r4-code">R4.define('meuTipo', {
   config: { texto: '' },
   build() { return R4.util.el('div', { text: this.texto }); }
 }, { title: 'meuTipo', description: '...', props: [] });
 
-// + um exemplo em public/showcase/demos.js  →  R4Demos.meuTipo = [{ title, fn(el, out) }]</pre>`
-  };
+// + um exemplo em public/showcase/demos.js  →  R4Demos.meuTipo = [{ title, fn(el, out) }]</pre>`;
+  const home = { title: vt('home'), key: '__home', html: homeHtml() };
 
   let tree, tabs;
   const open = id => {
@@ -200,8 +206,9 @@ R4.ready(() => {
   R4.create({
     xtype: 'viewport', renderTo: document.body, items: [
       { region: 'north', xtype: 'toolbar', cls: 'vt-top', items: [
-        { xtype: 'panel', header: false, padding: false, html: '<b class="vt-logo">libr4</b> <span class="vt-sub">vitrine · ' + esc(R4.brand) + '</span>', style: { border: 0, background: 'transparent' } },
+        { xtype: 'panel', header: false, padding: false, html: '<b class="vt-logo">libr4</b> <span class="vt-sub" ' + ix('sub') + ' params="' + esc(JSON.stringify({ brand: R4.brand })) + '">' + esc(vt('sub', { brand: R4.brand })) + '</span>', style: { border: 0, background: 'transparent' } },
         '->',
+        { xtype: 'vtlang' },
         { xtype: 'themeswitch', presets: true }
       ] },
       { region: 'west', xtype: 'treepanel', id: 'vt-tree', nodes, style: { borderRight: '1px solid var(--r4-line)' },
@@ -211,6 +218,14 @@ R4.ready(() => {
   });
   tree = R4.get('vt-tree'); tabs = R4.get('vt-tabs');
   tabs.on('tabchange', (t, p) => { const tab = tabs.current; if (tab && tab.key && tab.key !== '__home') { tree.select(tab.key, true); history.replaceState(null, '', '#' + tab.key); } });
+
+  // troca de idioma (ouvinte único da vitrine): Início, aba Início e selos "sem demo"
+  // (o resto da casca se atualiza sozinho pelos atributos r4-i18n / R4.util.tx)
+  R4.i18n.onChange(() => {
+    const t = tabs.find('__home');
+    if (t) { t.el.firstChild.textContent = vt('home'); t.cmp.setHtml(homeHtml()); R4.scan(t.cmp.el); }
+    Object.values(tree.nodeEls).forEach(n => { if (n.node.badge === 'sem demo' || n.node.badge === 'no demo') { const b = n.row.querySelector('.r4-badge'); if (b) b.textContent = n.node.badge = vt('noDemo'); } });
+  });
 
   window.addEventListener('hashchange', () => open(location.hash.slice(1)));
   if (location.hash.length > 1) open(location.hash.slice(1));

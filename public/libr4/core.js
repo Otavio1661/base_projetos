@@ -95,6 +95,23 @@
       else e.textContent = v == null ? '' : String(v);
       return e;
     },
+    /** Ícone numa opção `icon`: nome de R4.icon → SVG; outro texto/emoji → texto (sempre DOM/textContent). Devolve `e`. */
+    icon(e, v, o) { if (R4.icon) R4.icon.fill(e, v, o); else e.textContent = v == null ? '' : String(v); return e; },
+    /** Tradução com reserva: R4.t (theme.js carrega por último) ou o texto `f`. Resolva em tempo de uso, não no define. */
+    T: (k, p, f) => (R4.t ? R4.t(k, p) : f ?? k),
+    /**
+     * Texto/atributo traduzido que SE ATUALIZA sozinho quando o idioma muda (usa o atributo r4-i18n do R4.i18n):
+     * tx(el, 'r4.empty', 'Nenhum registro.') → textContent · tx(el, 'r4.filter', 'Filtrar...', 'placeholder') → atributo.
+     */
+    tx(e, k, f, attr, p) {
+      attr ? e.setAttribute(attr, util.T(k, p, f)) : e.textContent = util.T(k, p, f);
+      if (R4.i18n) {
+        const tok = (attr ? attr + ':' : '') + k, cur = e.getAttribute('r4-i18n');
+        e.setAttribute('r4-i18n', cur ? cur + ';' + tok : tok);
+        if (p) e.setAttribute('params', JSON.stringify(p));
+      }
+      return e;
+    },
     debounce(fn, ms = 200) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; },
     isObj: v => v !== null && typeof v === 'object' && !Array.isArray(v),
     /** Mescla recursiva; ignora __proto__/constructor/prototype (dados externos não poluem protótipos). */
@@ -260,6 +277,7 @@
       { name: 'R4.html`<b>${valor}</b>`  /  R4.raw(html)', type: 'HTML confiável', desc: 'R4.html escapa cada ${valor} e devolve HTML marcado como confiável; R4.raw marca uma string sua como HTML. É o que renderer do grid precisa devolver para gerar HTML (string comum vira texto).' },
       { name: 'safeUrl(url[, "img"])', type: 'string', desc: 'Devolve a URL se for relativa, #, http(s), mailto, tel ou blob (com "img": também data:image/png|jpeg|gif|webp|avif); senão "". Usado por goto:, href e src.' },
       { name: 'setContent(el, valor)', type: 'Element', desc: 'Node → anexa; R4.html/R4.raw → HTML; qualquer outro valor → texto.' },
+      { name: 'icon(elemento, valor[, opções])', type: 'Element', desc: 'Põe um ícone no elemento: valor que é nome de R4.icon vira SVG; qualquer outro texto/emoji vira texto (textContent). Usado pela opção icon dos componentes.' },
       { name: 'debounce(fn, ms)', type: 'function', desc: 'Atrasa chamadas repetidas.' },
       { name: 'merge(a, b) / assign(alvo, ...fontes)', type: 'object', desc: 'Mescla recursiva / cópia rasa. Ambas ignoram __proto__, constructor e prototype (dados externos não poluem protótipos).' },
       { name: 'bytes(n)', type: 'string', desc: '2048 → "2.0 KB".' },

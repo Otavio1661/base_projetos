@@ -42,6 +42,8 @@ atacante que já executa script na página, e o servidor (a validação no backe
 | Dados de servidor como HTML | `<r4-timeline src>` ignora o campo `html` dos eventos vindos do servidor. |
 | Tema | Cor, raio, densidade, modo e fonte passam por allowlist antes de virar CSS; valor adulterado no `localStorage` é descartado. Presets só os próprios (nada de `__proto__`). Cores de gráfico só por allowlist (`#hex`, nome, `var(--x)`, `rgb/hsl/...()` numéricos). |
 | i18n | `<r4-t>`/`r4-i18n` usam `textContent`; `r4-i18n` só escreve `placeholder`, `title`, `aria-label`, `alt`, `label`, `aria-description` (nunca `on*`, `href`, `src`, `style`). |
+| Ícones | `R4.icon(nome)` monta o SVG com `createElementNS` a partir de um **mapa fixo** nome → path (allowlist); o nome nunca vira markup (desconhecido → círculo neutro + aviso). `size` só aceita número/`em`/`rem`/`px`, `cls` só nomes de classe simples, `title` vai por `textContent`. `R4.icon.add` só aceita path com `[MmLlHhVvCcSsQqTtAaZz0-9 .,-]` (máx. 2000) e nome `[a-z][a-z0-9-]*`. A opção `icon` dos componentes (`R4.util.icon`) vira SVG só se o valor for um nome do mapa; qualquer outro valor (inclusive HTML) é texto. |
+| i18n dos componentes | Os textos fixos da lib vêm de `R4.t` e são gravados com `textContent`/atributos de texto; params (nome de coluna, mensagem do servidor, nome de arquivo) são dados, nunca markup. `R4.util.tx` grava `r4-i18n` (+ `params` em JSON) só nos atributos permitidos pelo i18n. |
 | Arquivos | Exportação CSV/XLSX neutraliza fórmulas (`= + - @ TAB CR` → prefixo `'`; XLSX grava texto como string compartilhada, nunca `<f>`). Leitura: limites de tamanho, XLSX com `DOCTYPE` recusado, limite descompactado ("zip bomb"), de entradas, de linhas e de células, CRC conferido. Nome de download sem caminho, controle ou caracteres bidi (U+202E). |
 | Formulários | `pattern` limitado a 512 caracteres; padrão com quantificador aninhado (`(a+)+`, `(\w*x)*`, `(a+){2,}`) é ignorado com aviso (ReDoS); valor com mais de 5.000 caracteres nem chega à regex. |
 | Criptografia | AES-GCM 256, PBKDF2-SHA-256 100 mil iterações, salt (16 B) e IV (12 B) novos a cada mensagem, tag conferida (pacote adulterado → `null`). **Chave vazia fora de localhost → erro** (não cifra com chave pública "vazia"). |
@@ -102,6 +104,7 @@ desliga a montagem automática (aí chame `R4.scan(el)` só onde quiser).
 
 ### Outros cuidados
 
+- Os componentes da lib nunca põem o resultado de `R4.t` em `innerHTML`; no seu código, escape (`R4.util.esc`) se for montar HTML.
 - `R4.t()` devolve **texto** (os `{params}` não são escapados): ao concatenar em HTML, escape.
 - `pattern` dado como `RegExp` (por código) não passa pelo filtro anti-ReDoS; alternâncias
   sobrepostas como `(a|aa)+$` não são detectadas — escreva padrões lineares.
@@ -222,7 +225,8 @@ de tema e usa `style="..."` nos gráficos).
 | `<style>` de tema | theme.js `applyDom` | `R4.theme.set` / `localStorage` | allowlist por campo |
 | `innerHTML` da vitrine | app.js:76, 127 | texto digitado no editor/playground | self-only (ferramenta de dev, só com APP_DEBUG) |
 | `eval` da vitrine | app.js:129 | texto do editor | self-only; nunca da URL/hash/storage |
-| `eval`, `new Function`, `window.open`, `outerHTML`, `createContextualFragment` | — | — | não existem na lib |
+| `outerHTML` (leitura) | icons.js `R4.icon.html` | SVG montado por DOM a partir do mapa fixo | só serializa (não é sink); devolve `R4.raw` |
+| `eval`, `new Function`, `window.open`, `createContextualFragment` | — | — | não existem na lib |
 
 ---
 
@@ -275,6 +279,7 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 5. `R4.util.el`/`domAttrs` ignoram `on*` em texto e URLs perigosas; `merge` não altera objetos herdados.
 6. `pattern` com quantificador aninhado é ignorado (aviso); valor > 5.000 caracteres falha no `pattern`.
 7. `/vitrine` e `/` (vitrine) → 404 com `APP_DEBUG=false`.
+8. Novos: `R4.icon`, `<r4-icon>`, `R4.util.icon`, `R4.util.T`, `R4.util.tx`, `R4.suggest`; `emptyText`/`loadingText`/`errorText`/`summaryLabel`/`placeholder` (grid, select, treepanel, chart, filedrop, form) têm padrão `''` = texto no idioma atual. Cobertos por 5 casos novos em `tools/testes-seguranca.js` (ícones e i18n).
 
 ---
 

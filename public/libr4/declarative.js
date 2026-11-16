@@ -51,6 +51,7 @@
     list.forEach(c => { const x = lev(name.toLowerCase(), c.toLowerCase()); if (x < bd) { bd = x; best = c; } });
     return best;
   };
+  R4.suggest = suggest;   // "quis dizer ...?" (também usado por R4.icon)
   const kebab = s => s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
   const ALLOWED_ATTRS = new Set(['region', 'hidden', 'key', 'text', 'closable']);
   const STRUCT = new Set(['r4-col', 'r4-node', 'r4-tab', 'r4-tbar', 'r4-fill', 'r4-sep']);
@@ -87,7 +88,7 @@
     expanded: n.getAttribute('expanded') !== 'false',
     children: [...n.children].filter(k => k.localName === 'r4-node').map(nodeCfg)
   });
-  const tabCfg = t => ({ xtype: 'panel', title: t.getAttribute('title') || 'Aba', key: t.getAttribute('key') || undefined,
+  const tabCfg = t => ({ xtype: 'panel', title: t.getAttribute('title') || R4.util.T('r4.tab', 0, 'Aba'), key: t.getAttribute('key') || undefined,
     closable: t.hasAttribute('closable'), html: t.innerHTML.trim() });
   const itemsFrom = h => [...h.children].map(k => k.localName === 'r4-fill' ? '->' : k.localName === 'r4-sep' ? '-' : isTag(k) ? toCfg(k) : null).filter(Boolean);
 
@@ -152,7 +153,7 @@
       Object.keys(cfg.domAttrs || {}).forEach(k => host.removeAttribute(k));
     } catch (err) {
       console.error('[R4] erro ao montar <' + host.localName + '>:', err);
-      host.replaceChildren(R4.util.el('div', { class: 'r4-alert r4-alert-err', text: 'R4: ' + err.message }));
+      host.replaceChildren(R4.util.el('div', { class: 'r4-alert r4-alert-err', text: R4.util.T('r4.mountError', { message: err.message }, 'R4: ' + err.message) }));
     }
   }
 
@@ -195,9 +196,9 @@
     copy: async a => {
       const t = a.startsWith('#') ? document.getElementById(a.slice(1)) : null;
       await navigator.clipboard.writeText(t ? t.textContent.trim() : a);
-      R4.toast('Copiado!');
+      R4.toast(R4.util.T('r4.copied', 0, 'Copiado!'));
     },
-    alert: a => R4.msg.alert('Aviso', a),
+    alert: a => R4.msg.alert(R4.util.T('r4.notice', 0, 'Aviso'), a),
     // só navega para URL relativa, #âncora, http(s), mailto ou tel — javascript:/data:/vbscript: são bloqueados
     goto: a => {
       const u = R4.util.safeUrl(a);
@@ -225,11 +226,11 @@
       const fn = R4.actions[name];
       if (!fn) { const sg = suggest(name, Object.keys(R4.actions)); return R4.warn('ação desconhecida "' + name + '"' + (sg ? ' — quis dizer "' + sg + '"?' : '')); }
       try { const r = fn(arg, h, ev); r && r.catch && r.catch(e => console.error('[R4] ação ' + name + ':', e)); }
-      catch (e) { console.error('[R4] ação ' + name + ':', e); R4.toast('Erro: ' + e.message); }
+      catch (e) { console.error('[R4] ação ' + name + ':', e); R4.toast(R4.util.T('r4.error', { message: e.message }, 'Erro: ' + e.message)); }
     });
     if (h.matches('a')) ev.preventDefault();
     const conf = h.getAttribute('r4-confirm');
-    conf ? R4.msg.confirm('Confirmar', conf, ok => ok && run()) : run();
+    conf ? R4.msg.confirm(R4.util.T('r4.confirm', 0, 'Confirmar'), conf, ok => ok && run()) : run();
   });
 
   /* ---------- animações r4-anim ---------- */

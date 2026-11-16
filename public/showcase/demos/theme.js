@@ -97,6 +97,25 @@
     el.innerHTML = '<p><r4-t key="app.ola" params=\'{"nome":"Ana"}\'></r4-t></p><p><r4-t key="app.msgs" n="3"></r4-t></p>';
     out(R4.t('app.ola', { nome: 'Ana' }) + ' | ' + R4.t('app.msgs', { n: 1 }) + ' | ' + R4.t('app.msgs', { n: 5 }));
   } },
+  { title: 'Adicionar um idioma (espanhol) e ver a biblioteca mudar de língua', fn(el, out) {
+    // 1) registre o dicionário: só as chaves que quiser traduzir (as que faltarem usam pt-BR como reserva)
+    R4.i18n.add('es', { r4: {
+      empty: 'Sin registros.', filter: 'Filtrar...', search: 'Buscar...', ok: 'Aceptar', cancel: 'Cancelar', yes: 'Sí', no: 'No',
+      confirm: 'Confirmar', loading: 'Cargando...', loadFail: 'Error al cargar.',
+      grid: { filterLabel: 'Filtrar registros', total: 'Total', retry: 'Intentar de nuevo' },
+      pager: { info: { one: '{page} / {pages}  ·  {n} registro', other: '{page} / {pages}  ·  {n} registros' } }
+    } });
+    // 2) troque o idioma (persist:false não grava no localStorage); componentes na tela se atualizam sozinhos
+    const h = R4.util.el;
+    const bar = h('div', { class: 'r4-flex r4-gap-2 r4-mb-2' }, [
+      h('button', { class: 'r4-btn', type: 'button', text: 'Español', onclick: () => R4.i18n.set('es', { persist: false }) }),
+      h('button', { class: 'r4-btn', type: 'button', text: 'Português', onclick: () => R4.i18n.set('pt-BR', { persist: false }) }),
+      h('button', { class: 'r4-btn', type: 'button', text: 'English', onclick: () => R4.i18n.set('en', { persist: false }) }),
+      h('button', { class: 'r4-btn', type: 'button', text: 'R4.confirm', onclick: () => R4.confirm('?', 'OK / Cancelar / Sí', () => {}) })]);
+    el.append(bar, h('div'));
+    R4.grid(el.lastChild, { data: [], columns: ['nome'] });
+    out('Locales: ' + R4.i18n.locales.join(', ') + '  ·  a escolha da barra superior (PT | EN) volta ao idioma salvo');
+  } },
   { title: 'Todas as chaves r4.* da biblioteca', fn(el, out) {
     out(['r4.ok', 'r4.cancel', 'r4.yes', 'r4.confirm', 'r4.notice', 'r4.copied', 'r4.empty', 'r4.filter', 'r4.search', 'r4.loadFail', 'r4.pager.info']
       .map(k => k + ' = ' + R4.t(k, { n: 2, page: 1, pages: 3 })).join('\n'));

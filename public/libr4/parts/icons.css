@@ -1,0 +1,17 @@
+/* libr4 / icons — SVG inline: herda cor (currentColor) e tamanho (1em) do texto ao redor */
+.r4-icon{flex:none;display:inline-block;vertical-align:-.125em;overflow:visible;pointer-events:none}
+.r4-icon:not([width]){width:1em;height:1em}
+.r4-iconc{display:inline-flex;align-items:center;line-height:1;vertical-align:middle}
+.r4-iconc .r4-icon{vertical-align:0}
+.r4-tool,.r4-x,.r4-arrow,.r4-select-arrow,.r4-legend-arrow,.r4-stat-arrow,.r4-dd-ico,.r4-fd-ico,.r4-ts-ico,.r4-es-ico,.r4-al-ico,.r4-ntf-ico,.r4-tl-mark,.r4-step-dot{line-height:1}
+.r4-arrow,.r4-select-arrow,.r4-legend-arrow{display:inline-flex;align-items:center;justify-content:center}
+.r4-arrow .r4-icon{width:.9em;height:.9em;vertical-align:0}
+.r4-arrow .r4-icon{transition:transform .12s}
+.r4-open>.r4-node>.r4-arrow .r4-icon{transform:rotate(90deg)}
+.r4-sort .r4-icon{width:.8em;height:.8em;vertical-align:-.05em}
+.r4-spin>button .r4-icon{width:8px;height:8px;vertical-align:0}
+.r4-x .r4-icon,.r4-tool .r4-icon{vertical-align:-.15em}
+.r4-es-ico .r4-icon{vertical-align:0}
+.r4-step-dot .r4-icon{width:.95em;height:.95em;vertical-align:0}
+.r4-al-x .r4-icon,.r4-ntf-x .r4-icon{width:.7em;height:.7em;vertical-align:0}
+.r4-fd-rm .r4-icon,.r4-chip-x .r4-icon,.r4-tg-x .r4-icon,.r4-select-clear .r4-icon{width:.8em;height:.8em;vertical-align:-.1em}

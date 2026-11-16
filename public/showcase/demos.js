@@ -8,7 +8,7 @@ window.R4Demos = {
   button: [
     { title: 'Variantes', fn(el) {
       ['default', 'primary', 'danger'].forEach(v =>
-        R4.create({ xtype: 'button', text: v, variant: v, icon: '●', renderTo: el, style: { marginRight: '8px' },
+        R4.create({ xtype: 'button', text: v, variant: v, icon: 'dot', renderTo: el, style: { marginRight: '8px' },
           handler: b => R4.msg.alert('Clique', 'Botão "' + b.text + '" acionado.') }));
     } }
   ],
@@ -124,7 +124,7 @@ window.R4Demos = {
 const _h = (k, item) => (R4Demos[k] ||= []).push(item);
 
 _h('button', { title: 'HTML: botão com ação', html: `
-<r4-button variant="primary" icon="★" r4-click="toast:Salvo com sucesso">Salvar</r4-button>
+<r4-button variant="primary" icon="star" r4-click="toast:Salvo com sucesso">Salvar</r4-button>
 <r4-button variant="danger" r4-click="alert:Item excluído" r4-confirm="Excluir este item?">Excluir</r4-button>` });
 
 _h('panel', { title: 'HTML: panel com toolbar', html: `

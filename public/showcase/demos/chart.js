@@ -102,7 +102,7 @@
     title: 'Alternar tema claro/escuro',
     fn(el, out) {
       el.innerHTML = '<div class="r4-mb-2"></div><div></div>';
-      R4.button(el.firstChild, '◐ Alternar tema', () => document.documentElement.classList.toggle('r4-dark'));
+      R4.button(el.firstChild, 'Alternar tema', { icon: 'contrast', handler: () => document.documentElement.classList.toggle('r4-dark') });
       R4.chart(el.lastChild, [
         { k: 'A', a: 30, b: 22, c: 14, d: 9, e: 17, f: 25, g: 12, h: 20 },
         { k: 'B', a: 20, b: 28, c: 18, d: 12, e: 9, f: 15, g: 22, h: 11 },

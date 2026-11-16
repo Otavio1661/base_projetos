@@ -38,28 +38,28 @@
   /* ===== dropdown ===== */
   add('dropdown',
     { title: 'HTML: menu de ações com r4-click', html: `
-<r4-dropdown text="Ações" icon="⚙">
-  <r4-item text="Editar" icon="✎" r4-click="notify:Editar clicado"></r4-item>
-  <r4-item text="Duplicar" icon="⧉" r4-click="toast:Duplicado!"></r4-item>
+<r4-dropdown text="Ações" icon="settings">
+  <r4-item text="Editar" icon="edit" r4-click="notify:Editar clicado"></r4-item>
+  <r4-item text="Duplicar" icon="copy" r4-click="toast:Duplicado!"></r4-item>
   <r4-item divider></r4-item>
-  <r4-item text="Arquivar" icon="🗄" disabled></r4-item>
-  <r4-item text="Excluir" icon="🗑" danger r4-click="notify:err|Registro excluído" r4-confirm="Excluir este registro?"></r4-item>
+  <r4-item text="Arquivar" icon="inbox" disabled></r4-item>
+  <r4-item text="Excluir" icon="trash" danger r4-click="notify:err|Registro excluído" r4-confirm="Excluir este registro?"></r4-item>
 </r4-dropdown>` },
     { title: 'HTML: alinhado à direita, colado na borda', html: `
 <div style="display:flex;justify-content:flex-end">
   <r4-dropdown text="Mais" align="right" variant="primary">
-    <r4-item text="Perfil" icon="👤" r4-click="toast:Perfil"></r4-item>
-    <r4-item text="Configurações" icon="⚙" r4-click="toast:Configurações"></r4-item>
-    <r4-item text="Sair" icon="⎋" r4-click="toast:Até logo!"></r4-item>
+    <r4-item text="Perfil" icon="user" r4-click="toast:Perfil"></r4-item>
+    <r4-item text="Configurações" icon="settings" r4-click="toast:Configurações"></r4-item>
+    <r4-item text="Sair" icon="arrow-right" r4-click="toast:Até logo!"></r4-item>
   </r4-dropdown>
 </div>` },
     { title: 'JS: handlers e evento select', fn(el, out) {
       const dd = R4.dropdown(el, 'Exportar', [
-        { text: 'CSV', icon: '📄', handler: () => R4.notify.ok('Exportando CSV...') },
-        { text: 'Excel', icon: '📊', handler: () => R4.notify.ok('Exportando Excel...') },
+        { text: 'CSV', icon: 'file', handler: () => R4.notify.ok('Exportando CSV...') },
+        { text: 'Excel', icon: 'chart-bar', handler: () => R4.notify.ok('Exportando Excel...') },
         '-',
-        { text: 'PDF (indisponível)', icon: '📕', disabled: true },
-        { text: 'Ajuda', icon: '❓', href: '#ajuda' }
+        { text: 'PDF (indisponível)', icon: 'file', disabled: true },
+        { text: 'Ajuda', icon: 'help', href: '#ajuda' }
       ]);
       dd.on('open', () => out('menu aberto'));
       dd.on('select', (d, item) => out({ escolhido: item.text }));
@@ -164,18 +164,18 @@
   add('stat',
     { title: 'HTML: formatos e variações', html: `
 <r4-div cols="4" gap="3">
-  <r4-stat title="Receita" value="384250.9" format="money" change="12.4" change-text="vs. mês anterior" icon="💰"></r4-stat>
-  <r4-stat title="Pedidos" value="2184" format="number" change="5.1" icon="🛒" variant="primary"></r4-stat>
-  <r4-stat title="Ticket médio" value="175.9" format="money" change="-2.3" icon="🎫"></r4-stat>
+  <r4-stat title="Receita" value="384250.9" format="money" change="12.4" change-text="vs. mês anterior" icon="dollar"></r4-stat>
+  <r4-stat title="Pedidos" value="2184" format="number" change="5.1" icon="cart" variant="primary"></r4-stat>
+  <r4-stat title="Ticket médio" value="175.9" format="money" change="-2.3" icon="tag"></r4-stat>
   <r4-stat title="Cancelamentos" value="2.1" format="percent" change="-0.8" invert change-text="queda é bom"></r4-stat>
 </r4-div>` },
     { title: 'HTML: um indicador direto de kpis.json (src + key)', html: `
 <r4-div cols="2" gap="3">
-  <r4-stat src="${K}kpis.json" key="receita" icon="💰" variant="ok"></r4-stat>
-  <r4-stat src="${K}kpis.json" key="conversao" icon="🎯" variant="info"></r4-stat>
+  <r4-stat src="${K}kpis.json" key="receita" icon="dollar" variant="ok"></r4-stat>
+  <r4-stat src="${K}kpis.json" key="conversao" icon="flag" variant="info"></r4-stat>
 </r4-div>` },
     { title: 'JS: atualização em tempo real', fn(el, out) {
-      const s = R4.stat(el, { title: 'Visitantes agora', value: 120, format: 'number', icon: '👥', change: 0 });
+      const s = R4.stat(el, { title: 'Visitantes agora', value: 120, format: 'number', icon: 'users', change: 0 });
       const t = setInterval(() => {
         if (!s.el.isConnected) return clearInterval(t);
         const novo = Math.round(s.value + (Math.random() - 0.4) * 30);
@@ -194,7 +194,7 @@
 </r4-stats>` },
     { title: 'JS: R4.stats(alvo, kpis) + ícones e variantes', async fn(el, out) {
       const kpis = await VitrineData.load('kpis');
-      const icones = { receita: '💰', pedidos: '🛒', ticket: '🎫', conversao: '🎯' };
+      const icones = { receita: 'dollar', pedidos: 'cart', ticket: 'tag', conversao: 'flag' };
       const grade = R4.stats(el, kpis.map(k => ({ ...k, icon: icones[k.id], variant: k.variacao >= 0 ? 'ok' : 'err' })));
       out({ cartoes: grade._children.length });
     } }
@@ -226,7 +226,7 @@
   add('breadcrumb',
     { title: 'HTML: com href e r4-click', html: `
 <r4-breadcrumb separator="›">
-  <r4-crumb icon="🏠" r4-click="toast:Início">Início</r4-crumb>
+  <r4-crumb icon="home" r4-click="toast:Início">Início</r4-crumb>
   <r4-crumb href="#cadastros" r4-click="toast:Cadastros">Cadastros</r4-crumb>
   <r4-crumb href="#clientes" r4-click="toast:Clientes">Clientes</r4-crumb>
   <r4-crumb>João Souza</r4-crumb>
@@ -279,10 +279,10 @@
   add('timeline',
     { title: 'HTML: itens manuais', html: `
 <r4-timeline>
-  <r4-item title="Pedido criado" date="2026-11-01" icon="🛒">Cliente fez o pedido #1021.</r4-item>
-  <r4-item title="Pagamento aprovado" date="2026-11-02" icon="✔" variant="ok">Cartão final 4242.</r4-item>
-  <r4-item title="Atraso na entrega" date="2026-11-05" icon="⚠" variant="warn">Transportadora informou 2 dias.</r4-item>
-  <r4-item title="Entrega cancelada" date="2026-11-07" icon="✖" variant="err">Endereço não encontrado.</r4-item>
+  <r4-item title="Pedido criado" date="2026-11-01" icon="cart">Cliente fez o pedido #1021.</r4-item>
+  <r4-item title="Pagamento aprovado" date="2026-11-02" icon="check" variant="ok">Cartão final 4242.</r4-item>
+  <r4-item title="Atraso na entrega" date="2026-11-05" icon="warning" variant="warn">Transportadora informou 2 dias.</r4-item>
+  <r4-item title="Entrega cancelada" date="2026-11-07" icon="error" variant="err">Endereço não encontrado.</r4-item>
 </r4-timeline>` },
     { title: 'HTML: direto de eventos.json (mais recentes primeiro)', html: `<r4-timeline src="${K}eventos.json" order="desc" limit="6"></r4-timeline>` },
     { title: 'JS: eventos com cor por tipo', async fn(el, out) {
@@ -371,7 +371,7 @@
   /* ===== emptystate ===== */
   add('emptystate',
     { title: 'HTML: com botão de ação', html: `
-<r4-emptystate icon="🔍" title="Nenhum cliente encontrado" text="Tente outro termo de busca ou cadastre um novo cliente." action-text="Novo cliente" action-click="notify:ok|Abrindo cadastro..."></r4-emptystate>` },
+<r4-emptystate icon="search" title="Nenhum cliente encontrado" text="Tente outro termo de busca ou cadastre um novo cliente." action-text="Novo cliente" action-click="notify:ok|Abrindo cadastro..."></r4-emptystate>` },
     { title: 'JS: lista vazia depois de filtrar (clientes.json)', async fn(el, out) {
       const clientes = await VitrineData.load('clientes');
       const campo = R4.textfield(el, 'Buscar cliente (tente "zzz")');
@@ -382,7 +382,7 @@
         atual && atual.destroy(); area.replaceChildren();
         const achados = clientes.filter(c => c.nome.toLowerCase().includes(q.toLowerCase()));
         if (!achados.length) {
-          atual = R4.emptystate(area, 'Nada para "' + q + '"', { text: 'Nenhum cliente corresponde à busca.', icon: '🔍', actionText: 'Limpar busca', handler: () => { campo.setValue(''); desenhar(''); }, compact: true });
+          atual = R4.emptystate(area, 'Nada para "' + q + '"', { text: 'Nenhum cliente corresponde à busca.', icon: 'search', actionText: 'Limpar busca', handler: () => { campo.setValue(''); desenhar(''); }, compact: true });
         } else { area.textContent = achados.length + ' cliente(s) encontrados'; }
         out({ achados: achados.length });
       };

@@ -15,7 +15,8 @@
  */
 (function (R4) {
   'use strict';
-  const { el } = R4.util;
+  const { el, tx } = R4.util;
+  const T = R4.util.T;   // R4.t com reserva (resolvido em tempo de uso)
   const MB = 1024 * 1024;
   const fail = msg => { throw new Error(msg); };
   const bytes = n => R4.util.bytes(n);
@@ -193,12 +194,12 @@
     const name = String(file.name || '').toLowerCase(), type = String(file.type || '').toLowerCase();
     return list.some(a => (a.startsWith('.') ? name.endsWith(a) : a.endsWith('/*') ? type.startsWith(a.slice(0, -1)) : type === a));
   }
-  /** Mensagem de erro em português, ou null se o arquivo passar em accept/maxSize. */
+  /** Mensagem de erro (no idioma atual), ou null se o arquivo passar em accept/maxSize. */
   function validate(file, opts) {
     const o = opts || {};
-    if (!file || typeof file.size !== 'number') return 'Arquivo inválido.';
-    if (o.accept && !acceptOk(file, o.accept)) return '"' + file.name + '": tipo de arquivo não permitido (aceitos: ' + o.accept + ').';
-    if (o.maxSize && file.size > o.maxSize) return '"' + file.name + '": arquivo muito grande (' + bytes(file.size) + '; máximo ' + bytes(o.maxSize) + ').';
+    if (!file || typeof file.size !== 'number') return T('r4.files.invalid', 0, 'Arquivo inválido.');
+    if (o.accept && !acceptOk(file, o.accept)) return T('r4.files.badType', { name: file.name, accept: o.accept }, '"' + file.name + '": tipo de arquivo não permitido (aceitos: ' + o.accept + ').');
+    if (o.maxSize && file.size > o.maxSize) return T('r4.files.tooBig', { name: file.name, size: bytes(file.size), max: bytes(o.maxSize) }, '"' + file.name + '": arquivo muito grande (' + bytes(file.size) + '; máximo ' + bytes(o.maxSize) + ').');
     return null;
   }
   /** Abre o seletor do sistema. Promise<File[]>; rejeita com erro (e.errors, e.files) se algum arquivo não passar. */
@@ -225,7 +226,7 @@
       if (e) return reject(new Error(e));
       const fr = new FileReader();
       fr.onload = () => resolve(fr.result);
-      fr.onerror = () => reject(new Error('Não foi possível ler "' + file.name + '".'));
+      fr.onerror = () => reject(new Error(T('r4.files.readFail', { name: file.name }, 'Não foi possível ler "' + file.name + '".')));
       kind === 'text' ? fr.readAsText(file, enc) : fr.readAsArrayBuffer(file);
     });
   }
@@ -602,20 +603,22 @@
 
   /* ================= filedrop ================= */
   R4.define('filedrop', {
-    config: { accept: '', multiple: false, maxSize: 10 * MB, maxFiles: 0, parse: '', text: 'Arraste arquivos para cá ou', buttonText: 'Escolher arquivo',
+    config: { accept: '', multiple: false, maxSize: 10 * MB, maxFiles: 0, parse: '', text: '', buttonText: '',   // '' = texto padrão no idioma atual
       hint: '', disabled: false, list: true, delimiter: 'auto', header: true },
     build() {
       this._files = [];
-      const hint = this.hint || [this.accept ? 'Tipos: ' + this.accept : '', this.maxSize ? 'Máx. ' + bytes(this.maxSize) + (this.multiple ? ' por arquivo' : '') : ''].filter(Boolean).join(' · ');
+      const hint = this._hint();
       this.input = el('input', { type: 'file', class: 'r4-fd-input', accept: this.accept || null, multiple: this.multiple, tabindex: '-1', 'aria-hidden': 'true' });
       this.btn = el('button', { type: 'button', class: 'r4-btn r4-btn-primary', disabled: this.disabled, text: this.buttonText });
+      this.buttonText || tx(this.btn, 'r4.files.choose', 'Escolher arquivo');
       this.zone = el('div', { class: 'r4-fd-zone' }, [
-        el('span', { class: 'r4-fd-ico', 'aria-hidden': 'true', text: '⇪' }),
-        el('span', { class: 'r4-fd-text', text: this.text }), this.btn,
-        hint ? el('span', { class: 'r4-fd-hint', id: this.id + '-hint', text: hint }) : null]);
+        el('span', { class: 'r4-fd-ico', 'aria-hidden': 'true' }, [R4.icon('upload')]),
+        this.text ? el('span', { class: 'r4-fd-text', text: this.text }) : tx(el('span', { class: 'r4-fd-text' }), 'r4.files.drop', 'Arraste arquivos para cá ou'), this.btn,
+        hint ? this.hintEl = el('span', { class: 'r4-fd-hint', id: this.id + '-hint', text: hint }) : null]);
       if (hint) this.btn.setAttribute('aria-describedby', this.id + '-hint');
       this.msgEl = el('div', { class: 'r4-fd-msg', role: 'alert', hidden: true });
-      this.listEl = el('ul', { class: 'r4-fd-list', 'aria-label': 'Arquivos selecionados', hidden: true });
+      this.listEl = el('ul', { class: 'r4-fd-list', hidden: true });
+      tx(this.listEl, 'r4.files.selected', 'Arquivos selecionados', 'aria-label');
       const root = el('div', { class: 'r4-filedrop' + (this.disabled ? ' r4-disabled' : '') }, [this.zone, this.input, this.msgEl, this.listEl]);
       this.btn.addEventListener('click', ev => { ev.stopPropagation(); this.open(); });
       this.zone.addEventListener('click', () => this.open());
@@ -651,11 +654,11 @@
       for (const f of files) {
         const e = validate(f, { accept: this.accept, maxSize: this.maxSize });
         if (e) errs.push(e);
-        else if (this.multiple && this._files.concat(ok).some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) errs.push('"' + f.name + '" já está na lista.');
+        else if (this.multiple && this._files.concat(ok).some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) errs.push(T('r4.files.dup', { name: f.name }, '"' + f.name + '" já está na lista.'));
         else ok.push(f);
       }
       if (this.multiple && this.maxFiles && this._files.length + ok.length > this.maxFiles) {
-        errs.push('Selecione no máximo ' + this.maxFiles + ' arquivo' + (this.maxFiles > 1 ? 's' : '') + '.');
+        errs.push(T('r4.files.maxFiles', { n: this.maxFiles }, 'Selecione no máximo ' + this.maxFiles + ' arquivo(s).'));
         ok.splice(Math.max(0, this.maxFiles - this._files.length));
       }
       if (errs.length) this.fire('invalid', this, errs);
@@ -680,15 +683,21 @@
       if (p === 'xlsx') return parseXLSX(await readArrayBuffer(f, { maxSize: this.maxSize || 50 * MB }), { header: this.header });
       const text = await readText(f, { maxSize: this.maxSize || 20 * MB });
       if (p === 'csv') return parseCSV(text, { delimiter: this.delimiter, header: this.header, types: true, decimal: this.delimiter === ';' || (this.delimiter === 'auto' && detectDelimiter(text) === ';') ? ',' : '.' });
-      if (p === 'json') { try { return JSON.parse(text); } catch (e) { throw new Error('JSON inválido.'); } }
+      if (p === 'json') { try { return JSON.parse(text); } catch (e) { throw new Error(T('r4.files.badJson', 0, 'JSON inválido.')); } }
       return text;
     },
+    /** Dica padrão (tipos aceitos e tamanho máximo) no idioma atual. */
+    _hint() {
+      return this.hint || [this.accept ? T('r4.files.types', { types: this.accept }, 'Tipos: ' + this.accept) : '',
+        this.maxSize ? T(this.multiple ? 'r4.files.maxEach' : 'r4.files.max', { size: bytes(this.maxSize) }, 'Máx. ' + bytes(this.maxSize)) : ''].filter(Boolean).join(' · ');
+    },
+    relocalize() { if (this.hintEl) this.hintEl.textContent = this._hint(); this._list(); },
     _msg(errs) { this.msgEl.hidden = !errs.length; this.msgEl.textContent = errs.join('\n'); },
     _list() {
       this.listEl.hidden = !this.list || !this._files.length;
       this.listEl.replaceChildren(...this._files.map((f, i) => el('li', { class: 'r4-fd-item' }, [
         el('span', { class: 'r4-fd-name', text: f.name, title: f.name }), el('span', { class: 'r4-fd-size', text: bytes(f.size) }),
-        el('button', { type: 'button', class: 'r4-fd-rm', 'data-i': i, 'aria-label': 'Remover ' + f.name, title: 'Remover', text: '×' })])));
+        el('button', { type: 'button', class: 'r4-fd-rm', 'data-i': i, 'aria-label': T('r4.form.remove', { item: f.name }, 'Remover ' + f.name), title: T('r4.remove', 0, 'Remover') }, [R4.icon('close')])])));
     }
   }, {
     title: 'filedrop', group: 'Dados',
@@ -699,7 +708,7 @@
       { name: 'maxSize', type: 'number (bytes)', default: '10485760', desc: 'Tamanho máximo por arquivo (10 MB).' },
       { name: 'parse', type: "'' | 'csv' | 'json' | 'xlsx' | 'text'", default: "''", desc: 'Lê o conteúdo e entrega no evento files/data. CSV detecta o delimitador e converte números (vírgula decimal quando o separador é ";").' },
       { name: 'delimiter / header', type: "string / boolean", default: "'auto' / true", desc: 'Opções de leitura do CSV/XLSX (primeira linha como cabeçalho).' },
-      { name: 'text / buttonText / hint', type: 'string', desc: 'Textos da área (hint padrão mostra tipos e tamanho máximo).' },
+      { name: 'text / buttonText / hint', type: 'string', default: "'' / '' / ''", desc: 'Textos da área (vazios = padrão no idioma atual; o hint padrão mostra tipos e tamanho máximo).' },
       { name: 'disabled / list', type: 'boolean', default: 'false / true', desc: 'Desabilita; mostra a lista de arquivos.' },
       { name: 'add(files) / open() / remove(i|file) / clear() / getFiles() / setDisabled(b)', type: 'método', desc: 'add aceita FileList/array (ex.: new File([...], "x.csv")) e devolve Promise.' },
       { name: 'files(cmp, novos, dados)', type: 'evento', desc: 'Arquivos aceitos; dados = array paralelo com o conteúdo lido (quando parse).' },
@@ -709,7 +718,7 @@
   });
   R4.registry.filedrop.meta.playground = {
     html: '<r4-filedrop{attrs}></r4-filedrop>', cfg: {},
-    controls: { accept: '.csv,.json,.xlsx,.txt', multiple: true, maxSize: 1048576, maxFiles: 0, parse: ['', 'csv', 'json', 'xlsx', 'text'], buttonText: 'Escolher arquivo', disabled: false }
+    controls: { accept: '.csv,.json,.xlsx,.txt', multiple: true, maxSize: 1048576, maxFiles: 0, parse: ['', 'csv', 'json', 'xlsx', 'text'], buttonText: '', disabled: false }
   };
   /** R4.filedrop(alvo, aoReceber(files, dados)) | R4.filedrop(alvo, '.csv', {parse:'csv'}) */
   if (R4.quickMap) R4.quickMap.filedrop = (a, b) => {

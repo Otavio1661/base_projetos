@@ -18,6 +18,8 @@
   <script src="<?= asset('/showcase/demos/chart.js') ?>"></script>
   <script src="<?= asset('/showcase/demos/theme.js') ?>"></script>
   <script src="<?= asset('/showcase/demos/receitas.js') ?>"></script>
+  <script src="<?= asset('/showcase/i18n.js') ?>"></script>
+  <script src="<?= asset('/showcase/demos/icons.js') ?>"></script>
   <script src="<?= asset('/showcase/app.js') ?>"></script>
 </body>
 </html>

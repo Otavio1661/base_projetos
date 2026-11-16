@@ -22,6 +22,7 @@
 (function (R4) {
   'use strict';
   const { el } = R4.util;
+  const TR = R4.util.T;   // R4.t com reserva (resolvido em tempo de uso)
   const NS = 'http://www.w3.org/2000/svg';
   const MAXC = 8, MAXBAR = 32, TABLE_ROWS = 500;
   const raf = f => (window.requestAnimationFrame ? window.requestAnimationFrame(f) : setTimeout(() => f(Date.now()), 16));
@@ -199,7 +200,8 @@
       color: '', colors: [], innerRadius: 0.62, centerText: '', centerSub: '',
       yMin: null, yMax: null, maxPoints: 1500, maxSlices: 8,
       tableButton: true, tableView: false, exportButtons: false,
-      emptyText: 'Sem dados para exibir.', errorText: 'Não foi possível carregar os dados.', loading: false, ariaLabel: ''
+      emptyText: '', errorText: '', loading: false,   // '' = texto padrão no idioma atual
+       ariaLabel: ''
     },
 
     init() {
@@ -221,11 +223,11 @@
         this.head = el('div', { class: 'r4-chart-head' }, [el('div', { class: 'r4-chart-title', text: this.title || '' })]);
         if (this.exportButtons) {
           this.head.append(
-            el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: 'SVG', title: 'Baixar como SVG', onclick: () => this.exportSVG() }),
-            el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: 'PNG', title: 'Baixar como PNG', onclick: () => this.exportPNG().catch(e => R4.toast && R4.toast('Não foi possível exportar: ' + e.message)) }));
+            el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: 'SVG', title: TR('r4.chart.dlSvg', 0, 'Baixar como SVG'), onclick: () => this.exportSVG() }),
+            el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: 'PNG', title: TR('r4.chart.dlPng', 0, 'Baixar como PNG'), onclick: () => this.exportPNG().catch(e => R4.toast && R4.toast(TR('r4.chart.exportFail', { message: e.message }, 'Não foi possível exportar: ' + e.message))) }));
         }
         if (this.tableButton) {
-          this.tblBtn = el('button', { type: 'button', class: 'r4-btn r4-chart-btn', 'aria-pressed': 'false', text: 'Ver como tabela', onclick: () => this.setTableView(!this._table) });
+          this.tblBtn = el('button', { type: 'button', class: 'r4-btn r4-chart-btn', 'aria-pressed': 'false', text: TR('r4.chart.viewTable', 0, 'Ver como tabela'), onclick: () => this.setTableView(!this._table) });
           this.head.append(this.tblBtn);
         }
         root.append(this.head);
@@ -324,7 +326,7 @@
     setTableView(on) {
       on = !!on;
       this._table = on;
-      if (this.tblBtn) { this.tblBtn.textContent = on ? 'Ver gráfico' : 'Ver como tabela'; this.tblBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+      if (this.tblBtn) { this.tblBtn.textContent = on ? TR('r4.chart.viewChart', 0, 'Ver gráfico') : TR('r4.chart.viewTable', 0, 'Ver como tabela'); this.tblBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
       this.stage.hidden = on;
       this.legendEl.hidden = on || !this.legendEl.childNodes.length;
       this.tableWrap.hidden = !on;
@@ -475,17 +477,24 @@
       if (this.animate === false) return false;
       try { return !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; }
     },
+    /** Troca de idioma (R4.i18n.set): textos de estado, botões e tabela. */
+    relocalize() {
+      if (!this.stage) return;
+      if (this.tblBtn) this.tblBtn.textContent = this._table ? TR('r4.chart.viewChart', 0, 'Ver gráfico') : TR('r4.chart.viewTable', 0, 'Ver como tabela');
+      if (this._state) this._setState(this._state);
+      if (this._table && this._m) this._buildTable();
+    },
     _setState(kind, err) {
       this._state = kind;
       const st = this.stateEl;
       st.hidden = !kind;
       st.className = 'r4-chart-state' + (kind === 'error' ? ' r4-err' : '');
       st.replaceChildren();
-      if (kind === 'loading') st.append(el('div', { class: 'r4-chart-spin' }), el('div', { text: 'Carregando…' }));
+      if (kind === 'loading') st.append(el('div', { class: 'r4-chart-spin' }), el('div', { text: TR('r4.loading', 0, 'Carregando...') }));
       else if (kind === 'error') {
         st.setAttribute('role', 'alert');
-        st.append(el('div', { text: this.errorText }), el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: 'Tentar novamente', onclick: () => this.load() }));
-      } else if (kind === 'empty') st.append(el('div', { text: this.emptyText }));
+        st.append(el('div', { text: this.errorText || TR('r4.chart.loadFail', 0, 'Não foi possível carregar os dados.') }), el('button', { type: 'button', class: 'r4-btn r4-chart-btn', text: TR('r4.retry', 0, 'Tentar novamente'), onclick: () => this.load() }));
+      } else if (kind === 'empty') st.append(el('div', { text: this.emptyText || TR('r4.chart.empty', 0, 'Sem dados para exibir.') }));
       kind === 'error' || st.setAttribute('role', 'status');
       this.stage.classList.toggle('r4-is-loading', kind === 'loading');
       this.stage.classList.toggle('r4-is-error', kind === 'error');
@@ -1061,30 +1070,30 @@
     _buildTable() {
       const m = this._m, f = this._f, w = this.tableWrap;
       w.replaceChildren();
-      w.setAttribute('aria-label', 'Dados do gráfico em tabela' + (this.title ? ': ' + this.title : ''));
-      if (!m || m.empty) { w.append(el('div', { class: 'r4-chart-note', text: this.emptyText })); return; }
+      w.setAttribute('aria-label', TR('r4.chart.tableLabel', 0, 'Dados do gráfico em tabela') + (this.title ? ': ' + this.title : ''));
+      if (!m || m.empty) { w.append(el('div', { class: 'r4-chart-note', text: this.emptyText || TR('r4.chart.empty', 0, 'Sem dados para exibir.') })); return; }
       const tb = el('table', { class: 'r4-table r4-striped' }), th = el('tr'), body = el('tbody');
       tb.append(el('caption', { class: 'r4-sr', text: this._desc.short }), el('thead', {}, [th]), body);
       const row = (cells, nums) => body.append(el('tr', {}, cells.map((c, i) => el('td', { class: nums[i] ? 'r4-num' : '', text: c }))));
       const head = (cols) => cols.forEach((c, i) => th.append(el('th', { class: c[1] ? 'r4-num' : '', scope: 'col', text: c[0] })));
       let total = 0, shown = 0;
       if (m.kind === 'pie') {
-        head([['Item'], [m.yLabel, 1], ['Participação', 1]]);
+        head([[TR('r4.chart.item', 0, 'Item')], [m.yLabel, 1], [TR('r4.chart.share', 0, 'Participação'), 1]]);
         m.slices.forEach(s => {
           total++; if (shown >= TABLE_ROWS) return; shown++;
           const hid = this._hidden.has(s.key);
-          row([s.label + (hid ? ' (oculto)' : ''), isFinite(toNum(s.raw)) || s.folded ? f(s.value) : (s.raw == null || s.raw === '' ? '—' : String(s.raw)), hid || !(m.total > 0) ? '—' : nf(s.value / m.total * 100, { maximumFractionDigits: 1 }) + '%'], [0, 1, 1]);
+          row([s.label + (hid ? TR('r4.chart.hidden', 0, ' (oculto)') : ''), isFinite(toNum(s.raw)) || s.folded ? f(s.value) : (s.raw == null || s.raw === '' ? '—' : String(s.raw)), hid || !(m.total > 0) ? '—' : nf(s.value / m.total * 100, { maximumFractionDigits: 1 }) + '%'], [0, 1, 1]);
         });
       } else {
         const vs = m.series;
-        head([[m.kind === 'scatter' ? m.xName : (m.xKey ? humanize(m.xKey) : 'Item')]].concat(vs.map(s => [s.label + (this._hidden.has(s.key) ? ' (oculta)' : ''), 1])));
+        head([[m.kind === 'scatter' ? m.xName : (m.xKey ? humanize(m.xKey) : TR('r4.chart.item', 0, 'Item'))]].concat(vs.map(s => [s.label + (this._hidden.has(s.key) ? TR('r4.chart.hiddenF', 0, ' (oculta)') : ''), 1])));
         for (let i = 0; i < m.n; i++) {
           total++; if (shown >= TABLE_ROWS) continue; shown++;
           row([m.kind === 'scatter' ? (m.xv[i] == null ? '—' : String(m.xv[i])) : m.label(i, true)].concat(vs.map(s => (s.vals[i] == null ? '—' : f(s.vals[i])))), [0].concat(vs.map(() => 1)));
         }
       }
       w.append(tb);
-      if (total > shown) w.append(el('div', { class: 'r4-chart-note', text: 'Mostrando ' + shown + ' de ' + total + ' linhas.' }));
+      if (total > shown) w.append(el('div', { class: 'r4-chart-note', text: TR('r4.chart.rows', { shown, total }, 'Mostrando ' + shown + ' de ' + total + ' linhas.') }));
     },
 
     /* ---------- tooltip ---------- */
@@ -1116,7 +1125,7 @@
           k.setAttribute('style', 'background:' + r.color);
           frag.append(el('div', { class: 'r4-tt-row' }, [k, el('span', { class: 'r4-tt-val', text: r.value }), el('span', { class: 'r4-tt-lab', text: r.label })]));
         });
-        if (d.total != null) frag.append(el('div', { class: 'r4-tt-row r4-tt-total' }, [el('span', { class: 'r4-tt-key', style: { background: 'transparent' } }), el('span', { class: 'r4-tt-val', text: d.total }), el('span', { class: 'r4-tt-lab', text: 'Total' })]));
+        if (d.total != null) frag.append(el('div', { class: 'r4-tt-row r4-tt-total' }, [el('span', { class: 'r4-tt-key', style: { background: 'transparent' } }), el('span', { class: 'r4-tt-val', text: d.total }), el('span', { class: 'r4-tt-lab', text: TR('r4.grid.total', 0, 'Total') })]));
         t.replaceChildren(frag);
       }
       this._placeTip(cx, cy);
@@ -1235,7 +1244,7 @@
       { name: 'maxSlices', type: 'number', default: '8', desc: 'Pizza com mais fatias agrupa as menores em "Outros" (0 = não agrupa).' },
       { name: 'tableButton / tableView', type: 'boolean', default: 'true / false', desc: 'Botão "Ver como tabela" (alternativa acessível) e estado inicial.' },
       { name: 'exportButtons', type: 'boolean', default: 'false', desc: 'Mostra os botões SVG e PNG.' },
-      { name: 'emptyText / errorText / loading', type: 'string / string / boolean', default: "'Sem dados para exibir.' / '…' / false", desc: 'Textos dos estados vazio e erro; loading força o estado carregando.' },
+      { name: 'emptyText / errorText / loading', type: 'string / string / boolean', default: "'' / '' / false", desc: 'Textos dos estados vazio e erro (vazios = padrão no idioma atual); loading força o estado carregando.' },
       { name: 'update(dados[, opções])', type: 'método', desc: 'Troca os dados com transição suave. Devolve o componente.' },
       { name: 'load() / reload()', type: 'método', desc: 'Busca src de novo.' },
       { name: 'setOptions(opts)', type: 'método', desc: 'Muda type, stacked, format... e redesenha.' },

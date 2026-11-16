@@ -95,7 +95,7 @@
         pageSize: 6,
         columns: [{ header: 'Nome', dataIndex: 'nome' }, { header: 'Perfil', dataIndex: 'perfil', width: 120 },
           { header: 'Ações', width: 190, actions: [
-            { text: 'Ver', icon: '👁', handler: (linha) => out(linha) },
+            { text: 'Ver', icon: 'eye', handler: (linha) => out(linha) },
             { text: 'Avisar', 'r4-click': 'toast:Olá, {nome}!' },
             { text: 'Excluir', variant: 'danger', 'r4-confirm': 'Excluir {nome}?', 'r4-click': 'toast:{nome} excluído (demo)' }] }]
       });

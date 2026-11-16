@@ -10,7 +10,8 @@
  */
 (function (R4) {
   'use strict';
-  const { el, esc, debounce } = R4.util;
+  const { el, esc, debounce, tx } = R4.util;
+  const T = R4.util.T;   // R4.t com reserva; resolvido em tempo de uso (theme.js carrega por último)
 
   /* ================= button ================= */
   R4.define('button', {
@@ -19,11 +20,19 @@
       const b = el('button', { type: 'button', class: 'r4-btn r4-btn-' + this.variant, disabled: this.disabled,
         onclick: ev => { if (!this.disabled) { this.fire('click', this, ev); this.handler && this.handler(this, ev); } } });
       this.label = el('span', { text: this.text });
-      if (this.icon) b.append(el('span', { class: 'r4-ico', text: this.icon }));
+      if (this.icon) b.append(this._ico = R4.util.icon(el('span', { class: 'r4-ico' }), this.icon));
       b.append(this.label);
       return b;
     },
     setText(t) { this.text = t; this.label.textContent = t; return this; },
+    /** Troca o ícone (nome de R4.icon ou texto/emoji; '' remove). */
+    setIcon(v) {
+      this.icon = v;
+      if (!v) { this._ico && this._ico.remove(); this._ico = null; }
+      else if (this._ico) R4.util.icon(this._ico, v);
+      else this.el.prepend(this._ico = R4.util.icon(el('span', { class: 'r4-ico' }), v));
+      return this;
+    },
     setDisabled(d) { this.disabled = !!d; this.el.disabled = !!d; return this; }
   }, {
     title: 'button', group: 'Componentes', description: 'Botão com handler, ícone e variantes de cor.',
@@ -31,9 +40,9 @@
       { name: 'text', type: 'string', default: "''", desc: 'Texto do botão.' },
       { name: 'handler', type: 'function(btn, ev)', default: 'null', desc: 'Chamado ao clicar.' },
       { name: 'variant', type: "'default'|'primary'|'danger'", default: "'default'", desc: 'Cor.' },
-      { name: 'icon', type: 'string', default: "''", desc: 'Texto/emoji exibido antes do rótulo.' },
+      { name: 'icon', type: 'string', default: "''", desc: 'Nome de ícone (R4.icon: "edit", "trash"...) ou texto/emoji exibido antes do rótulo.' },
       { name: 'disabled', type: 'boolean', default: 'false', desc: 'Desabilita o botão.' },
-      { name: 'setText(t) / setDisabled(b)', type: 'método', desc: 'Atualizam o botão depois de renderizado.' }
+      { name: 'setText(t) / setDisabled(b) / setIcon(v)', type: 'método', desc: 'Atualizam o botão depois de renderizado.' }
     ]
   });
 
@@ -54,7 +63,7 @@
       if (this.title && this.header !== false) {
         this.headerEl = el('div', { class: 'r4-header' }, [el('span', { class: 'r4-title', text: this.title })]);
         if (this.collapsible) {
-          this.headerEl.append(el('span', { class: 'r4-tool', text: '▾' }));
+          this.headerEl.append(R4.util.icon(el('span', { class: 'r4-tool' }), 'chevron-down'));
           this.headerEl.addEventListener('click', () => this.toggle());
         }
         p.append(this.headerEl);
@@ -124,10 +133,10 @@
     /** add(cfg) → cria a aba (cfg.title, cfg.closable, cfg.key) e ativa */
     add(cfg, activate = true) {
       const panel = R4.create(Object.assign({ header: false }, cfg, { renderTo: null, xtype: cfg.xtype || 'panel' }));
-      const tabEl = el('div', { class: 'r4-tab' }, [el('span', { text: cfg.title || 'Aba' })]);
+      const tabEl = el('div', { class: 'r4-tab' }, [el('span', { text: cfg.title || T('r4.tab', 0, 'Aba') })]);
       const tab = { cmp: panel, el: tabEl, key: cfg.key };
       tabEl.addEventListener('click', () => this.setActive(tab));
-      if (cfg.closable) tabEl.append(el('span', { class: 'r4-x', text: '×', onclick: ev => { ev.stopPropagation(); this.remove(tab); } }));
+      if (cfg.closable) tabEl.append(R4.util.tx(R4.util.icon(el('span', { class: 'r4-x', onclick: ev => { ev.stopPropagation(); this.remove(tab); } }), 'close'), 'r4.close', 'Fechar', 'title'));
       this.strip.append(tabEl);
       panel.render(this.stage);
       panel.hide();
@@ -163,12 +172,14 @@
 
   /* ================= treepanel ================= */
   R4.define('treepanel', {
-    config: { nodes: [], filterable: true, placeholder: 'Buscar...' },
+    config: { nodes: [], filterable: true, placeholder: '' },
     build() {
       const root = el('div', { class: 'r4-tree' });
       if (this.filterable) {
-        root.append(el('input', { class: 'r4-input r4-tree-filter', type: 'search', placeholder: this.placeholder,
-          oninput: debounce(ev => this.filter(ev.target.value), 120) }));
+        const inp = el('input', { class: 'r4-input r4-tree-filter', type: 'search', oninput: debounce(ev => this.filter(ev.target.value), 120) });
+        if (this.placeholder) { inp.placeholder = this.placeholder; inp.setAttribute('aria-label', this.placeholder); }
+        else ['placeholder', 'aria-label'].forEach(a => R4.util.tx(inp, 'r4.search', 'Buscar...', a));   // sem texto próprio: acompanha o idioma
+        root.append(inp);
       }
       this.list = el('div', { class: 'r4-tree-list' });
       root.append(this.list);
@@ -179,7 +190,7 @@
     _node(n, depth) {
       const kids = n.children || [];
       const row = el('div', { class: 'r4-node', style: { paddingLeft: 12 + depth * 16 + 'px' } }, [
-        el('span', { class: 'r4-arrow', text: kids.length ? '▸' : '' }),
+        el('span', { class: 'r4-arrow', 'aria-hidden': 'true' }, kids.length ? R4.icon('caret-right') : null),
         el('span', { class: 'r4-node-text', text: n.text }),
         n.badge ? el('span', { class: 'r4-badge', text: n.badge }) : null
       ]);
@@ -190,13 +201,10 @@
         wrap.append(box);
         const open = n.expanded !== false;
         wrap.classList.toggle('r4-open', open);
-        row.firstChild.textContent = open ? '▾' : '▸';
       }
       row.addEventListener('click', () => {
-        if (kids.length) {
-          const o = wrap.classList.toggle('r4-open');
-          row.firstChild.textContent = o ? '▾' : '▸';
-        } else this.select(n.id ?? n.text);
+        if (kids.length) wrap.classList.toggle('r4-open');   // a seta gira por CSS
+        else this.select(n.id ?? n.text);
       });
       this.nodeEls[n.id ?? n.text] = { node: n, row, wrap };
       return wrap;
@@ -217,7 +225,7 @@
         kids.forEach(k => { if (walk(this.nodeEls[k.id ?? k.text].wrap, k)) any = true; });
         const show = hit || any;
         wrap.hidden = !show;
-        if (kids.length && q) { wrap.classList.add('r4-open'); wrap.querySelector('.r4-arrow').textContent = '▾'; }
+        if (kids.length && q) wrap.classList.add('r4-open');
         return show;
       };
       this.nodes.forEach(n => walk(this.nodeEls[n.id ?? n.text].wrap, n));
@@ -226,7 +234,7 @@
     title: 'treepanel', description: 'Árvore hierárquica com filtro. É o menu lateral padrão da vitrine.',
     props: [
       { name: 'nodes', type: 'Array<{id,text,children,expanded,badge}>', default: '[]', desc: 'Nós da árvore; folhas disparam select.' },
-      { name: 'filterable', type: 'boolean', default: 'true', desc: 'Mostra campo de busca.' },
+      { name: 'filterable / placeholder', type: 'boolean / string', default: "true / ''", desc: 'Mostra campo de busca; placeholder vazio = "Buscar..." no idioma atual.' },
       { name: 'select(id) / filter(texto)', type: 'método', desc: 'Seleciona um nó / filtra a árvore.' }
     ],
     events: ['select']
@@ -270,10 +278,10 @@
   const fillTpl = (tpl, row) => String(tpl).replace(/\{(\w+)\}/g, (_, k) => String(row[k] ?? '').replace(/[;\r\n]/g, ' '));
 
   const Grid = R4.define('grid', {
-    config: { columns: [], data: [], pageSize: 0, filter: true, emptyText: 'Nenhum registro.', striped: true, src: '', method: 'GET', encrypt: false, params: null,
+    config: { columns: [], data: [], pageSize: 0, filter: true, emptyText: '', striped: true, src: '', method: 'GET', encrypt: false, params: null,
       virtual: false, virtualThreshold: 1000, rowHeight: 36, height: 0, selectable: '', idProperty: 'id', remote: false,
-      resizable: false, columnMenu: false, exportable: false, exportName: 'dados', summaryLabel: 'Total',
-      loadingText: 'Carregando...', errorText: 'Falha ao carregar.' },
+      resizable: false, columnMenu: false, exportable: false, exportName: 'dados', summaryLabel: '',
+      loadingText: '', errorText: '' },   // '' = texto padrão no idioma atual (R4.i18n)
     build() {
       const root = el('div', { class: 'r4-grid' });
       this.sortKey = null; this.sortDir = 1; this.page = 0; this.q = '';
@@ -281,7 +289,8 @@
       this._ver = 0; this._pv = 0; this._pool = []; this._view = []; this._rows = []; this._base = 0; this._count = 0; this._total = 0; this._seq = 0;
       const bar = el('div', { class: 'r4-grid-bar' });
       if (this.filter) {
-        this.filterEl = el('input', { class: 'r4-input', type: 'search', placeholder: 'Filtrar...', 'aria-label': 'Filtrar registros' });
+        this.filterEl = el('input', { class: 'r4-input', type: 'search' });
+        tx(this.filterEl, 'r4.filter', 'Filtrar...', 'placeholder'); tx(this.filterEl, 'r4.grid.filterLabel', 'Filtrar registros', 'aria-label');
         this.filterEl.addEventListener('input', () => {
           clearTimeout(this._qt);
           this._qt = setTimeout(() => this.setFilter(this.filterEl.value), this.remote ? 300 : 120);
@@ -290,9 +299,12 @@
       }
       if (this.columnMenu || this.exportable) {
         bar.append(el('span', { class: 'r4-fill' }));
-        const tool = (k, t, l) => el('button', { type: 'button', class: 'r4-btn r4-grid-tool', 'data-menu': k, 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: l, text: t });
-        if (this.columnMenu) bar.append(tool('cols', '☰ Colunas', 'Mostrar ou ocultar colunas'));
-        if (this.exportable) bar.append(tool('export', '⇩ Exportar', 'Exportar os registros filtrados'));
+        const tool = (k, ico, t, tf, l, lf) => {
+          const b = el('button', { type: 'button', class: 'r4-btn r4-grid-tool', 'data-menu': k, 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, [R4.icon(ico), ' ', tx(el('span'), t, tf)]);
+          return tx(b, l, lf, 'title');
+        };
+        if (this.columnMenu) bar.append(tool('cols', 'list', 'r4.grid.cols', 'Colunas', 'r4.grid.colsTitle', 'Mostrar ou ocultar colunas'));
+        if (this.exportable) bar.append(tool('export', 'download', 'r4.grid.export', 'Exportar', 'r4.grid.exportTitle', 'Exportar os registros filtrados'));
         bar.addEventListener('click', ev => { const b = ev.target.closest('[data-menu]'); b && this._toggleMenu(b.getAttribute('data-menu'), b); });
       }
       if (bar.childNodes.length) root.append(bar);
@@ -306,7 +318,7 @@
       this.tbody.append(this._msg);
       this.table.append(this.thead, this._tTop, this.tbody, this._tBot, this.tfoot);
       this.scroller = el('div', { class: 'r4-grid-scroll' }, [this.table]);
-      this.mask = el('div', { class: 'r4-grid-mask', hidden: true }, [el('span', { class: 'r4-grid-spin', 'aria-hidden': 'true' }), el('span', { text: this.loadingText })]);
+      this.mask = el('div', { class: 'r4-grid-mask', hidden: true }, [el('span', { class: 'r4-grid-spin', 'aria-hidden': 'true' }), this.loadingText ? el('span', { text: this.loadingText }) : tx(el('span'), 'r4.loading', 'Carregando...')]);
       this.pager = el('div', { class: 'r4-pager' });
       root.append(this.scroller, this.mask, this.pager);
       root.style.setProperty('--r4-rh', this.rowHeight + 'px');
@@ -344,7 +356,7 @@
         const msg = r && !Array.isArray(r) && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message);
         // status de erro no corpo ({status: 500, ...}) também é falha — this.data só muda em caso de sucesso
         if ((r && !Array.isArray(r) && +r.status >= 400) || (!Array.isArray(rows) && msg)) throw new Error(msg || 'HTTP ' + r.status);
-        if (rows != null && !Array.isArray(rows)) throw new Error('Resposta sem lista de registros.');
+        if (rows != null && !Array.isArray(rows)) throw new Error(T('r4.grid.noList', 0, 'Resposta sem lista de registros.'));
         this._err = null;
         if (this.remote) this._setRemote(rows || [], r && r.total);
         else this.loadData(rows || []);
@@ -373,7 +385,7 @@
         const m = r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message);
         throw new Error('HTTP ' + res.status + (m ? ': ' + m : ''));
       }
-      if (bad) throw new Error('A resposta não é JSON válido.');
+      if (bad) throw new Error(T('r4.grid.badJson', 0, 'A resposta não é JSON válido.'));
       return r;
     },
     reload() { return this.load(); },
@@ -504,7 +516,7 @@
     _buildHead() {
       const tr = el('tr', { 'aria-rowindex': 1 }), s = this._sorters();
       if (this._multi) {
-        this._all = el('input', { type: 'checkbox', class: 'r4-check-all', tabindex: '-1', 'aria-label': 'Selecionar todos os registros filtrados' });
+        this._all = el('input', { type: 'checkbox', class: 'r4-check-all', tabindex: '-1', 'aria-label': T('r4.grid.selectAll', 0, 'Selecionar todos os registros filtrados') });
         tr.append(el('th', { class: 'r4-check-cell', tabindex: '-1' }, [this._all]));
       } else this._all = null;
       this._cols.forEach(c => {
@@ -517,10 +529,10 @@
           const i = s.findIndex(x => x.key === c.dataIndex);
           if (i >= 0) {
             th.setAttribute('aria-sort', s[i].dir > 0 ? 'ascending' : 'descending');
-            th.append(el('span', { class: 'r4-sort', text: (s[i].dir > 0 ? ' ▲' : ' ▼') + (s.length > 1 ? i + 1 : '') }));
+            th.append(el('span', { class: 'r4-sort', 'aria-hidden': 'true' }, [R4.icon(s[i].dir > 0 ? 'caret-up' : 'caret-down'), s.length > 1 ? String(i + 1) : '']));
           }
         }
-        if (this.resizable && c.resizable !== false) th.append(el('span', { class: 'r4-col-resize', title: 'Arraste para redimensionar', 'aria-hidden': 'true' }));
+        if (this.resizable && c.resizable !== false) th.append(el('span', { class: 'r4-col-resize', title: T('r4.grid.resize', 0, 'Arraste para redimensionar'), 'aria-hidden': 'true' }));
         tr.append(th);
       });
       this.thead.replaceChildren(tr);
@@ -546,9 +558,9 @@
       if (!rows.length) {
         this._msgTd.className = this._err ? 'r4-empty r4-grid-err' : 'r4-empty';
         this._msgTd.replaceChildren(...(this._err
-          ? [el('span', { text: this.errorText + (this._err.message ? ' (' + this._err.message + ')' : '') }), ' ',
-            this.src ? el('button', { type: 'button', class: 'r4-btn r4-grid-retry', text: '↻ Tentar de novo' }) : '']
-          : [this._loading ? this.loadingText : this.emptyText]));
+          ? [el('span', { text: (this.errorText || T('r4.loadFail', 0, 'Falha ao carregar.')) + (this._err.message ? ' (' + this._err.message + ')' : '') }), ' ',
+            this.src ? el('button', { type: 'button', class: 'r4-btn r4-grid-retry' }, [R4.icon('refresh'), ' ', tx(el('span'), 'r4.grid.retry', 'Tentar de novo')]) : '']
+          : [this._msgText()]));
       } else if (this._msgTd.firstChild) this._msgTd.replaceChildren();
       this._renderSummary(sum);
       this._renderPager();
@@ -649,7 +661,7 @@
           txt = v == null || (typeof v === 'number' && !isFinite(v)) ? ''
             : c.summary === 'count' ? R4.util.number(v, 0)
             : typeof v === 'number' && !c.format ? R4.util.number(v, Number.isInteger(v) ? 0 : 2) : fmtVal(c, v);
-        } else if (j === 0) txt = this.summaryLabel;
+        } else if (j === 0) txt = this.summaryLabel || T('r4.grid.total', 0, 'Total');
         tr.append(el('td', { text: txt, style: c.align ? { textAlign: c.align } : null }));
       });
       this.tfoot.replaceChildren(tr);
@@ -658,12 +670,12 @@
       const size = this._size(), total = this._count, show = !!size || this._v;
       this.pager.hidden = !show;
       if (!show) return;
-      if (!size) { this.pager.replaceChildren(el('span', { text: R4.util.number(total, 0) + ' registros' })); return; }
+      if (!size) { this.pager.replaceChildren(el('span', { text: T('r4.grid.count', { n: total, total: R4.util.number(total, 0) }, R4.util.number(total, 0) + ' registros') })); return; }
       const pages = Math.max(1, Math.ceil(total / size));
       this.pager.replaceChildren(
-        el('button', { type: 'button', class: 'r4-btn', disabled: this.page === 0, text: '‹', 'aria-label': 'Página anterior', onclick: () => this.setPage(this.page - 1) }),
-        el('span', { text: ` ${this.page + 1} / ${pages}  ·  ${total} registros ` }),
-        el('button', { type: 'button', class: 'r4-btn', disabled: this.page >= pages - 1, text: '›', 'aria-label': 'Próxima página', onclick: () => this.setPage(this.page + 1) }));
+        el('button', { type: 'button', class: 'r4-btn', disabled: this.page === 0, 'aria-label': T('r4.pager.prev', 0, 'Página anterior'), onclick: () => this.setPage(this.page - 1) }, [R4.icon('chevron-left')]),
+        el('span', { text: ' ' + T('r4.pager.info', { page: this.page + 1, pages, n: total }, `${this.page + 1} / ${pages}  ·  ${total} registros`) + ' ' }),
+        el('button', { type: 'button', class: 'r4-btn', disabled: this.page >= pages - 1, 'aria-label': T('r4.pager.next', 0, 'Próxima página'), onclick: () => this.setPage(this.page + 1) }, [R4.icon('chevron-right')]));
     },
     setPage(p) {
       const size = this._size(); if (!size) return this;
@@ -672,11 +684,15 @@
       if (this.remote) this.load(); else this._render();
       return this;
     },
+    /** Texto da linha de mensagem: carregando ou vazio (no idioma atual quando não definido). */
+    _msgText() { return this._loading ? (this.loadingText || T('r4.loading', 0, 'Carregando...')) : (this.emptyText || T('r4.empty', 0, 'Nenhum registro.')); },
+    /** Troca de idioma (R4.i18n.set): refaz cabeçalho, mensagens e paginação. */
+    relocalize() { this.refresh(); },
     _busy(on) {
       this._loading = on;
       this.el && this.el.setAttribute('aria-busy', on ? 'true' : 'false');
       this.mask.hidden = !on;
-      if (!this._rows.length && !this._err) this._msgTd.textContent = on ? this.loadingText : this.emptyText;
+      if (!this._rows.length && !this._err) this._msgTd.textContent = this._msgText();
     },
 
     /* ---------- seleção ---------- */
@@ -920,7 +936,7 @@
         input._opts = opts;
       } else input = el('input', { class: 'r4-input r4-cell-editor', type: type === 'number' ? 'number' : type === 'date' ? 'date' : 'text', step: type === 'number' ? 'any' : null });
       input.value = old == null ? '' : type === 'date' ? String(old).slice(0, 10) : String(old);
-      input.setAttribute('aria-label', 'Editar ' + (col.header ?? col.dataIndex));
+      input.setAttribute('aria-label', T('r4.grid.edit', { col: col.header ?? col.dataIndex }, 'Editar ' + (col.header ?? col.dataIndex)));
       this._editor = { input, td, tr: td.parentNode, row, col, ri, ci, old, type };
       td.classList.add('r4-editing');
       td.replaceChildren(input);
@@ -964,9 +980,9 @@
       if (!same) this._openMenu(kind, btn);
     },
     _openMenu(kind, btn) {
-      const m = el('div', { class: 'r4-grid-menu r4-cmp', role: 'menu', 'aria-label': kind === 'cols' ? 'Colunas' : 'Exportar' });
+      const m = el('div', { class: 'r4-grid-menu r4-cmp', role: 'menu', 'aria-label': kind === 'cols' ? T('r4.grid.cols', 0, 'Colunas') : T('r4.grid.export', 0, 'Exportar') });
       if (kind === 'export') {
-        [['csv', 'CSV (.csv)'], ['xlsx', 'Excel (.xlsx)'], ['json', 'JSON (.json)'], ['print', 'Imprimir']]
+        [['csv', 'CSV (.csv)'], ['xlsx', 'Excel (.xlsx)'], ['json', 'JSON (.json)'], ['print', T('r4.grid.print', 0, 'Imprimir')]]
           .forEach(([k, t]) => m.append(el('button', { type: 'button', role: 'menuitem', class: 'r4-grid-mi', 'data-k': k, text: t })));
       } else {
         this.columns.forEach((c, i) => {
@@ -974,7 +990,7 @@
           const cb = el('input', { type: 'checkbox', 'data-ci': i, tabindex: '-1' }); cb.checked = !c.hidden;
           m.append(el('label', { class: 'r4-grid-mi', role: 'menuitemcheckbox', tabindex: '-1', 'aria-checked': String(!c.hidden) }, [cb, el('span', { text: c.header ?? c.dataIndex })]));
         });
-        if (this._sorters().length) m.append(el('button', { type: 'button', role: 'menuitem', class: 'r4-grid-mi', 'data-k': 'unsort', text: 'Limpar ordenação' }));
+        if (this._sorters().length) m.append(el('button', { type: 'button', role: 'menuitem', class: 'r4-grid-mi', 'data-k': 'unsort', text: T('r4.grid.unsort', 0, 'Limpar ordenação') }));
       }
       m.addEventListener('change', ev => {
         const i = ev.target.getAttribute('data-ci'); if (i == null) return;
@@ -1056,7 +1072,7 @@
     print(title) {
       this._printFrame && this._printFrame.remove();
       // sandbox sem allow-scripts: mesmo que algo escapasse do esc(), nada executa no iframe de impressão
-      const f = el('iframe', { class: 'r4-print-frame', title: 'Impressão', 'aria-hidden': 'true', tabindex: '-1', sandbox: 'allow-same-origin allow-modals' });
+      const f = el('iframe', { class: 'r4-print-frame', title: T('r4.grid.printing', 0, 'Impressão'), 'aria-hidden': 'true', tabindex: '-1', sandbox: 'allow-same-origin allow-modals' });
       f.addEventListener('load', () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.error('[R4] grid.print:', e); } }, { once: true });
       f.srcdoc = this._printHtml(title);
       document.body.append(f);
@@ -1093,7 +1109,7 @@
       { name: 'data', type: 'Array<object>', default: '[]', desc: 'Registros.' },
       { name: 'pageSize', type: 'number', default: '0', desc: 'Linhas por página (0 = sem paginação; no modo remoto o padrão é 25).' },
       { name: 'filter', type: 'boolean', default: 'true', desc: 'Barra de filtro (busca em todas as colunas, com atraso de digitação).' },
-      { name: 'striped / emptyText / height', type: "boolean / string / number", default: "true / 'Nenhum registro.' / 0", desc: 'Listras, texto de vazio, altura fixa da área de rolagem em px (0 = automática, máx. 420).' },
+      { name: 'striped / emptyText / height', type: "boolean / string / number", default: "true / '' / 0", desc: 'Listras, texto de vazio (vazio = "Nenhum registro." no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420).' },
       { name: 'virtual', type: 'boolean', default: 'false', desc: 'Renderiza só as linhas visíveis (altura fixa rowHeight). Liga sozinho sem paginação acima de virtualThreshold linhas.' },
       { name: 'virtualThreshold / rowHeight', type: 'number / number', default: '1000 / 36', desc: 'Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual.' },
       { name: 'selectable', type: "'' | 'single' | 'multi'", default: "''", desc: "multi adiciona coluna de caixas (a do cabeçalho seleciona todos os filtrados), Ctrl+clique alterna e Shift+clique seleciona intervalo." },
@@ -1102,7 +1118,7 @@
       { name: 'remote', type: 'boolean', default: 'false', desc: 'Paginação, ordenação e filtro no servidor: envia page (1…), size, sort, dir (asc|desc), q e lê {total, retorno}. Multi-coluna envia só o critério principal.' },
       { name: 'resizable / columnMenu', type: 'boolean', default: 'false', desc: 'Arrastar a borda do cabeçalho (ou Alt+←/→ no cabeçalho) muda a largura; menu "Colunas" mostra/oculta colunas.' },
       { name: 'exportable / exportName', type: "boolean / string", default: "false / 'dados'", desc: 'Botão "Exportar" (CSV, Excel, JSON, imprimir) com as linhas filtradas/ordenadas e colunas visíveis.' },
-      { name: 'summaryLabel / loadingText / errorText', type: 'string', default: "'Total' / 'Carregando...' / 'Falha ao carregar.'", desc: 'Textos do rodapé e dos estados.' },
+      { name: 'summaryLabel / loadingText / errorText', type: 'string', default: "'' / '' / ''", desc: 'Textos do rodapé e dos estados. Vazio = texto padrão no idioma atual (Total / Carregando... / Falha ao carregar.).' },
       { name: 'loadData(array) / getData() / getView()', type: 'método', desc: 'Substitui os dados / dados atuais (com edições) / linhas filtradas e ordenadas.' },
       { name: 'sort(campo, dir, somar) / setSorters([{key,dir}]) / getSorters()', type: 'método', desc: 'Ordenação por código; somar=true acrescenta critério (multi-coluna).' },
       { name: 'setFilter(texto) / setPage(n) / reload()', type: 'método', desc: 'Filtro, página (0…) e recarga.' },
@@ -1149,7 +1165,7 @@
     build() {
       const win = el('div', { class: 'r4-window', style: { width: this.width + 'px' }, role: 'dialog' });
       const head = el('div', { class: 'r4-header' }, [el('span', { class: 'r4-title', text: this.title })]);
-      if (this.closable) head.append(el('span', { class: 'r4-tool', text: '×', onclick: () => this.close() }));
+      if (this.closable) head.append(tx(R4.util.icon(el('span', { class: 'r4-tool', onclick: () => this.close() }), 'close'), 'r4.close', 'Fechar', 'title'));
       this.body = el('div', { class: 'r4-body r4-pad' });
       if (this.html) this.body.innerHTML = this.html;
       this.renderItems(this.body, this.items);
@@ -1210,11 +1226,11 @@
   R4.module('msg', {
     alert(title, text, cb) {
       return R4.create({ xtype: 'window', title, html: '<p>' + esc(text) + '</p>', width: 360,
-        buttons: [{ text: 'OK', variant: 'primary', handler: () => cb && cb() }] }).show();
+        buttons: [{ text: T('r4.ok', 0, 'OK'), variant: 'primary', handler: () => cb && cb() }] }).show();
     },
     confirm(title, text, cb) {
       return R4.create({ xtype: 'window', title, html: '<p>' + esc(text) + '</p>', width: 380,
-        buttons: [{ text: 'Cancelar', handler: () => cb && cb(false) }, { text: 'Sim', variant: 'primary', handler: () => cb && cb(true) }] }).show();
+        buttons: [{ text: T('r4.cancel', 0, 'Cancelar'), handler: () => cb && cb(false) }, { text: T('r4.yes', 0, 'Sim'), variant: 'primary', handler: () => cb && cb(true) }] }).show();
     }
   }, {
     title: 'R4.msg', group: 'Núcleo', description: 'Atalhos de diálogo baseados em window.',
@@ -1279,8 +1295,8 @@
     cfg: { data: [{ id: 1, nome: 'Ana', uf: 'SP', valor: 1200 }, { id: 2, nome: 'Bruno', uf: 'RJ', valor: 830.5 }, { id: 3, nome: 'Carla', uf: 'SP', valor: 2210 }, { id: 4, nome: 'Davi', uf: 'MG', valor: 95 }],
       columns: [{ header: 'Nome', dataIndex: 'nome', editable: true }, { header: 'UF', dataIndex: 'uf', width: 80, editable: { options: ['SP', 'RJ', 'MG'] } },
         { header: 'Valor', dataIndex: 'valor', format: 'money', align: 'right', editable: 'number', summary: 'sum' }] },
-    controls: { selectable: ['', 'single', 'multi'], pageSize: 0, filter: true, striped: true, resizable: false, columnMenu: false, exportable: false, virtual: false, summaryLabel: 'Total', emptyText: 'Nenhum registro.' } });
+    controls: { selectable: ['', 'single', 'multi'], pageSize: 0, filter: true, striped: true, resizable: false, columnMenu: false, exportable: false, virtual: false, summaryLabel: '', emptyText: '' } });
   PG('treepanel', { html: '<r4-treepanel{attrs} style="height:180px">\n  <r4-node text="Frutas"><r4-node id="pg-a" text="Maçã"></r4-node><r4-node id="pg-b" text="Banana"></r4-node></r4-node>\n</r4-treepanel>',
     cfg: { nodes: [{ text: 'Frutas', children: [{ id: 'a', text: 'Maçã' }, { id: 'b', text: 'Banana' }] }] },
-    controls: { filterable: true, placeholder: 'Buscar...' } });
+    controls: { filterable: true, placeholder: '' } });
 })(window.R4);

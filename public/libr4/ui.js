@@ -20,6 +20,7 @@
 (function (R4) {
   'use strict';
   const U = R4.util, el = U.el;
+  const T = U.T;   // R4.t com reserva (theme.js carrega por último; resolvido em tempo de uso)
 
   /* ---------------------------------------------------------------- *
    * Auxiliares
@@ -37,7 +38,7 @@
   const VARIANTS = ['default', 'primary', 'ok', 'warn', 'err', 'info'];
   const ALIAS = { success: 'ok', sucesso: 'ok', warning: 'warn', aviso: 'warn', error: 'err', erro: 'err', danger: 'err', perigo: 'err', secondary: 'default', neutral: 'default' };
   const variantOf = v => { v = String(v || 'default').toLowerCase(); v = ALIAS[v] || v; return VARIANTS.includes(v) ? v : 'default'; };
-  const ICONS = { info: 'ℹ', ok: '✔', warn: '⚠', err: '✖' };
+  const ICONS = { info: 'info', ok: 'success', warn: 'warning', err: 'error' };   // nomes de R4.icon
 
   /** Só deixa passar URLs de navegação seguras (nada de javascript:, data:, vbscript:). */
   const safeUrl = u => {
@@ -267,10 +268,10 @@
     _norm() { this._items = (this.items || []).map(it => typeof it === 'string' ? (it === '-' ? { divider: true } : { text: it }) : it); },
     _label() {
       this.btn.replaceChildren();
-      if (this.icon) this.btn.append(el('span', { class: 'r4-ico', 'aria-hidden': 'true', text: this.icon }));
+      if (this.icon) this.btn.append(U.icon(el('span', { class: 'r4-ico', 'aria-hidden': 'true' }), this.icon));
       if (this.text) this.btn.append(el('span', { text: this.text }));
       if (this.caret) this.btn.append(el('span', { class: 'r4-dd-caret', 'aria-hidden': 'true' }));
-      if (this.text) this.btn.removeAttribute('aria-label'); else this.btn.setAttribute('aria-label', this.menuLabel || 'Menu');
+      if (this.text) this.btn.removeAttribute('aria-label'); else this.btn.setAttribute('aria-label', this.menuLabel || T('r4.ui.menu', 0, 'Menu'));
     },
     _menu() {
       if (this._menuEl) return this._menuEl;
@@ -281,7 +282,7 @@
         const b = el(href ? 'a' : 'button', { class: 'r4-dd-item' + (it.disabled ? ' r4-dis' : '') + (it.danger ? ' r4-dd-danger' : ''), role: 'menuitem', tabindex: '-1', 'data-i': i,
           href: href || null, type: href ? null : 'button', disabled: !href && it.disabled, 'aria-disabled': it.disabled ? 'true' : null,
           'r4-click': it['r4-click'] || null, 'r4-confirm': it['r4-confirm'] || null }, [
-          el('span', { class: 'r4-dd-ico', 'aria-hidden': 'true', text: it.icon || '' }), el('span', { class: 'r4-dd-txt', text: it.text == null ? '' : it.text })]);
+          U.icon(el('span', { class: 'r4-dd-ico', 'aria-hidden': 'true' }), it.icon || ''), el('span', { class: 'r4-dd-txt', text: it.text == null ? '' : it.text })]);
         m.append(b);
       });
       m.addEventListener('click', ev => {
@@ -370,7 +371,7 @@
     title: 'dropdown', group: 'Interface',
     description: 'Botão com menu suspenso. Teclado: ↑ ↓ Home End navegam, Enter/Espaço ativam, Esc fecha, letra salta para o item. Fecha ao clicar fora e nunca vaza da tela (inverte para cima ou alinha à direita).',
     props: [
-      { name: 'text / icon', type: 'string', default: "''", desc: 'Rótulo e ícone do botão.' },
+      { name: 'text / icon', type: 'string', default: "''", desc: 'Rótulo e ícone do botão (nome de R4.icon ou texto/emoji; o mesmo vale para icon dos itens).' },
       { name: 'items', type: "Array<{text, icon, handler, disabled, divider, danger, href, 'r4-click', 'r4-confirm'}>", default: '[]', desc: "Itens do menu; '-' ou {divider:true} é separador. 'r4-click' usa as ações declarativas (toast:, notify:, modal:...). Em HTML: <r4-item text icon disabled divider r4-click>." },
       { name: 'variant', type: "'default'|'primary'|'danger'", default: "'default'", desc: 'Cor do botão.' },
       { name: 'align', type: "'left'|'right'", default: "'left'", desc: 'Lado em que o menu se alinha ao botão.' },
@@ -430,8 +431,8 @@
       else this.fill.style.width = ind ? '' : p + '%';
       const b = this.bar;
       b.setAttribute('aria-valuemax', String(num(this.max, 100)));
-      if (this.label) { b.setAttribute('aria-labelledby', this.labelEl.id); b.removeAttribute('aria-label'); } else { b.removeAttribute('aria-labelledby'); b.setAttribute('aria-label', 'Progresso'); }
-      if (ind) { b.removeAttribute('aria-valuenow'); b.removeAttribute('aria-valuetext'); b.setAttribute('aria-valuetext', 'Carregando'); }
+      if (this.label) { b.setAttribute('aria-labelledby', this.labelEl.id); b.removeAttribute('aria-label'); } else { b.removeAttribute('aria-labelledby'); b.setAttribute('aria-label', T('r4.ui.progress', 0, 'Progresso')); }
+      if (ind) { b.removeAttribute('aria-valuenow'); b.removeAttribute('aria-valuetext'); b.setAttribute('aria-valuetext', T('r4.ui.loadingShort', 0, 'Carregando')); }
       else { b.setAttribute('aria-valuenow', String(num(this.value))); b.setAttribute('aria-valuetext', Math.round(p) + '%'); }
       b.setAttribute('aria-busy', ind ? 'true' : 'false');
     },
@@ -473,13 +474,13 @@
    * ================================================================ */
   R4.define('spinner', {
     extend: 'uibase',
-    config: { text: '', size: 'md', variant: 'primary', label: 'Carregando' },
+    config: { text: '', size: 'md', variant: 'primary', label: '' },
     build() {
       const root = el('span', { class: 'r4-spin r4-spin-' + this.size + ' r4-v-' + variantOf(this.variant), role: 'status' }, [el('span', { class: 'r4-spin-ring', 'aria-hidden': 'true' })]);
-      root.append(this.text ? el('span', { class: 'r4-spin-text', text: this.text }) : sr(this.label || 'Carregando'));
+      root.append(this.text ? el('span', { class: 'r4-spin-text', text: this.text }) : sr(this.label || T('r4.ui.loadingShort', 0, 'Carregando')));
       return root;
     },
-    setText(t) { this.text = t; const x = this.el.querySelector('.r4-spin-text, .r4-sr'); x && x.replaceWith(t ? el('span', { class: 'r4-spin-text', text: t }) : sr(this.label)); return this; }
+    setText(t) { this.text = t; const x = this.el.querySelector('.r4-spin-text, .r4-sr'); x && x.replaceWith(t ? el('span', { class: 'r4-spin-text', text: t }) : sr(this.label || T('r4.ui.loadingShort', 0, 'Carregando'))); return this; }
   }, {
     title: 'spinner', group: 'Interface',
     description: 'Indicador de carregamento giratório com role="status". Para cobrir uma área inteira use R4.mask(alvo, texto).',
@@ -487,7 +488,7 @@
       { name: 'text', type: 'string', default: "''", desc: 'Texto ao lado do indicador. Sem texto, o rótulo fica só para leitores de tela.' },
       { name: 'size', type: "'sm'|'md'|'lg'", default: "'md'", desc: 'Tamanho.' },
       { name: 'variant', type: "'default'|'primary'|'ok'|'warn'|'err'|'info'", default: "'primary'", desc: 'Cor.' },
-      { name: 'label', type: 'string', default: "'Carregando'", desc: 'Texto anunciado por leitores de tela quando não há text.' }
+      { name: 'label', type: 'string', default: "''", desc: 'Texto anunciado por leitores de tela quando não há text (vazio = "Carregando" no idioma atual).' }
     ]
   });
 
@@ -496,9 +497,9 @@
    * ================================================================ */
   R4.define('skeleton', {
     extend: 'uibase',
-    config: { type: 'lines', lines: 3, rows: 3, width: '', height: '', animated: true, label: 'Carregando conteúdo' },
+    config: { type: 'lines', lines: 3, rows: 3, width: '', height: '', animated: true, label: '' },
     build() {
-      const root = el('div', { class: 'r4-sk r4-sk-' + this.type + (this.animated ? '' : ' r4-sk-still'), role: 'status', 'aria-busy': 'true', 'aria-label': this.label });
+      const root = el('div', { class: 'r4-sk r4-sk-' + this.type + (this.animated ? '' : ' r4-sk-still'), role: 'status', 'aria-busy': 'true', 'aria-label': this.label || T('r4.ui.loadingContent', 0, 'Carregando conteúdo') });
       const bar = (w, h) => el('span', { class: 'r4-sk-bar', 'aria-hidden': 'true', style: { width: w || '', height: h || '' } });
       const lines = n => Array.from({ length: Math.max(1, n) }, (_, i) => bar(i === n - 1 && n > 1 ? '60%' : '100%'));
       const avatar = () => el('div', { class: 'r4-sk-row', 'aria-hidden': 'true' }, [
@@ -524,7 +525,7 @@
       { name: 'rows', type: 'number', default: '3', desc: 'Itens da lista (type list).' },
       { name: 'width / height', type: 'string', default: "''", desc: 'Tamanho CSS (ex.: "200px", "50%").' },
       { name: 'animated', type: 'boolean', default: 'true', desc: 'Brilho em movimento (desligado com prefers-reduced-motion).' },
-      { name: 'label', type: 'string', default: "'Carregando conteúdo'", desc: 'Texto para leitores de tela.' }
+      { name: 'label', type: 'string', default: "''", desc: 'Texto para leitores de tela (vazio = "Carregando conteúdo" no idioma atual).' }
     ]
   });
 
@@ -549,7 +550,7 @@
     afterRender() { this.src && this.load(); },
     _sync() {
       this.titleEl.textContent = this.title || '';
-      this.iconEl.textContent = this.icon || ''; this.iconEl.hidden = !this.icon;
+      U.icon(this.iconEl, this.icon || ''); this.iconEl.hidden = !this.icon;
       const v = this.loading ? '…' : this.value === '' || this.value == null ? '—' : fmt(this.value, this.format, this.decimals);
       this.valueEl.textContent = (this.loading ? '' : this.prefix || '') + v + (this.loading ? '' : this.suffix || '');
       const c = this.change === '' || this.change == null ? null : Number(this.change);
@@ -559,8 +560,8 @@
       if (has) {
         const dir = c > 0 ? 'up' : c < 0 ? 'down' : 'flat', good = dir === 'flat' ? null : (dir === 'up') !== !!this.invert;
         this.changeEl.className = 'r4-stat-change r4-' + (good === null ? 'flat' : good ? 'pos' : 'neg') + ' r4-' + dir;
-        this.changeEl.replaceChildren(el('span', { class: 'r4-stat-arrow', 'aria-hidden': 'true', text: dir === 'up' ? '▲' : dir === 'down' ? '▼' : '■' }),
-          sr(dir === 'up' ? 'Aumento de ' : dir === 'down' ? 'Queda de ' : 'Sem variação: '), document.createTextNode(U.number(Math.abs(c), Number.isInteger(c) ? 0 : 1) + '%'));
+        this.changeEl.replaceChildren(el('span', { class: 'r4-stat-arrow', 'aria-hidden': 'true' }, [R4.icon(dir === 'up' ? 'caret-up' : dir === 'down' ? 'caret-down' : 'square')]),
+          sr(dir === 'up' ? T('r4.ui.up', 0, 'Aumento de ') : dir === 'down' ? T('r4.ui.down', 0, 'Queda de ') : T('r4.ui.flat', 0, 'Sem variação: ')), document.createTextNode(U.number(Math.abs(c), Number.isInteger(c) ? 0 : 1) + '%'));
       }
       this.el && this.el.setAttribute('aria-busy', this.loading ? 'true' : 'false');
     },
@@ -593,7 +594,7 @@
       { name: 'change', type: 'number', default: "''", desc: 'Variação em %: positiva (verde, ▲) ou negativa (vermelha, ▼).' },
       { name: 'invert', type: 'boolean', default: 'false', desc: 'Inverte as cores da variação (quando queda é bom, como cancelamentos).' },
       { name: 'changeText', type: 'string', default: "''", desc: 'Texto ao lado da variação ("vs. mês anterior").' },
-      { name: 'icon / prefix / suffix', type: 'string', default: "''", desc: 'Ícone no canto e textos antes/depois do valor.' },
+      { name: 'icon / prefix / suffix', type: 'string', default: "''", desc: 'Ícone no canto (nome de R4.icon ou texto/emoji) e textos antes/depois do valor.' },
       { name: 'variant', type: "'default'|'primary'|'ok'|'warn'|'err'|'info'", default: "'default'", desc: 'Cor de destaque.' },
       { name: 'src / key', type: 'string', default: "''", desc: 'URL JSON (array de { titulo, valor, variacao, formato }); key escolhe o indicador pelo id (senão o primeiro).' },
       { name: 'setData(obj) / setValue(v) / reload()', type: 'método', desc: 'Atualizações.' }
@@ -650,9 +651,9 @@
    * ================================================================ */
   R4.define('pagination', {
     extend: 'uibase',
-    config: { total: 0, pageSize: 10, page: 1, siblings: 1, info: false, label: 'Paginação' },
+    config: { total: 0, pageSize: 10, page: 1, siblings: 1, info: false, label: '' },
     build() {
-      const nav = el('nav', { class: 'r4-pgn', 'aria-label': this.label });
+      const nav = el('nav', { class: 'r4-pgn', 'aria-label': this.label || T('r4.ui.pagination', 0, 'Paginação') });
       this.list = el('ul', { class: 'r4-pgn-list' });
       this.infoEl = el('span', { class: 'r4-pgn-info', 'aria-live': 'polite' });
       nav.append(this.list, this.infoEl);
@@ -682,19 +683,20 @@
     _render() {
       const focused = this.list.contains(document.activeElement), had = focused && document.activeElement.dataset.page;
       const last = this.pages(), cur = this.page, frag = document.createDocumentFragment();
-      const btn = (cls, label, text, page, disabled) => el('li', {}, [el('button', { type: 'button', class: 'r4-pgn-btn ' + cls, 'data-page': page, 'aria-label': label, disabled, 'aria-current': page === String(cur) && cls.includes('r4-cur') ? 'page' : null, text })]);
-      frag.append(btn('r4-pgn-nav', 'Página anterior', '‹', 'prev', cur <= 1));
+      const btn = (cls, label, text, page, disabled) => el('li', {}, [el('button', { type: 'button', class: 'r4-pgn-btn ' + cls, 'data-page': page, 'aria-label': label, disabled, 'aria-current': page === String(cur) && cls.includes('r4-cur') ? 'page' : null }, [text])]);
+      frag.append(btn('r4-pgn-nav', T('r4.pager.prev', 0, 'Página anterior'), R4.icon('chevron-left'), 'prev', cur <= 1));
       windowPages(cur, last, Math.max(0, num(this.siblings, 1))).forEach(p => {
         if (p === '…') frag.append(el('li', { class: 'r4-pgn-gap', 'aria-hidden': 'true', text: '…' }));
-        else frag.append(btn(p === cur ? 'r4-cur' : '', p === cur ? 'Página ' + p + ', atual' : 'Ir para a página ' + p, String(p), String(p), false));
+        else frag.append(btn(p === cur ? 'r4-cur' : '', p === cur ? T('r4.pager.current', { page: p }, 'Página ' + p + ', atual') : T('r4.pager.goto', { page: p }, 'Ir para a página ' + p), String(p), String(p), false));
       });
-      frag.append(btn('r4-pgn-nav', 'Próxima página', '›', 'next', cur >= last));
+      frag.append(btn('r4-pgn-nav', T('r4.pager.next', 0, 'Próxima página'), R4.icon('chevron-right'), 'next', cur >= last));
       this.list.replaceChildren(frag);
       const i = this.getInfo();
       this.infoEl.hidden = !this.info;
-      this.infoEl.textContent = i.total ? i.from + '–' + i.to + ' de ' + i.total : 'Nenhum registro';
+      this.infoEl.textContent = i.total ? T('r4.pager.range', { from: i.from, to: i.to, total: i.total }, i.from + '–' + i.to + ' de ' + i.total) : T('r4.pager.none', 0, 'Nenhum registro');
       if (focused) { const f = this.list.querySelector('button[data-page="' + had + '"]:not(:disabled)') || this.list.querySelector('.r4-cur'); f && f.focus(); }
     },
+    relocalize() { this._render(); },
     setPage(p, silent) {
       p = this._clamp(p);
       if (p === this.page) return this;
@@ -729,9 +731,9 @@
    * ================================================================ */
   R4.define('breadcrumb', {
     extend: 'uibase',
-    config: { items: [], separator: '/', label: 'Trilha de navegação' },
+    config: { items: [], separator: '/', label: '' },
     build() {
-      const nav = el('nav', { class: 'r4-bc', 'aria-label': this.label });
+      const nav = el('nav', { class: 'r4-bc', 'aria-label': this.label || T('r4.ui.crumbs', 0, 'Trilha de navegação') });
       nav.style.setProperty('--r4-bc-sep', JSON.stringify(String(this.separator)));
       this.ol = el('ol', { class: 'r4-bc-list' });
       nav.append(this.ol);
@@ -749,7 +751,7 @@
       this._its = (this.items || []).map(it => typeof it === 'string' ? { text: it } : it);
       const n = this._its.length, frag = document.createDocumentFragment();
       this._its.forEach((it, i) => {
-        const label = [it.icon ? el('span', { class: 'r4-ico', 'aria-hidden': 'true', text: it.icon }) : null, el('span', { text: it.text == null ? '' : it.text })];
+        const label = [it.icon ? U.icon(el('span', { class: 'r4-ico', 'aria-hidden': 'true' }), it.icon) : null, el('span', { text: it.text == null ? '' : it.text })];
         const href = it.href ? safeUrl(it.href) : '', link = href || it['r4-click'] || it.handler;
         let node;
         if (i === n - 1 || !link) node = el('span', { class: 'r4-bc-cur', 'aria-current': i === n - 1 ? 'page' : null }, label);
@@ -765,7 +767,7 @@
     props: [
       { name: 'items', type: "Array<string | {text, href, icon, handler, 'r4-click'}>", default: '[]', desc: 'Itens, do mais geral ao mais específico. Em HTML: <r4-crumb href r4-click icon>texto</r4-crumb>.' },
       { name: 'separator', type: 'string', default: "'/'", desc: 'Caractere entre os itens.' },
-      { name: 'label', type: 'string', default: "'Trilha de navegação'", desc: 'Nome acessível do <nav>.' },
+      { name: 'label', type: 'string', default: "''", desc: 'Nome acessível do <nav> (vazio = "Trilha de navegação" no idioma atual).' },
       { name: 'setItems(itens)', type: 'método', desc: 'Troca a trilha.' }
     ],
     events: ['itemclick']
@@ -781,14 +783,14 @@
    * ================================================================ */
   R4.define('steps', {
     extend: 'uibase',
-    config: { steps: [], active: 0, clickable: false, orientation: 'horizontal', label: 'Etapas' },
+    config: { steps: [], active: 0, clickable: false, orientation: 'horizontal', label: '' },
     build() {
       const root = el('div', { class: 'r4-steps r4-steps-' + (this.orientation === 'vertical' ? 'v' : 'h') });
       this.data = (this.steps || []).map(s => typeof s === 'string' ? { title: s } : Object.assign({}, s));
       this.errors = new Set(); this.data.forEach((s, i) => s.error && this.errors.add(i));
       this.finished = false;
       this.active = clamp(Math.floor(num(this.active)), 0, Math.max(0, this.data.length - 1));
-      this.list = el('ol', { class: 'r4-steps-list', 'aria-label': this.label });
+      this.list = el('ol', { class: 'r4-steps-list', 'aria-label': this.label || T('r4.ui.steps', 0, 'Etapas') });
       root.append(this.list);
       if (this.data.some(s => s.html)) {
         this.bodies = this.data.map(s => el('div', { class: 'r4-steps-panel', role: 'region', 'aria-label': s.title || '', html: s.html || null }));
@@ -813,9 +815,9 @@
       this.data.forEach((s, i) => {
         const err = this.errors.has(i), done = !err && (i < this.active || this.finished), cur = i === this.active && !this.finished;
         const state = err ? 'err' : done ? 'done' : cur ? 'cur' : 'todo';
-        const inner = [el('span', { class: 'r4-step-dot', 'aria-hidden': 'true', text: err ? '!' : done ? '✓' : String(i + 1) }),
-          el('span', { class: 'r4-step-txt' }, [el('span', { class: 'r4-step-title', text: s.title || 'Etapa ' + (i + 1) }), s.text ? el('span', { class: 'r4-step-desc', text: s.text }) : null,
-            sr(err ? ' (com erro)' : done ? ' (concluída)' : '')])];
+        const inner = [el('span', { class: 'r4-step-dot', 'aria-hidden': 'true' }, [err ? '!' : done ? R4.icon('check') : String(i + 1)]),
+          el('span', { class: 'r4-step-txt' }, [el('span', { class: 'r4-step-title', text: s.title || T('r4.ui.step', { n: i + 1 }, 'Etapa ' + (i + 1)) }), s.text ? el('span', { class: 'r4-step-desc', text: s.text }) : null,
+            sr(err ? T('r4.ui.stepErr', 0, ' (com erro)') : done ? T('r4.ui.stepDone', 0, ' (concluída)') : '')])];
         const box = this.clickable ? el('button', { type: 'button', class: 'r4-step-btn', 'data-i': i }, inner) : el('div', { class: 'r4-step-btn' }, inner);
         frag.append(el('li', { class: 'r4-step r4-step-' + state, 'aria-current': cur ? 'step' : null }, [box]));
       });
@@ -866,9 +868,9 @@
    * ================================================================ */
   R4.define('timeline', {
     extend: 'uibase',
-    config: { items: [], src: '', order: '', limit: 0, label: 'Linha do tempo' },
+    config: { items: [], src: '', order: '', limit: 0, label: '' },
     build() {
-      this.ol = el('ol', { class: 'r4-tl', 'aria-label': this.label });
+      this.ol = el('ol', { class: 'r4-tl', 'aria-label': this.label || T('r4.ui.timeline', 0, 'Linha do tempo') });
       this._render();
       return this.ol;
     },
@@ -889,9 +891,9 @@
           el('div', { class: 'r4-tl-head' }, [el('strong', { class: 'r4-tl-title', text: it.title == null ? '' : it.title }),
             d ? el('time', { class: 'r4-tl-date', datetime: t ? (isoDay.test(it.date) ? it.date : new Date(t).toISOString()) : null, text: d }) : null])]);
         if (it.html) body.append(el('div', { class: 'r4-tl-text', html: it.html })); else if (it.text) body.append(el('p', { class: 'r4-tl-text', text: it.text }));
-        frag.append(el('li', { class: 'r4-tl-item r4-v-' + variantOf(it.variant) }, [el('span', { class: 'r4-tl-mark', 'aria-hidden': 'true', text: it.icon || '' }), body]));
+        frag.append(el('li', { class: 'r4-tl-item r4-v-' + variantOf(it.variant) }, [U.icon(el('span', { class: 'r4-tl-mark', 'aria-hidden': 'true' }), it.icon || ''), body]));
       });
-      if (!list.length) frag.append(el('li', { class: 'r4-tl-empty', text: 'Nenhum evento.' }));
+      if (!list.length) frag.append(el('li', { class: 'r4-tl-empty', text: T('r4.ui.noEvents', 0, 'Nenhum evento.') }));
       this.ol.replaceChildren(frag);
     },
     setItems(list) { this.items = rowsOf(list); this._render(); return this; },
@@ -935,7 +937,7 @@
     build() {
       const v = variantOf(this.variant), urgent = v === 'err' || v === 'warn';
       const root = el('div', { class: 'r4-al r4-v-' + (v === 'default' ? 'info' : v), role: urgent ? 'alert' : 'status' });
-      if (this.showIcon) root.append(el('span', { class: 'r4-al-ico', 'aria-hidden': 'true', text: this.icon || ICONS[v] || ICONS.info }));
+      if (this.showIcon) root.append(U.icon(el('span', { class: 'r4-al-ico', 'aria-hidden': 'true' }), this.icon || ICONS[v] || ICONS.info));
       const main = el('div', { class: 'r4-al-main' });
       if (this.title) main.append(el('strong', { class: 'r4-al-title', text: this.title }));
       this.body = el('div', { class: 'r4-al-text' });
@@ -943,7 +945,7 @@
       main.append(this.body);
       root.append(main);
       if (this.closable) {
-        root.append(el('button', { type: 'button', class: 'r4-al-x', 'aria-label': 'Fechar aviso', text: '×', onclick: () => this.close() }));
+        root.append(el('button', { type: 'button', class: 'r4-al-x', 'aria-label': T('r4.ui.closeAlert', 0, 'Fechar aviso'), onclick: () => this.close() }, [R4.icon('close')]));
       }
       return root;
     },
@@ -962,7 +964,7 @@
       { name: 'title', type: 'string', default: "''", desc: 'Título em negrito.' },
       { name: 'text / html', type: 'string', default: "''", desc: 'Mensagem em texto puro ou HTML confiável (em tag: o conteúdo).' },
       { name: 'closable', type: 'boolean', default: 'false', desc: 'Mostra o botão ×.' },
-      { name: 'showIcon / icon', type: 'boolean / string', default: "true / ''", desc: 'Ícone (padrão por variante).' },
+      { name: 'showIcon / icon', type: 'boolean / string', default: "true / ''", desc: 'Ícone: nome de R4.icon ou texto/emoji (padrão por variante: info, success, warning, error).' },
       { name: 'closeAction', type: "'destroy'|'hide'", default: "'destroy'", desc: 'Remove o aviso ou só o esconde.' },
       { name: 'close() / setText(t)', type: 'método', desc: 'Fecha / troca a mensagem.' }
     ],
@@ -990,12 +992,12 @@
       r.classList.toggle('r4-pill', !!this.pill); r.classList.toggle('r4-bdg-out', !!this.outline);
       r.replaceChildren();
       if (this.dot) r.append(el('span', { class: 'r4-bdg-dot', 'aria-hidden': 'true' }));
-      if (this.icon) r.append(el('span', { class: 'r4-ico', 'aria-hidden': 'true', text: this.icon }));
+      if (this.icon) r.append(U.icon(el('span', { class: 'r4-ico', 'aria-hidden': 'true' }), this.icon));
       if (t !== '' && t != null) r.append(document.createTextNode(t));
       else if (this.html) r.insertAdjacentHTML('beforeend', this.html);
       const pure = this.dot && t === '' && !this.html;
       r.classList.toggle('r4-bdg-solo', pure);
-      if (pure || this.label) r.setAttribute('aria-label', this.label || 'Indicador'); else r.removeAttribute('aria-label');
+      if (pure || this.label) r.setAttribute('aria-label', this.label || T('r4.ui.indicator', 0, 'Indicador')); else r.removeAttribute('aria-label');
       if (pure) r.setAttribute('role', 'img'); else r.removeAttribute('role');
       this.xBtn && r.append(this.xBtn);
     },
@@ -1024,7 +1026,7 @@
       const r = R4.registry.badge.cls.prototype.build.call(this);
       if (this.closable) {
         r.classList.add('r4-tg-closable');
-        r.append(this.xBtn = el('button', { type: 'button', class: 'r4-tg-x', 'aria-label': 'Remover ' + (this.text || 'etiqueta'), text: '×', onclick: () => this.close() }));
+        r.append(this.xBtn = el('button', { type: 'button', class: 'r4-tg-x', 'aria-label': T('r4.form.remove', { item: this.text || T('r4.ui.tag', 0, 'etiqueta') }, 'Remover ' + (this.text || 'etiqueta')), onclick: () => this.close() }, [R4.icon('close')]));
       }
       return r;
     },
@@ -1052,7 +1054,7 @@
     config: { name: '', src: '', size: 'md', shape: 'circle', status: '', alt: '' },
     build() {
       const px = { xs: 24, sm: 28, md: 40, lg: 56, xl: 80 }[this.size] || (/^[0-9]+$/.test(String(this.size)) ? +this.size : 40);
-      const root = el('span', { class: 'r4-av r4-av-' + (['square', 'rounded'].includes(this.shape) ? this.shape : 'circle'), role: 'img', 'aria-label': this.alt || this.name || 'Avatar' });
+      const root = el('span', { class: 'r4-av r4-av-' + (['square', 'rounded'].includes(this.shape) ? this.shape : 'circle'), role: 'img', 'aria-label': this.alt || this.name || T('r4.ui.avatar', 0, 'Avatar') });
       root.style.width = root.style.height = px + 'px'; root.style.fontSize = Math.round(px * .4) + 'px';
       root.style.setProperty('--r4-av-h', String(hue(this.name)));
       this.ini = el('span', { class: 'r4-av-ini', 'aria-hidden': 'true', text: initials(this.name) || '?' });
@@ -1086,11 +1088,12 @@
    * ================================================================ */
   R4.define('emptystate', {
     extend: 'uibase',
-    config: { icon: '📭', title: 'Nada por aqui', text: '', html: '', actionText: '', actionVariant: 'primary', actionClick: '', handler: null, compact: false },
+    config: { icon: 'inbox', title: 'Nada por aqui',   // o título padrão acompanha o idioma
+      text: '', html: '', actionText: '', actionVariant: 'primary', actionClick: '', handler: null, compact: false },
     build() {
       const root = el('div', { class: 'r4-es' + (this.compact ? ' r4-es-compact' : '') });
-      if (this.icon) root.append(el('div', { class: 'r4-es-ico', 'aria-hidden': 'true', text: this.icon }));
-      if (this.title) root.append(el('h3', { class: 'r4-es-title', text: this.title }));
+      if (this.icon) root.append(U.icon(el('div', { class: 'r4-es-ico', 'aria-hidden': 'true' }), this.icon));
+      if (this.title) root.append(el('h3', { class: 'r4-es-title', text: this.title === 'Nada por aqui' ? T('r4.ui.nothing', 0, 'Nada por aqui') : this.title }));
       if (this.text) root.append(el('p', { class: 'r4-es-text', text: this.text }));
       if (this.html) root.append(el('div', { class: 'r4-es-text', html: this.html }));
       if (this.actionText) {
@@ -1104,7 +1107,7 @@
     title: 'emptystate', group: 'Interface',
     description: 'Estado vazio: ícone, título, texto e um botão de ação opcional. Use quando uma lista ou busca não tem resultados.',
     props: [
-      { name: 'icon / title / text', type: 'string', default: "'📭' / 'Nada por aqui' / ''", desc: 'Ícone, título e explicação. html aceita HTML confiável.' },
+      { name: 'icon / title / text', type: 'string', default: "'inbox' / 'Nada por aqui' / ''", desc: 'Ícone (nome de R4.icon ou emoji), título (o padrão acompanha o idioma) e explicação. html aceita HTML confiável.' },
       { name: 'actionText', type: 'string', default: "''", desc: 'Texto do botão de ação (sem texto, não há botão).' },
       { name: 'actionClick', type: 'string', default: "''", desc: 'Valor de r4-click para o botão (ex.: "toast:Criado").' },
       { name: 'handler', type: 'function(cmp, ev)', default: 'null', desc: 'Chamado ao clicar no botão.' },
@@ -1222,7 +1225,7 @@
   const NT = { cfg: { position: 'top-right', max: 5, duration: 5000 }, wraps: {} };
   function ntWrap(pos) {
     if (!NT.wraps[pos] || !NT.wraps[pos].isConnected) {
-      const w = el('div', { class: 'r4-ntf-wrap r4-cmp r4-ntf-' + pos, role: 'region', 'aria-label': 'Notificações', 'aria-live': 'polite', 'aria-relevant': 'additions', 'data-r4-noinert': '' });
+      const w = el('div', { class: 'r4-ntf-wrap r4-cmp r4-ntf-' + pos, role: 'region', 'aria-label': T('r4.ui.notifications', 0, 'Notificações'), 'aria-live': 'polite', 'aria-relevant': 'additions', 'data-r4-noinert': '' });
       w._list = [];
       document.body.append(w); NT.wraps[pos] = w;
     }
@@ -1243,11 +1246,11 @@
     if (o.html) main.append(el('div', { class: 'r4-ntf-text', html: o.html }));
     let h;
     if (Array.isArray(o.actions) && o.actions.length) {
-      main.append(el('div', { class: 'r4-ntf-actions' }, o.actions.map(a => el('button', { type: 'button', class: 'r4-ntf-act', 'r4-click': a['r4-click'] || null, text: a.text || 'OK',
+      main.append(el('div', { class: 'r4-ntf-actions' }, o.actions.map(a => el('button', { type: 'button', class: 'r4-ntf-act', 'r4-click': a['r4-click'] || null, text: a.text || T('r4.ok', 0, 'OK'),
         onclick: ev => { a.handler && a.handler(h, ev); if (a.close !== false) h.close(); } }))));
     }
-    node.append(el('span', { class: 'r4-ntf-ico', 'aria-hidden': 'true', text: o.icon || ICONS[v === 'default' ? 'info' : v] }), main);
-    if (o.closable !== false) node.append(el('button', { type: 'button', class: 'r4-ntf-x', 'aria-label': 'Fechar notificação', text: '×', onclick: () => h.close() }));
+    node.append(U.icon(el('span', { class: 'r4-ntf-ico', 'aria-hidden': 'true' }), o.icon || ICONS[v === 'default' ? 'info' : v]), main);
+    if (o.closable !== false) node.append(el('button', { type: 'button', class: 'r4-ntf-x', 'aria-label': T('r4.ui.closeNotice', 0, 'Fechar notificação'), onclick: () => h.close() }, [R4.icon('close')]));
 
     let remaining = duration, started = 0, timer = null, closed = false;
     const start = () => { if (closed || !(remaining > 0) || timer) return; started = Date.now(); timer = setTimeout(() => h.close(), remaining); };
@@ -1307,14 +1310,14 @@
   function mask(t, text, opts) {
     const host = elOf(t);
     if (!host) throw new Error('R4.mask: alvo não encontrado: ' + t);
-    const txt = text == null ? 'Carregando...' : String(text);
+    const txt = text == null ? T('r4.loading', 0, 'Carregando...') : String(text);
     let m = MASKS.get(host);
     if (m) { m.update(txt); return m; }
     const isBody = host === document.body, prev = document.activeElement, label = el('span', { class: 'r4-lmask-text', text: txt });
     label.hidden = !txt;
     const overlay = el('div', { class: 'r4-lmask r4-cmp' + (isBody ? ' r4-lmask-fixed' : ''), role: 'status', 'aria-live': 'polite', tabindex: '-1', 'data-r4-noinert': '' },
       [el('span', { class: 'r4-spin r4-spin-lg r4-v-primary' }, [el('span', { class: 'r4-spin-ring', 'aria-hidden': 'true' })]), label]);
-    if (!txt) overlay.append(sr('Carregando'));
+    if (!txt) overlay.append(sr(T('r4.ui.loadingShort', 0, 'Carregando')));
     const addClass = !isBody && getComputedStyle(host).position === 'static';
     addClass && host.classList.add('r4-masked');
     const inerted = [...host.children].filter(c => !c.hasAttribute('inert') && !c.hasAttribute('data-r4-noinert'));
@@ -1389,8 +1392,8 @@
   PG('accordion', { html: '<r4-accordion{attrs}>\n  <r4-item title="O que é a libr4?" open>Biblioteca de componentes em JavaScript puro.</r4-item>\n  <r4-item title="Funciona sem JavaScript?">Sim: use as tags <code>&lt;r4-*&gt;</code>.</r4-item>\n  <r4-item title="Item desabilitado" disabled>Não abre.</r4-item>\n</r4-accordion>',
     cfg: { items: [{ title: 'O que é a libr4?', html: 'Biblioteca de componentes em JavaScript puro.', open: true }, { title: 'Funciona sem JavaScript?', html: 'Sim: use as tags.' }] },
     controls: { multiple: false, animate: true } });
-  PG('dropdown', { html: '<r4-dropdown{attrs}>\n  <r4-item text="Editar" icon="✎" r4-click="notify:Editar clicado"></r4-item>\n  <r4-item text="Duplicar" icon="⧉" r4-click="toast:Duplicado"></r4-item>\n  <r4-item divider></r4-item>\n  <r4-item text="Arquivar" disabled></r4-item>\n  <r4-item text="Excluir" icon="🗑" danger r4-click="notify:err|Excluído"></r4-item>\n</r4-dropdown>',
-    cfg: { items: [{ text: 'Editar', icon: '✎' }, { text: 'Duplicar', icon: '⧉' }, { divider: true }, { text: 'Arquivar', disabled: true }, { text: 'Excluir', icon: '🗑', danger: true }] },
+  PG('dropdown', { html: '<r4-dropdown{attrs}>\n  <r4-item text="Editar" icon="edit" r4-click="notify:Editar clicado"></r4-item>\n  <r4-item text="Duplicar" icon="copy" r4-click="toast:Duplicado"></r4-item>\n  <r4-item divider></r4-item>\n  <r4-item text="Arquivar" disabled></r4-item>\n  <r4-item text="Excluir" icon="trash" danger r4-click="notify:err|Excluído"></r4-item>\n</r4-dropdown>',
+    cfg: { items: [{ text: 'Editar', icon: 'edit' }, { text: 'Duplicar', icon: 'copy' }, { divider: true }, { text: 'Arquivar', disabled: true }, { text: 'Excluir', icon: 'trash', danger: true }] },
     controls: { text: 'Ações', icon: '', variant: ['default', 'primary', 'danger'], align: ['left', 'right'], caret: true, disabled: false } });
   PG('progress', { html: '<r4-progress{attrs}></r4-progress>', cfg: {},
     controls: { value: 65, max: 100, type: ['bar', 'circle'], variant: ['primary', 'ok', 'warn', 'err', 'info', 'default'], label: 'Envio do arquivo', showValue: true, indeterminate: false, striped: false, size: ['md', 'sm', 'lg'] } });
@@ -1398,15 +1401,15 @@
   PG('skeleton', { html: '<r4-skeleton{attrs}></r4-skeleton>', cfg: {},
     controls: { type: ['lines', 'avatar', 'list', 'card', 'rect', 'circle'], lines: 3, rows: 3, width: '', height: '', animated: true } });
   PG('stat', { html: '<r4-stat{attrs}></r4-stat>', cfg: { title: 'Receita', value: 384250.9, format: 'money', change: 12.4 },
-    controls: { title: 'Receita', value: '384250.9', format: ['money', 'number', 'percent', 'bytes', ''], change: '12.4', changeText: 'vs. mês anterior', icon: '💰', invert: false, variant: VAR } });
+    controls: { title: 'Receita', value: '384250.9', format: ['money', 'number', 'percent', 'bytes', ''], change: '12.4', changeText: 'vs. mês anterior', icon: 'dollar', invert: false, variant: VAR } });
   PG('stats', { html: '<r4-stats{attrs} src="/showcase/vitrineData/kpis.json"></r4-stats>', cfg: { src: '/showcase/vitrineData/kpis.json' }, controls: { minWidth: 200 } });
   PG('pagination', { html: '<r4-pagination{attrs}></r4-pagination>', cfg: {}, controls: { total: 250, pageSize: 10, page: 1, siblings: 1, info: true } });
   PG('breadcrumb', { html: '<r4-breadcrumb{attrs}>\n  <r4-crumb href="#" r4-click="toast:Início">Início</r4-crumb>\n  <r4-crumb href="#" r4-click="toast:Cadastros">Cadastros</r4-crumb>\n  <r4-crumb>Clientes</r4-crumb>\n</r4-breadcrumb>',
     cfg: { items: [{ text: 'Início', href: '#' }, { text: 'Cadastros', href: '#' }, { text: 'Clientes' }] }, controls: { separator: ['/', '›', '>', '•', '|'] } });
   PG('steps', { html: '<r4-steps{attrs}>\n  <r4-step title="Conta" text="Dados de acesso"></r4-step>\n  <r4-step title="Endereço" text="Onde entregar"></r4-step>\n  <r4-step title="Pagamento" text="Forma de pagar"></r4-step>\n  <r4-step title="Revisão"></r4-step>\n</r4-steps>',
     cfg: { steps: [{ title: 'Conta' }, { title: 'Endereço' }, { title: 'Pagamento' }, { title: 'Revisão' }] }, controls: { active: 1, clickable: true, orientation: ['horizontal', 'vertical'] } });
-  PG('timeline', { html: '<r4-timeline{attrs}>\n  <r4-item title="Pedido criado" date="2026-11-01" icon="🛒">Cliente fez o pedido #1021.</r4-item>\n  <r4-item title="Pagamento aprovado" date="2026-11-02" icon="✔" variant="ok">Cartão final 4242.</r4-item>\n  <r4-item title="Atraso na entrega" date="2026-11-05" icon="⚠" variant="warn">Transportadora informou 2 dias.</r4-item>\n</r4-timeline>',
-    cfg: { items: [{ title: 'Pedido criado', date: '2026-11-01', icon: '🛒' }, { title: 'Pagamento aprovado', date: '2026-11-02', variant: 'ok' }] }, controls: { order: ['', 'asc', 'desc'], limit: 0 } });
+  PG('timeline', { html: '<r4-timeline{attrs}>\n  <r4-item title="Pedido criado" date="2026-11-01" icon="cart">Cliente fez o pedido #1021.</r4-item>\n  <r4-item title="Pagamento aprovado" date="2026-11-02" icon="check" variant="ok">Cartão final 4242.</r4-item>\n  <r4-item title="Atraso na entrega" date="2026-11-05" icon="warning" variant="warn">Transportadora informou 2 dias.</r4-item>\n</r4-timeline>',
+    cfg: { items: [{ title: 'Pedido criado', date: '2026-11-01', icon: 'cart' }, { title: 'Pagamento aprovado', date: '2026-11-02', variant: 'ok' }] }, controls: { order: ['', 'asc', 'desc'], limit: 0 } });
   PG('alert', { html: '<r4-alert{attrs}>Seus dados foram salvos com sucesso.</r4-alert>', cfg: { html: 'Seus dados foram salvos com sucesso.' },
     controls: { variant: ['info', 'ok', 'warn', 'err'], title: 'Atenção', closable: true, showIcon: true, icon: '' } });
   PG('badge', { html: '<r4-badge{attrs}>Novo</r4-badge>', cfg: { html: 'Novo' },
@@ -1415,7 +1418,7 @@
     controls: { variant: VAR, closable: true, pill: true, dot: false, outline: false, icon: '' } });
   PG('avatar', { html: '<r4-avatar{attrs}></r4-avatar>', cfg: {}, controls: { name: 'Maria Souza', src: '', size: ['md', 'xs', 'sm', 'lg', 'xl', '64'], shape: ['circle', 'rounded', 'square'], status: ['', 'online', 'busy', 'away', 'offline'] } });
   PG('emptystate', { html: '<r4-emptystate{attrs}></r4-emptystate>', cfg: {},
-    controls: { icon: '📭', title: 'Nenhum cliente encontrado', text: 'Tente outro termo de busca ou cadastre um novo cliente.', actionText: 'Novo cliente', actionClick: 'notify:Abrir cadastro', actionVariant: ['primary', 'default', 'danger'], compact: false } });
+    controls: { icon: 'inbox', title: 'Nenhum cliente encontrado', text: 'Tente outro termo de busca ou cadastre um novo cliente.', actionText: 'Novo cliente', actionClick: 'notify:Abrir cadastro', actionVariant: ['primary', 'default', 'danger'], compact: false } });
   PG('tooltip', { html: '<r4-tooltip{attrs}><r4-button>Passe o mouse ou use Tab</r4-button></r4-tooltip>', cfg: { html: 'Passe o mouse ou use Tab' },
     controls: { text: 'Dica de ferramenta', pos: ['top', 'bottom', 'left', 'right'], focusable: true } });
 

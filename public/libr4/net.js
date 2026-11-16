@@ -129,11 +129,11 @@
       let parsed = null;
       try { parsed = text ? JSON.parse(text) : null; } catch (e) { /* não era JSON */ }
       if (!res.ok) {
-        const err = new Error(((parsed && typeof parsed.retorno === 'string' && parsed.retorno) || 'Erro HTTP ' + res.status).slice(0, 300));
+        const err = new Error(((parsed && typeof parsed.retorno === 'string' && parsed.retorno) || (R4.t ? R4.t('r4.http.status', { status: res.status }) : 'Erro HTTP ' + res.status)).slice(0, 300));
         err.status = res.status; err.data = parsed;     // o corpo (ex.: {erros:{...}}) fica em err.data
         throw err;
       }
-      if (parsed === null && text) throw new Error('A resposta não é JSON válido');
+      if (parsed === null && text) throw new Error(R4.t ? R4.t('r4.grid.badJson') : 'A resposta não é JSON válido');
       return parsed;
     },
     get: (url, opts) => R4.http.request(url, { ...opts, method: 'GET' }),

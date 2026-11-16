@@ -21,6 +21,7 @@
 (function (R4) {
   'use strict';
   const { el } = R4.util;
+  const T = R4.util.T;   // R4.t com reserva (theme.js carrega por último; resolvido em tempo de uso)
   const G = 'Formulários';
   const proto = x => R4.registry[x].cls.prototype;
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -59,6 +60,10 @@
     invalid: 'Valor inválido.'
   };
 
+  // MSG é o catálogo pt-BR editável (R4.validation.messages.x = '...'); quem não o editou acompanha o idioma (r4.form.*)
+  const DEF_MSG = Object.assign({}, MSG);
+  const msgOf = k => { if (!(k in MSG)) k = 'invalid'; return MSG[k] !== DEF_MSG[k] ? MSG[k] : T('r4.form.' + k, 0, MSG[k]); };
+
   function cpfValid(v) {
     const d = onlyDigits(v);
     if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
@@ -93,7 +98,7 @@
     if (/^(.)\1+$/.test(pw) || WEAK.has(pw.toLowerCase())) s = 0;
     return Math.min(4, s);
   }
-  const STRENGTH_TXT = ['Muito fraca', 'Fraca', 'Média', 'Forte', 'Muito forte'];
+  const STRENGTH_TXT = ['Muito fraca', 'Fraca', 'Média', 'Forte', 'Muito forte'];   // reserva pt-BR; o texto vem de r4.form.strength0..4
 
   /* ---- máscaras: 9 = dígito, A = letra, S = letra ou dígito; o resto é literal ---- */
   const TOKENS = { '9': /[0-9]/, 'A': /[A-Za-z]/, 'S': /[0-9A-Za-z]/ };
@@ -216,12 +221,12 @@
   }
 
   const VALIDATORS = {
-    cpf: v => cpfValid(v) || MSG.cpf,
-    cnpj: v => cnpjValid(v) || MSG.cnpj,
-    cpfCnpj: v => (alnumUp(v).length <= 11 ? cpfValid(v) : cnpjValid(v)) || MSG.cpfCnpj,
-    email: v => emailValid(v) || MSG.email,
-    cep: v => onlyDigits(v).length === 8 || MSG.cep,
-    telefone: v => /^[0-9]{10,11}$/.test(onlyDigits(v)) || MSG.telefone
+    cpf: v => cpfValid(v) || msgOf('cpf'),
+    cnpj: v => cnpjValid(v) || msgOf('cnpj'),
+    cpfCnpj: v => (alnumUp(v).length <= 11 ? cpfValid(v) : cnpjValid(v)) || msgOf('cpfCnpj'),
+    email: v => emailValid(v) || msgOf('email'),
+    cep: v => onlyDigits(v).length === 8 || msgOf('cep'),
+    telefone: v => /^[0-9]{10,11}$/.test(onlyDigits(v)) || msgOf('telefone')
   };
 
   const validation = R4.module('validation', {
@@ -344,7 +349,7 @@
     setRequired(b) { this.required = !!b; this._reqMark(); return this; },
     setLabel(t) { this.label = t; if (this.labelEl) { this.labelEl.firstChild.textContent = t; } return this; },
     focus() { const c = this._focusEl ? this._focusEl() : this._ctl(); c && c.focus(); return this; },
-    _msg(k) { return (this.messages && this.messages[k]) || MSG[k] || MSG.invalid; },
+    _msg(k) { return (this.messages && this.messages[k]) || msgOf(k); },
     _form() {
       const p = this.el && this.el.parentElement && this.el.parentElement.closest('.r4-form');
       return p ? R4.instances[p.id] : null;
@@ -563,8 +568,10 @@
    * ===================================================================== */
   R4.define('select', Object.assign({}, Options, {
     extend: 'field',
-    config: Object.assign({}, OPT_CFG, { placeholder: 'Selecione...', searchable: false, multiple: false, maxItems: 0, clearable: false,
-      emptyText: 'Nenhuma opção encontrada.', searchPlaceholder: 'Buscar...', maxVisible: 300 }),
+    config: Object.assign({}, OPT_CFG, { placeholder: '', searchable: false, multiple: false, maxItems: 0, clearable: false,
+      emptyText: '', searchPlaceholder: '', maxVisible: 300 }),   // '' = texto padrão no idioma atual
+    _ph() { return this.placeholder || T('r4.form.select', 0, 'Selecione...'); },
+    relocalize() { this._renderDisplay && this._renderDisplay(); this._open && this._renderList && this._renderList(this._active); },
     _reqKey: 'requiredChoice',
     build() {
       const ids = this._ids();
@@ -574,13 +581,13 @@
       this.display = el('span', { class: 'r4-select-value' });
       this.trigger = el('div', { class: 'r4-input r4-select-trigger', id: ids.input, role: 'combobox', tabindex: '0',
         'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-controls': ids.list,
-        'aria-labelledby': this.label ? ids.label : null, 'aria-label': this.label ? null : (this.placeholder || 'Selecione') }, [this.display]);
+        'aria-labelledby': this.label ? ids.label : null, 'aria-label': this.label ? null : this._ph() }, [this.display]);
       if (this.clearable) {
-        this.clearBtn = el('button', { type: 'button', class: 'r4-select-clear', tabindex: '-1', 'aria-label': 'Limpar seleção', text: '×',
-          onclick: ev => { ev.stopPropagation(); if (!this.disabled && !this.readOnly) this.clear(); } });
+        this.clearBtn = el('button', { type: 'button', class: 'r4-select-clear', tabindex: '-1', 'aria-label': T('r4.form.clearSel', 0, 'Limpar seleção'),
+          onclick: ev => { ev.stopPropagation(); if (!this.disabled && !this.readOnly) this.clear(); } }, [R4.icon('close')]);
         this.trigger.append(this.clearBtn);
       }
-      this.trigger.append(el('span', { class: 'r4-select-arrow', 'aria-hidden': 'true', text: '▾' }));
+      this.trigger.append(el('span', { class: 'r4-select-arrow', 'aria-hidden': 'true' }, [R4.icon('chevron-down')]));
       this.trigger.addEventListener('click', ev => {
         const x = ev.target.closest('.r4-chip-x');
         if (x) { ev.stopPropagation(); if (!this.disabled && !this.readOnly) this._toggle(x.getAttribute('data-v'), false); return; }
@@ -594,8 +601,8 @@
       const kids = [];
       if (this.searchable) {
         this.search = el('input', { class: 'r4-input r4-select-search', type: 'text', role: 'combobox', autocomplete: 'off',
-          'aria-autocomplete': 'list', 'aria-expanded': 'true', 'aria-controls': ids.list, placeholder: this.searchPlaceholder,
-          'aria-label': 'Buscar' + (this.label ? ' em ' + this.label : '') });
+          'aria-autocomplete': 'list', 'aria-expanded': 'true', 'aria-controls': ids.list, placeholder: this.searchPlaceholder || T('r4.search', 0, 'Buscar...'),
+          'aria-label': this.label ? T('r4.form.searchIn', { label: this.label }, 'Buscar em ' + this.label) : T('r4.form.searchAria', 0, 'Buscar') });
         this.search.addEventListener('input', () => { this._q = this.search.value; this._renderList(0); });
         this.search.addEventListener('keydown', ev => this._key(ev));
         kids.push(this.search);
@@ -653,13 +660,13 @@
       if (!this.display) return;
       const d = this.display, empty = this.multiple ? !this._val.length : this._val === '';
       if (empty) {
-        d.replaceChildren(el('span', { class: 'r4-placeholder', text: this._loading ? 'Carregando...' : this.placeholder }));
+        d.replaceChildren(el('span', { class: 'r4-placeholder', text: this._loading ? T('r4.loading', 0, 'Carregando...') : this._ph() }));
       } else if (this.multiple) {
         const frag = document.createDocumentFragment();
         this._val.forEach(v => {
           const t = this._textOf(v);
           frag.append(el('span', { class: 'r4-chip' }, [el('span', { text: t }),
-            el('button', { type: 'button', class: 'r4-chip-x', tabindex: '-1', 'data-v': v, 'aria-label': 'Remover ' + t, text: '×' })]));
+            el('button', { type: 'button', class: 'r4-chip-x', tabindex: '-1', 'data-v': v, 'aria-label': T('r4.form.remove', { item: t }, 'Remover ' + t) }, [R4.icon('close')])]));
         });
         d.replaceChildren(frag);
       } else d.replaceChildren(el('span', { class: 'r4-select-text', text: this._textOf(this._val) }));
@@ -678,9 +685,9 @@
         [this.multiple ? el('span', { class: 'r4-option-check', 'aria-hidden': 'true' }) : null, el('span', { text: o.text })]));
       });
       this.list.replaceChildren(frag);
-      const note = this._loading ? 'Carregando...' : this._loadFailed ? 'Falha ao carregar as opções.'
-        : !all.length ? this.emptyText
-        : all.length > this._view.length ? 'Mostrando ' + this._view.length + ' de ' + all.length + ' — refine a busca.' : '';
+      const note = this._loading ? T('r4.loading', 0, 'Carregando...') : this._loadFailed ? T('r4.form.optsFail', 0, 'Falha ao carregar as opções.')
+        : !all.length ? (this.emptyText || T('r4.form.noOptions', 0, 'Nenhuma opção encontrada.'))
+        : all.length > this._view.length ? T('r4.form.showing', { shown: this._view.length, total: all.length }, 'Mostrando ' + this._view.length + ' de ' + all.length + ' — refine a busca.') : '';
       this.note.textContent = note; this.note.hidden = !note;
       this._active = -1;
       if (this._view.length) this._setActive(active == null ? 0 : active);
@@ -823,12 +830,12 @@
     description: 'Lista de escolha com popup próprio e acessível (combobox + listbox): busca interna, múltipla escolha com chips, opções estáticas, de <r4-option> ou carregadas de uma URL. Teclado: setas, Home/End, PageUp/Down, Enter/Espaço, Esc, digitação para pular; fecha com Esc e clique fora.',
     props: [
       ...optionDocs,
-      { name: 'placeholder', type: 'string', default: "'Selecione...'", desc: 'Texto quando nada está selecionado.' },
+      { name: 'placeholder', type: 'string', default: "''", desc: 'Texto quando nada está selecionado (vazio = "Selecione..." no idioma atual).' },
       { name: 'searchable', type: 'boolean', default: 'false', desc: 'Campo de busca dentro do popup (ignora acentos e maiúsculas).' },
       { name: 'multiple', type: 'boolean', default: 'false', desc: 'Várias escolhas: o valor vira array e aparece como chips. No HTML: value="a,b" ou JSON.' },
       { name: 'maxItems', type: 'number', default: '0', desc: 'Limite de escolhas no modo multiple (0 = sem limite).' },
       { name: 'clearable', type: 'boolean', default: 'false', desc: 'Botão × para limpar a seleção.' },
-      { name: 'emptyText / searchPlaceholder', type: 'string', default: "'Nenhuma opção encontrada.' / 'Buscar...'", desc: 'Textos do popup.' },
+      { name: 'emptyText / searchPlaceholder', type: 'string', default: "'' / ''", desc: 'Textos do popup (vazio = "Nenhuma opção encontrada." / "Buscar..." no idioma atual).' },
       { name: 'maxVisible', type: 'number', default: '300', desc: 'Máximo de opções desenhadas por vez (listas grandes pedem busca).' },
       ...fieldDocs,
       { name: 'open() / close() / clear() / getSelected() / getText()', type: 'método', desc: 'Controle do popup e leitura da opção escolhida ({value, text}).' }
@@ -916,8 +923,8 @@
         inp.checked = o.value === this._val;
         frag.append(el('label', { class: 'r4-check r4-radio', for: id }, [inp, el('span', { class: 'r4-check-box', 'aria-hidden': 'true' }), el('span', { class: 'r4-check-text', text: o.text })]));
       });
-      if (this._loading) frag.append(el('span', { class: 'r4-help', text: 'Carregando...' }));
-      else if (this._loadFailed) frag.append(el('span', { class: 'r4-help', text: 'Falha ao carregar as opções.' }));
+      if (this._loading) frag.append(el('span', { class: 'r4-help', text: T('r4.loading', 0, 'Carregando...') }));
+      else if (this._loadFailed) frag.append(el('span', { class: 'r4-help', text: T('r4.form.optsFail', 0, 'Falha ao carregar as opções.') }));
       this.group.replaceChildren(frag);
     },
     _optionsChanged() { if (this.group) { this._renderRadios(); this._applyState(); } },
@@ -1008,9 +1015,9 @@
       parts.push(this.input);
       if (this.suffix) parts.push(el('span', { class: 'r4-addon', 'aria-hidden': 'true', text: this.suffix }));
       if (this.spinner) {
-        const b = (t, d, lbl) => el('button', { type: 'button', tabindex: '-1', 'aria-label': lbl, text: t,
-          onmousedown: ev => ev.preventDefault(), onclick: () => { if (!this.disabled && !this.readOnly) { this.stepBy(d); } } });
-        parts.push(el('span', { class: 'r4-spin' }, [b('▲', 1, 'Aumentar'), b('▼', -1, 'Diminuir')]));
+        const b = (t, d, lbl) => el('button', { type: 'button', tabindex: '-1', 'aria-label': lbl,
+          onmousedown: ev => ev.preventDefault(), onclick: () => { if (!this.disabled && !this.readOnly) { this.stepBy(d); } } }, [R4.icon(t)]);
+        parts.push(el('span', { class: 'r4-spin' }, [b('caret-up', 1, T('r4.form.increase', 0, 'Aumentar')), b('caret-down', -1, T('r4.form.decrease', 0, 'Diminuir'))]));
       }
       return this._wrap(el('div', { class: 'r4-input-group' }, parts), 'r4-numberfield');
     },
@@ -1128,7 +1135,7 @@
       const parts = [this.input];
       if (this.showToggle) {
         this.toggleBtn = el('button', { type: 'button', class: 'r4-addon r4-addon-btn', 'aria-pressed': 'false', 'aria-controls': ids.input,
-          'aria-label': 'Mostrar senha', text: 'Mostrar', onclick: () => this.toggleVisible() });
+          'aria-label': T('r4.form.showPwd', 0, 'Mostrar senha'), text: T('r4.form.show', 0, 'Mostrar'), onclick: () => this.toggleVisible() });
         parts.push(this.toggleBtn);
       }
       const after = [];
@@ -1149,16 +1156,17 @@
       if (!this.meter) return;
       const v = this.input.value, s = strength(v);
       this.meter.setAttribute('data-level', v ? String(s) : '');
-      this.meterText.textContent = v ? 'Força: ' + STRENGTH_TXT[s] : '';
+      this.meterText.textContent = v ? T('r4.form.strength', { level: T('r4.form.strength' + s, 0, STRENGTH_TXT[s]) }, 'Força: ' + STRENGTH_TXT[s]) : '';
     },
     getStrength() { return strength(this.getValue()); },
+    relocalize() { if (this.toggleBtn) this.toggleVisible(this.input.type === 'text'); this._meter(); },
     toggleVisible(show) {
       show = show == null ? this.input.type === 'password' : !!show;
       this.input.type = show ? 'text' : 'password';
       if (this.toggleBtn) {
         this.toggleBtn.setAttribute('aria-pressed', show ? 'true' : 'false');
-        this.toggleBtn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
-        this.toggleBtn.textContent = show ? 'Ocultar' : 'Mostrar';
+        this.toggleBtn.setAttribute('aria-label', show ? T('r4.form.hidePwd', 0, 'Ocultar senha') : T('r4.form.showPwd', 0, 'Mostrar senha'));
+        this.toggleBtn.textContent = show ? T('r4.form.hide', 0, 'Ocultar') : T('r4.form.show', 0, 'Mostrar');
       }
       return this;
     },
@@ -1283,7 +1291,7 @@
         const lg = el('legend', { class: 'r4-legend' });
         if (this.collapsible) {
           this.toggleBtn = el('button', { type: 'button', class: 'r4-legend-btn', 'aria-expanded': this.collapsed ? 'false' : 'true', 'aria-controls': this.body.id,
-            onclick: () => this.toggle() }, [el('span', { class: 'r4-legend-arrow', 'aria-hidden': 'true', text: '▾' }), String(this.title)]);
+            onclick: () => this.toggle() }, [el('span', { class: 'r4-legend-arrow', 'aria-hidden': 'true' }, [R4.icon('chevron-down')]), String(this.title)]);
           lg.append(this.toggleBtn);
         } else lg.textContent = this.title;
         fs.append(lg);
@@ -1377,7 +1385,8 @@
 
   R4.define('form', {
     config: { action: '', method: 'POST', encrypt: false, headers: null, html: '', fields: [], items: [], buttons: null,
-      submitText: 'Salvar', resetText: 'Limpar', successText: '', errorText: 'Não foi possível enviar. Tente novamente.',
+      submitText: '', resetText: 'Limpar', successText: '', errorText: '',   // '' = texto padrão no idioma atual (resetText 'Limpar' idem; vazio esconde o botão)
+     
       resetOnSuccess: false, submitOnEnter: true, focusInvalid: true, values: null },
     build() {
       const f = el('form', { class: 'r4-form', novalidate: true });
@@ -1405,13 +1414,14 @@
         if (this.html) Promise.resolve().then(() => !this._destroyed && this.setValues(this.values, true));   // campos do HTML montam logo depois
       }
     },
+    relocalize() { (this._children || []).forEach(c => c._i18n && c.setText && c.setText(T(c._i18n))); },
     _buttonCfgs() {
       let b = this.buttons;
       if (b === 'false') b = false; else if (b === 'true' || b === '') b = true;
       if (b == null) b = (this.fields || []).length > 0;
       if (b === true) {
-        b = [{ text: this.submitText, variant: 'primary', action: 'submit' }];
-        if (this.resetText) b.push({ text: this.resetText, action: 'reset' });
+        b = [{ text: this.submitText || T('r4.save', 0, 'Salvar'), variant: 'primary', action: 'submit', _i18n: this.submitText ? '' : 'r4.save' }];
+        if (this.resetText) b.push({ text: this.resetText === 'Limpar' ? T('r4.clear', 0, 'Limpar') : this.resetText, action: 'reset', _i18n: this.resetText === 'Limpar' ? 'r4.clear' : '' });
       }
       if (!Array.isArray(b)) return [];
       return b.map(x => {
@@ -1490,7 +1500,7 @@
         let m = errs[n]; if (Array.isArray(m)) m = m.join(' ');
         m = m == null ? '' : String(m);
         const f = this.getField(n);
-        if (f && !f.disabled) { f.setError(m || MSG.invalid); first = first || f; } else if (m) rest.push(m);
+        if (f && !f.disabled) { f.setError(m || msgOf('invalid')); first = first || f; } else if (m) rest.push(m);
       });
       if (first && this.focusInvalid) first.focus();
       return rest;
@@ -1567,7 +1577,7 @@
         res.ok = false;
         const rest = this.markErrors(body && (body.erros || body.errors));
         const txt = body && [body.mensagem, body.message, body.retorno, body.erro].find(x => typeof x === 'string' && x);
-        const msg = res.status === 0 ? 'Sem conexão com o servidor.' : (txt || this.errorText);
+        const msg = res.status === 0 ? T('r4.form.offline', 0, 'Sem conexão com o servidor.') : (txt || this.errorText || T('r4.form.sendFail', 0, 'Não foi possível enviar. Tente novamente.'));
         this._showMsg([msg, ...rest].join(' '), 'err');
         this.fire('failure', this, body, res);
       } else {
@@ -1604,8 +1614,8 @@
       { name: 'fields', type: 'Array<cfg>', default: '[]', desc: "Campos por configuração: {type:'text'|'email'|'password'|'number'|'date'|'select'|'multiselect'|'checkbox'|'switch'|'radio'|'textarea'|'cpf'|'cnpj'|'telefone'|'cep'|'moeda'|'mask'|'fieldset'|'row', name, label, ...} ou {xtype}." },
       { name: 'items / html', type: 'Array<cfg> / string', default: "[] / ''", desc: 'Outros componentes ou HTML livre (tags r4-* dentro são montadas e entram no form).' },
       { name: 'buttons', type: 'true | false | Array<{text, action:"submit"|"reset", handler, variant}>', default: 'null', desc: 'Botões no rodapé. null = Salvar/Limpar automáticos quando há fields.' },
-      { name: 'submitText / resetText', type: 'string', default: "'Salvar' / 'Limpar'", desc: 'Textos dos botões automáticos (resetText vazio esconde o Limpar).' },
-      { name: 'successText / errorText', type: 'string', default: "'' / 'Não foi possível enviar...'", desc: 'Aviso após sucesso (vazio = nenhum) / aviso padrão de falha (usa a mensagem do servidor quando houver).' },
+      { name: 'submitText / resetText', type: 'string', default: "'' / 'Limpar'", desc: 'Textos dos botões automáticos (padrão: Salvar / Limpar no idioma atual; resetText vazio esconde o Limpar).' },
+      { name: 'successText / errorText', type: 'string', default: "'' / ''", desc: 'Aviso após sucesso (vazio = nenhum) / aviso padrão de falha (usa a mensagem do servidor quando houver).' },
       { name: 'values', type: 'object', default: 'null', desc: 'Valores iniciais (viram o "original" para reset/isDirty).' },
       { name: 'resetOnSuccess', type: 'boolean', default: 'false', desc: 'Limpa após enviar com sucesso (senão os valores enviados viram o original).' },
       { name: 'submitOnEnter / focusInvalid', type: 'boolean', default: 'true', desc: 'Enter num campo envia / foca o primeiro campo inválido.' },
@@ -1707,7 +1717,7 @@
   PG('select', {
     html: '<r4-select name="uf" label="Estado"{attrs} src="/showcase/vitrineData/estados.json"></r4-select>',
     cfg: { name: 'uf', label: 'Estado', src: '/showcase/vitrineData/estados.json' },
-    controls: { searchable: true, multiple: false, clearable: false, required: false, placeholder: 'Selecione...', helpText: '', disabled: false, maxItems: 0 }
+    controls: { searchable: true, multiple: false, clearable: false, required: false, placeholder: '', helpText: '', disabled: false, maxItems: 0 }
   });
   PG('checkbox', {
     html: '<r4-checkbox name="aceite"{attrs}>Li e aceito os termos</r4-checkbox>',

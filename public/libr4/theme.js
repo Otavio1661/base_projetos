@@ -319,7 +319,7 @@
   /* ============================================================
    * COMPONENTE themeswitch
    * ============================================================ */
-  const MODE_DEF = [['light', 'r4.theme.light', '☀'], ['dark', 'r4.theme.dark', '☾'], ['auto', 'r4.theme.auto', '◐']];
+  const MODE_DEF = [['light', 'r4.theme.light', 'sun'], ['dark', 'r4.theme.dark', 'moon'], ['auto', 'r4.theme.auto', 'contrast']];   // nomes de R4.icon
 
   R4.define('themeswitch', {
     config: { modes: true, presets: true, picker: false, label: '' },
@@ -331,7 +331,7 @@
         const grp = el('div', { class: 'r4-ts-modes' });
         MODE_DEF.forEach(([m, key, icon]) => {
           const b = el('button', { type: 'button', class: 'r4-btn r4-ts-btn', 'aria-pressed': 'false', 'data-mode': m }, [
-            el('span', { class: 'r4-ts-ico', 'aria-hidden': 'true', text: icon }), el('span', { class: 'r4-ts-txt' })]);
+            R4.util.icon(el('span', { class: 'r4-ts-ico', 'aria-hidden': 'true' }), icon), el('span', { class: 'r4-ts-txt' })]);
           b.addEventListener('click', () => R4.theme.set({ mode: m }));
           this._btns[m] = { b, key };
           grp.append(b);
@@ -598,6 +598,117 @@
     }
   });
 
+  add('pt-BR', {
+    r4: {
+      clear: 'Limpar', remove: 'Remover', retry: 'Tentar novamente',
+      http: { status: 'Erro HTTP {status}' },
+      pager: {
+        prev: 'Página anterior', next: 'Próxima página', current: 'Página {page}, atual', goto: 'Ir para a página {page}',
+        range: '{from}–{to} de {total}', none: 'Nenhum registro'
+      },
+      grid: {
+        filterLabel: 'Filtrar registros', cols: 'Colunas', colsTitle: 'Mostrar ou ocultar colunas', export: 'Exportar',
+        exportTitle: 'Exportar os registros filtrados', retry: 'Tentar de novo', resize: 'Arraste para redimensionar',
+        selectAll: 'Selecionar todos os registros filtrados', edit: 'Editar {col}', unsort: 'Limpar ordenação',
+        print: 'Imprimir', printing: 'Impressão', total: 'Total', noList: 'Resposta sem lista de registros.',
+        badJson: 'A resposta não é JSON válido.', count: { um: '{total} registro', outros: '{total} registros' }
+      },
+      form: {
+        required: 'Campo obrigatório.', requiredCheck: 'Marque esta opção para continuar.', requiredChoice: 'Selecione uma opção.',
+        minLength: 'Use pelo menos {n} caracteres.', maxLength: 'Use no máximo {n} caracteres.',
+        min: 'O valor mínimo é {n}.', max: 'O valor máximo é {n}.', number: 'Informe um número válido.', date: 'Informe uma data válida.',
+        minDate: 'Informe uma data a partir de {n}.', maxDate: 'Informe uma data até {n}.', email: 'Informe um e-mail válido.',
+        pattern: 'Formato inválido.', match: 'Não confere com o campo "{campo}".', cpf: 'CPF inválido.', cnpj: 'CNPJ inválido.',
+        cpfCnpj: 'CPF ou CNPJ inválido.', telefone: 'Telefone incompleto.', cep: 'CEP incompleto.', mask: 'Preencha no formato {n}.',
+        weak: 'Senha fraca: combine letras maiúsculas, minúsculas, números e símbolos.', maxItems: 'Selecione no máximo {n} opções.',
+        invalid: 'Valor inválido.',
+        strength: 'Força: {level}', strength0: 'Muito fraca', strength1: 'Fraca', strength2: 'Média', strength3: 'Forte', strength4: 'Muito forte',
+        select: 'Selecione...', noOptions: 'Nenhuma opção encontrada.', optsFail: 'Falha ao carregar as opções.',
+        showing: 'Mostrando {shown} de {total} — refine a busca.', clearSel: 'Limpar seleção', searchIn: 'Buscar em {label}', searchAria: 'Buscar',
+        remove: 'Remover {item}', increase: 'Aumentar', decrease: 'Diminuir', show: 'Mostrar', hide: 'Ocultar',
+        showPwd: 'Mostrar senha', hidePwd: 'Ocultar senha', offline: 'Sem conexão com o servidor.',
+        sendFail: 'Não foi possível enviar. Tente novamente.'
+      },
+      files: {
+        drop: 'Arraste arquivos para cá ou', choose: 'Escolher arquivo', selected: 'Arquivos selecionados', invalid: 'Arquivo inválido.',
+        badType: '"{name}": tipo de arquivo não permitido (aceitos: {accept}).', tooBig: '"{name}": arquivo muito grande ({size}; máximo {max}).',
+        readFail: 'Não foi possível ler "{name}".', dup: '"{name}" já está na lista.', maxFiles: { um: 'Selecione no máximo {n} arquivo.', outros: 'Selecione no máximo {n} arquivos.' },
+        badJson: 'JSON inválido.', types: 'Tipos: {types}', max: 'Máx. {size}', maxEach: 'Máx. {size} por arquivo'
+      },
+      ui: {
+        menu: 'Menu', progress: 'Progresso', loadingShort: 'Carregando', loadingContent: 'Carregando conteúdo',
+        up: 'Aumento de ', down: 'Queda de ', flat: 'Sem variação: ', pagination: 'Paginação', crumbs: 'Trilha de navegação',
+        steps: 'Etapas', step: 'Etapa {n}', stepErr: ' (com erro)', stepDone: ' (concluída)', timeline: 'Linha do tempo',
+        noEvents: 'Nenhum evento.', closeAlert: 'Fechar aviso', indicator: 'Indicador', tag: 'etiqueta', avatar: 'Avatar',
+        nothing: 'Nada por aqui', notifications: 'Notificações', closeNotice: 'Fechar notificação'
+      },
+      chart: {
+        dlSvg: 'Baixar como SVG', dlPng: 'Baixar como PNG', exportFail: 'Não foi possível exportar: {message}', viewTable: 'Ver como tabela',
+        viewChart: 'Ver gráfico', loadFail: 'Não foi possível carregar os dados.', empty: 'Sem dados para exibir.',
+        tableLabel: 'Dados do gráfico em tabela', rows: 'Mostrando {shown} de {total} linhas.', item: 'Item', share: 'Participação',
+        hidden: ' (oculto)', hiddenF: ' (oculta)'
+      }
+    }
+  });
+  add('en', {
+    r4: {
+      clear: 'Clear', remove: 'Remove', retry: 'Try again',
+      http: { status: 'HTTP error {status}' },
+      pager: {
+        prev: 'Previous page', next: 'Next page', current: 'Page {page}, current', goto: 'Go to page {page}',
+        range: '{from}–{to} of {total}', none: 'No records'
+      },
+      grid: {
+        filterLabel: 'Filter records', cols: 'Columns', colsTitle: 'Show or hide columns', export: 'Export',
+        exportTitle: 'Export the filtered records', retry: 'Try again', resize: 'Drag to resize',
+        selectAll: 'Select all filtered records', edit: 'Edit {col}', unsort: 'Clear sorting',
+        print: 'Print', printing: 'Printing', total: 'Total', noList: 'Response has no list of records.',
+        badJson: 'The response is not valid JSON.', count: { one: '{total} record', other: '{total} records' }
+      },
+      form: {
+        required: 'Required field.', requiredCheck: 'Check this option to continue.', requiredChoice: 'Select an option.',
+        minLength: 'Use at least {n} characters.', maxLength: 'Use at most {n} characters.',
+        min: 'The minimum value is {n}.', max: 'The maximum value is {n}.', number: 'Enter a valid number.', date: 'Enter a valid date.',
+        minDate: 'Enter a date on or after {n}.', maxDate: 'Enter a date on or before {n}.', email: 'Enter a valid email.',
+        pattern: 'Invalid format.', match: 'Does not match the "{campo}" field.', cpf: 'Invalid CPF.', cnpj: 'Invalid CNPJ.',
+        cpfCnpj: 'Invalid CPF or CNPJ.', telefone: 'Incomplete phone number.', cep: 'Incomplete postal code.', mask: 'Fill in the format {n}.',
+        weak: 'Weak password: mix upper and lower case letters, numbers and symbols.', maxItems: 'Select at most {n} options.',
+        invalid: 'Invalid value.',
+        strength: 'Strength: {level}', strength0: 'Very weak', strength1: 'Weak', strength2: 'Fair', strength3: 'Strong', strength4: 'Very strong',
+        select: 'Select...', noOptions: 'No options found.', optsFail: 'Failed to load the options.',
+        showing: 'Showing {shown} of {total} — refine your search.', clearSel: 'Clear selection', searchIn: 'Search in {label}', searchAria: 'Search',
+        remove: 'Remove {item}', increase: 'Increase', decrease: 'Decrease', show: 'Show', hide: 'Hide',
+        showPwd: 'Show password', hidePwd: 'Hide password', offline: 'No connection to the server.',
+        sendFail: 'Could not send. Please try again.'
+      },
+      files: {
+        drop: 'Drag files here or', choose: 'Choose file', selected: 'Selected files', invalid: 'Invalid file.',
+        badType: '"{name}": file type not allowed (accepted: {accept}).', tooBig: '"{name}": file too large ({size}; maximum {max}).',
+        readFail: 'Could not read "{name}".', dup: '"{name}" is already in the list.', maxFiles: { one: 'Select at most {n} file.', other: 'Select at most {n} files.' },
+        badJson: 'Invalid JSON.', types: 'Types: {types}', max: 'Max. {size}', maxEach: 'Max. {size} per file'
+      },
+      ui: {
+        menu: 'Menu', progress: 'Progress', loadingShort: 'Loading', loadingContent: 'Loading content',
+        up: 'Increase of ', down: 'Decrease of ', flat: 'No change: ', pagination: 'Pagination', crumbs: 'Breadcrumb',
+        steps: 'Steps', step: 'Step {n}', stepErr: ' (with error)', stepDone: ' (completed)', timeline: 'Timeline',
+        noEvents: 'No events.', closeAlert: 'Dismiss alert', indicator: 'Indicator', tag: 'tag', avatar: 'Avatar',
+        nothing: 'Nothing here', notifications: 'Notifications', closeNotice: 'Dismiss notification'
+      },
+      chart: {
+        dlSvg: 'Download as SVG', dlPng: 'Download as PNG', exportFail: 'Could not export: {message}', viewTable: 'View as table',
+        viewChart: 'View chart', loadFail: 'Could not load the data.', empty: 'No data to display.',
+        tableLabel: 'Chart data as a table', rows: 'Showing {shown} of {total} rows.', item: 'Item', share: 'Share',
+        hidden: ' (hidden)', hiddenF: ' (hidden)'
+      }
+    }
+  });
+
+  // troca de idioma: componentes na tela que sabem se retraduzir (relocalize) atualizam o que é simples. Um único ouvinte global.
+  i18n.onChange(() => Object.keys(R4.instances).forEach(id => {
+    const c = R4.instances[id];
+    if (c && !c._destroyed && c.rendered && typeof c.relocalize === 'function') { try { c.relocalize(); } catch (e) { console.error('[R4] relocalize:', e); } }
+  }));
+
   // restaura o idioma salvo
   (function () {
     const saved = store.get(LKEY);
@@ -606,7 +717,7 @@
 
   R4.module('i18n', i18n, {
     group: 'Núcleo', title: 'R4.i18n / R4.t',
-    description: 'Internacionalização: R4.t("chave", {params}) com interpolação {nome} e plural via Intl.PluralRules; dicionários pt-BR e en já trazem TODAS as strings fixas da lib sob r4.*; fallback para pt-BR; formatos de número, moeda e data por locale; atributo lang no <html>. No HTML: <r4-t key="r4.empty"></r4-t> ou r4-i18n="chave" em qualquer elemento (atualizam sozinhos ao trocar o idioma).',
+    description: 'Internacionalização: R4.t("chave", {params}) com interpolação {nome} e plural via Intl.PluralRules; dicionários pt-BR e en já trazem TODAS as strings fixas da lib sob r4.*; fallback para pt-BR; formatos de número, moeda e data por locale; atributo lang no <html>. No HTML: <r4-t key="r4.empty"></r4-t> ou r4-i18n="chave" em qualquer elemento (atualizam sozinhos ao trocar o idioma). Os textos fixos de TODOS os componentes (grid, form, ui, chart, files, diálogos, aria-labels) vêm de r4.*: ao trocar o idioma, o que está na tela se atualiza (atributo r4-i18n e método relocalize de cada componente; um único ouvinte global) e componentes novos já nascem no idioma atual. Para adicionar um idioma: R4.i18n.add("es", { r4: { empty: "Sin registros.", ... } }) e R4.i18n.set("es") — chaves ausentes usam pt-BR.',
     props: [
       { name: "R4.t('chave', {params})", type: 'string', desc: "Interpola {nome}. Plural: mensagem {um:'{n} item', outros:'{n} itens'} escolhida pelo parâmetro n (ou count). Chave ausente → fallback pt-BR → a própria chave (com aviso). Devolve TEXTO (params não são escapados): <r4-t>/r4-i18n usam textContent; se você concatenar em HTML, escape com R4.util.esc." },
       { name: "i18n.set('pt-BR' | 'en')", type: 'R4.i18n', desc: 'Troca o idioma: atualiza <html lang>, salva no localStorage, retraduz <r4-t>/r4-i18n e dispara onChange.' },
@@ -614,6 +725,9 @@
       { name: 'i18n.locale', type: 'string', desc: 'Idioma atual (somente leitura). i18n.locales lista os disponíveis.' },
       { name: 'i18n.onChange(fn(locale, anterior))', type: 'function', desc: 'Escuta trocas de idioma; devolve a função para cancelar.' },
       { name: 'i18n.number(n, opts) / money(n, moeda) / date(v, opts)', type: 'string', desc: 'Formatos via Intl no idioma atual. money usa BRL em pt, USD em en (ou a moeda informada). date aceita AAAA-MM-DD como data local.' },
+      { name: 'Novo idioma', type: 'receita', desc: "1) R4.i18n.add('es', { r4: { ok: 'Aceptar', empty: 'Sin registros.', pager: { info: { one: '{page} / {pages} · {n} registro', other: '{page} / {pages} · {n} registros' } } } }); 2) R4.i18n.set('es'). Só traduza o que quiser: o resto cai no pt-BR. A lista completa de chaves está nos blocos add('pt-BR') e add('en') do fim de theme.js. Textos próprios: use outro prefixo (app.*) e R4.t('app.chave')." },
+      { name: 'componente.relocalize()', type: 'método (opcional)', desc: 'Componentes com textos montados em código (grid, select, passwordfield, form, filedrop, chart, pagination) definem relocalize(), chamado por um único ouvinte global ao trocar o idioma. Textos estáticos usam R4.util.tx(el, chave, reserva[, atributo]), que grava o r4-i18n no elemento.' },
+      { name: 'R4.util.T(chave, params, reserva) / R4.util.tx(...)', type: 'helpers', desc: 'T = R4.t com texto de reserva se o módulo i18n não estiver carregado (resolva em tempo de uso, não no define). Params são TEXTO: ao montar HTML, escape com R4.util.esc (os componentes da lib usam textContent).' },
       { name: 'i18n.has(chave)', type: 'boolean', desc: 'A chave existe (no idioma, no idioma-base ou no pt-BR).' },
       { name: 'i18n.bind(elemento)', type: 'R4.i18n', desc: 'Traduz <r4-t>/r4-i18n dentro do elemento agora (normalmente automático via MutationObserver).' },
       { name: '<r4-t key="r4.empty" n="3" params=\'{"nome":"Ana"}\'>', type: 'tag', desc: 'Texto traduzido; o conteúdo da tag é o reserva se a chave não existir.' },

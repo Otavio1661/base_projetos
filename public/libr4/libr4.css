@@ -1,4 +1,5 @@
 @import url('parts/tabs.css');
+@import url('parts/icons.css');
 @import url('parts/form.css');
 @import url('parts/files.css');
 @import url('parts/ui.css');
@@ -37,6 +38,7 @@
 .r4-tool{cursor:pointer;color:var(--r4-mut);user-select:none}
 .r4-pad{padding:14px}
 .r4-collapsed>.r4-body,.r4-collapsed>.r4-toolbar{display:none}
+.r4-header .r4-tool .r4-icon{transition:transform .15s}.r4-collapsed>.r4-header .r4-tool .r4-icon{transform:rotate(-90deg)}
 
 /* toolbar */
 .r4-toolbar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--r4-head);border-bottom:1px solid var(--r4-line)}

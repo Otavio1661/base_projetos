@@ -22,3 +22,4 @@ code{font-family:var(--r4-mono);font-size:13px;background:var(--r4-head);padding
 .vt-ctl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--r4-mut)}
 .vt-ctl-bool{flex-direction:row;align-items:center;justify-content:space-between}
 .vt-ctl .r4-input{padding:4px 8px}
+.vt-demo .vt-out{margin-top:0;border-radius:4px}.vt-stage:empty+.vt-out{margin-top:0}.vt-stage:not(:empty)+.vt-out{margin-top:10px}

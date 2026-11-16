@@ -50,7 +50,7 @@
       { title: 'Clientes (HTML)', html: `
 <r4-panel title="Clientes">
   <r4-tbar>
-    <r4-button variant="primary" icon="＋" r4-click="modal:#rc-novo">Novo cliente</r4-button>
+    <r4-button variant="primary" icon="plus" r4-click="modal:#rc-novo">Novo cliente</r4-button>
     <r4-button r4-click="reload:#rc-grid">Atualizar</r4-button>
   </r4-tbar>
   <r4-grid id="rc-grid" src="${D}clientes.json" page-size="8" filter selectable="multi" exportable>

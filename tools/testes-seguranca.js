@@ -476,6 +476,47 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
       !active(b).length && b.querySelector('r4-t').textContent === 'Olá ' + P_IMG && !a.hasAttribute('onclick') && !a.hasAttribute('href') && a.title === 'Olá {nome}' && w.Object.prototype.pwnI18n === undefined);
   });
 
+  /* ---------- ícones (R4.icon) e i18n dos componentes ---------- */
+  await caso('icon: nome malicioso não vira markup (círculo neutro + aviso); title/cls/size só como dado', async () => {
+    const b = box(); w.__w = 0;
+    const evil = '"><img src=x onerror=window.__pwn=1>';
+    const warns = []; const ow = w.console.warn; w.console.warn = m => warns.push(String(m));
+    const s1 = R4.icon(evil), s2 = R4.icon('edit', { title: P_IMG, cls: P_IMG, size: P_IMG });
+    w.console.warn = ow;
+    b.append(s1, s2); await tick();
+    check('icon: nome malicioso não vira markup (círculo neutro + aviso); title/cls/size só como dado',
+      !active(b).length && !b.querySelector('img') && s1.querySelectorAll('path').length === 1 && warns.some(x => /ícone desconhecido/.test(x))
+      && s2.querySelector('title').textContent === P_IMG && !s2.hasAttribute('width') && !/img/i.test([...s2.classList].join(' ')), b.innerHTML.slice(0, 300));
+  });
+  await caso('icon: opção icon com HTML/emoji vira texto; só nome da allowlist vira SVG (button, dropdown, stat, alert)', async () => {
+    const b = box();
+    const mk = (xt, cfg) => { const h = d.createElement('div'); b.append(h); return R4.create(Object.assign({ xtype: xt, renderTo: h }, cfg)); };
+    const c1 = mk('button', { text: 'a', icon: P_IMG }), c2 = mk('button', { text: 'a', icon: 'edit' }), c3 = mk('stat', { title: 't', value: 1, icon: P_IMG }),
+      c4 = mk('alert', { text: 'x', icon: P_SVG }), c5 = mk('dropdown', { text: 'm', icon: P_IMG, items: [{ text: 'i', icon: P_IMG }] });
+    c5.btn.click(); await tick();
+    check('icon: opção icon com HTML/emoji vira texto; só nome da allowlist vira SVG (button, dropdown, stat, alert)',
+      !active(d.body).length && !b.querySelector('img') && !d.querySelector('.r4-dd-menu img') && c1.el.querySelector('.r4-ico').textContent === P_IMG
+      && !!c2.el.querySelector('svg.r4-icon-edit') && c3.el.querySelector('.r4-stat-icon').textContent === P_IMG && c4.el.querySelector('.r4-al-ico').textContent === P_SVG, b.innerHTML.slice(0, 300));
+  });
+  await caso('icon: R4.icon.add recusa path com markup/tamanho/nome inválido (sem tocar o mapa)', async () => {
+    const antes = R4.icon.names.length;
+    const r = [R4.icon.add('x1', 'M0 0"/><script>window.__pwn=1</script>'), R4.icon.add('x2', 'M0 0 ' + 'L1 1 '.repeat(500)), R4.icon.add('"><img>', 'M0 0h1'), R4.icon.add('__proto__', 'M0 0h1'), R4.icon.add('x3', 'url(javascript:1)'), R4.icon.add('x4', { toString: () => 'M0 0' })];
+    check('icon: R4.icon.add recusa path com markup/tamanho/nome inválido (sem tocar o mapa)', r.every(v => v === false) && R4.icon.names.length === antes && !R4.icon.has('__proto__') && !R4.icon.has('constructor') && w.__pwn === undefined, JSON.stringify(r));
+    const ok = R4.icon.add('sec-ok', 'M2 2h20v20H2z'); const svg = R4.icon('sec-ok');
+    check('icon: path válido aceito vira só <path d>', ok === true && svg.querySelectorAll('*').length === 1 && svg.querySelector('path').getAttribute('d') === 'M2 2h20v20H2z');
+  });
+  await caso('i18n: texto traduzido com params HTML vai como texto em grid/aria/título (nunca markup) e ao trocar o idioma', async () => {
+    const b = box();
+    const h = d.createElement('div'); b.append(h);
+    const g = R4.create({ xtype: 'grid', renderTo: h, data: [{ n: 'a' }], columns: [{ header: P_IMG, dataIndex: 'n', editable: true }], pageSize: 1, exportable: true });
+    const t = R4.util.tx(d.createElement('span'), 'r4.error', 'x', 'title', { message: P_IMG }); b.append(t);
+    R4.i18n.set('en', { persist: false }); await tick(); await tick();
+    const gridEn = /Export/.test(g.el.textContent);
+    R4.i18n.set('pt-BR', { persist: false }); await tick();
+    check('i18n: texto traduzido com params HTML vai como texto em grid/aria/título (nunca markup) e ao trocar o idioma',
+      !active(b).length && !b.querySelector('img') && gridEn && /Exportar/.test(g.el.textContent) && t.title === 'Erro: ' + P_IMG && w.__pwn === undefined, b.innerHTML.slice(0, 200));
+  });
+
   /* ---------- vitrine ---------- */
   await caso('vitrine: nenhum alert/eval de dados e window.__pwn indefinido nesta página', async () => {
     check('vitrine: nenhum alert/eval de dados e window.__pwn indefinido nesta página', !pwnLog.length && w.__pwn === undefined && w.__alerts === 0 && !w.__evals.some(s => s.includes('__pwn')),
