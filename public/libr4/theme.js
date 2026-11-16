@@ -22,11 +22,21 @@
   const warn = m => (R4.warn ? R4.warn(m) : console.warn('[R4] ' + m));
   const root = () => document.documentElement;
 
-  /* armazenamento tolerante a falhas (modo privado, bloqueado, indisponível) */
+  /*
+   * Preferências (tema e idioma) vão para o R4.store (chaves r4:theme e r4:locale): validade de 180 dias
+   * renovada a cada uso, valor revalidado ao ler, lixeira automática. R4.store nunca lança exceção
+   * (sem localStorage cai para memória). Sem o módulo store carregado, nada é guardado.
+   */
+  const PREF = { ttl: '180d', sliding: true, now: true };
   const store = {
-    get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } },
-    del(k) { try { window.localStorage.removeItem(k); } catch (e) { /* ignora */ } }
+    get(k, schema) { try { return R4.store ? R4.store.get(k, { schema }) : undefined; } catch (e) { return undefined; } },
+    set(k, v) { try { return !!R4.store && R4.store.set(k, v, PREF); } catch (e) { return false; } },
+    del(k) { try { if (R4.store) R4.store.del(k); } catch (e) { /* ignora */ } },
+    /** migração única: lê e APAGA uma chave antiga (sem prefixo, de antes do R4.store); devolve o texto (curto) ou null */
+    legacy(k) {
+      if (!R4.store) return null;
+      try { const v = window.localStorage.getItem(k); window.localStorage.removeItem(k); return typeof v === 'string' && v.length <= 4096 ? v : null; } catch (e) { return null; }
+    }
   };
 
   /* ============================================================
@@ -97,7 +107,7 @@
   const DENSITY = { compact: 0.75, normal: 1, comfortable: 1.25 };
   const MODES = ['light', 'dark', 'auto'];
   const GENERIC_FONTS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-sans-serif', 'ui-serif', 'ui-monospace', 'ui-rounded'];
-  const KEY = 'r4-theme';
+  const KEY = 'theme';    // chave no R4.store (no localStorage: "r4:theme")
 
   const presets = {
     'R4 Azul': { primary: '#3b5bdb', radius: 6 },
@@ -243,7 +253,7 @@
     state = next; started = true;
     watchSystem(); applyDom();
     if (!opts || opts.persist !== false) {
-      if (!store.set(KEY, JSON.stringify({ mode: state.mode, primary: state.primary, radius: state.radius, density: state.density, font: state.font, preset: state.preset }))) { /* sem armazenamento: segue só em memória */ }
+      store.set(KEY, { mode: state.mode, primary: state.primary, radius: state.radius, density: state.density, font: state.font, preset: state.preset });   // sem armazenamento: segue só em memória
     }
     emit((opts && opts.reason) || 'set');
     return api;
@@ -272,7 +282,7 @@
   }
 
   const api = {
-    set, get, preset, reset, onChange, presets, isDark, contrast, textOn, parseColor, storageKey: KEY,
+    set, get, preset, reset, onChange, presets, isDark, contrast, textOn, parseColor, storageKey: 'r4:' + KEY,
     /** Valida sem aplicar: { ok, errors } */
     validate(cfg) {
       const errors = {};
@@ -282,22 +292,33 @@
   };
   R4.theme = api;
 
+  // esquema do que foi salvo: só campos válidos (cada um passa por sanitize); sem nenhum válido → undefined (o R4.store apaga a chave)
+  function savedTheme(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return undefined;
+    const cfg = {};
+    ['mode', 'primary', 'radius', 'density', 'font'].forEach(k => {
+      if (!Object.prototype.hasOwnProperty.call(o, k)) return;
+      const r = sanitize(k, o[k]); if (r.ok) cfg[k] = r.value;
+    });
+    return Object.keys(cfg).length ? cfg : undefined;
+  }
   // restaura o tema salvo (revalidando tudo; valor adulterado no storage é descartado)
   (function restore() {
-    const raw = store.get(KEY);
-    if (raw) {
-      try {
-        const o = JSON.parse(raw), cfg = {};
-        ['mode', 'primary', 'radius', 'density', 'font'].forEach(k => { if (k in o && sanitize(k, o[k]).ok) cfg[k] = o[k]; });
-        if (Object.keys(cfg).length) { set(cfg, { persist: false, reason: 'restore' }); return; }
-      } catch (e) { /* JSON ruim: ignora */ }
+    // migração única das chaves antigas (r4-theme, r4-dark): importa se valer e APAGA as antigas
+    const lt = store.legacy('r4-theme'), ld = store.legacy('r4-dark');
+    let cfg = store.get(KEY, savedTheme);
+    if (!cfg) {
+      try { cfg = lt ? savedTheme(JSON.parse(lt)) : undefined; } catch (e) { cfg = undefined; }
+      if (!cfg && ld && /^(1|true|dark)$/i.test(ld.trim())) cfg = { mode: 'dark' };
+      if (cfg) store.set(KEY, cfg);
     }
+    if (cfg) { set(cfg, { persist: false, reason: 'restore' }); return; }
     if (root().classList.contains('r4-dark')) state.mode = 'dark';   // página já nasceu escura (ex.: alternador próprio)
   })();
 
   R4.module('theme', api, {
     group: 'Núcleo', title: 'R4.theme',
-    description: 'Tema a partir de UMA cor primária: gera os tokens --r4-* (acc, sel, hover, head, bg, line, txt...) para claro e escuro num <style id="r4-theme">, sem editar arquivos. Modo claro/escuro/auto (segue o sistema), raio, densidade e fonte; salva no localStorage. Toda entrada é validada (impede injeção de CSS) e o contraste do texto sobre a cor primária é calculado (WCAG AA 4.5:1) com escolha automática de texto claro/escuro em --r4-acc-txt. Densidade: use calc(8px * var(--r4-density, 1)) nos seus estilos, ou --r4-pad-y / --r4-pad-x / --r4-gap.',
+    description: 'Tema a partir de UMA cor primária: gera os tokens --r4-* (acc, sel, hover, head, bg, line, txt...) para claro e escuro num <style id="r4-theme">, sem editar arquivos. Modo claro/escuro/auto (segue o sistema), raio, densidade e fonte; salva no R4.store (chave r4:theme, validade de 180 dias renovada a cada uso, revalidado ao ler). Toda entrada é validada (impede injeção de CSS) e o contraste do texto sobre a cor primária é calculado (WCAG AA 4.5:1) com escolha automática de texto claro/escuro em --r4-acc-txt. Densidade: use calc(8px * var(--r4-density, 1)) nos seus estilos, ou --r4-pad-y / --r4-pad-x / --r4-gap.',
     props: [
       { name: 'set({ mode, primary, radius, density, font })', type: 'R4.theme', desc: "mode: 'light' | 'dark' | 'auto'; primary: '#3b5bdb' ou 'rgb(59,91,219)'; radius: 0 a 24 (px); density: 'compact' | 'normal' | 'comfortable'; font: lista de nomes de fonte. Campos inválidos são ignorados com aviso." },
       { name: 'get()', type: 'object', desc: 'Estado atual { mode, primary, radius, density, font, preset, dark }.' },
@@ -402,7 +423,8 @@
   /* ============================================================
    * i18n
    * ============================================================ */
-  const FALLBACK = 'pt-BR', LKEY = 'r4-locale';
+  const FALLBACK = 'pt-BR', LKEY = 'locale';   // chave no R4.store (no localStorage: "r4:locale")
+  let pendingLocale = null;   // idioma salvo cujo dicionário ainda não foi adicionado (aplicado em add())
   const PLURAL_ALIAS = { zero: 'zero', um: 'one', one: 'one', dois: 'two', two: 'two', poucos: 'few', few: 'few', muitos: 'many', many: 'many', outros: 'other', other: 'other' };
   const dict = {};          // locale -> { chave: string | { one, other... } }
   let locale = FALLBACK;
@@ -458,7 +480,8 @@
     if (!l) { warn('i18n.add: locale inválido "' + loc + '"'); return i18n; }
     if (!messages || typeof messages !== 'object') return i18n;
     Object.assign(dict[l] ||= {}, flatten(messages, '', {}));
-    if (started18) retranslate(document);   // novas chaves podem completar elementos já na página
+    if (pendingLocale && (l === pendingLocale || l === pendingLocale.split('-')[0])) { const p = pendingLocale; pendingLocale = null; setLocale(p, { persist: false }); }   // idioma salvo que só agora existe
+    else if (started18) retranslate(document);   // novas chaves podem completar elementos já na página
     return i18n;
   }
   function setLocale(loc, opts) {
@@ -467,6 +490,7 @@
     if (!dict[l] && !dict[l.split('-')[0]]) warn('i18n.set: sem dicionário para "' + l + '"; usando ' + FALLBACK + ' como reserva. Use R4.i18n.add("' + l + '", {...}).');
     if (l === locale && !(opts && opts.force)) return i18n;
     const prev = locale;
+    pendingLocale = null;
     locale = l;
     try { root().setAttribute('lang', l); } catch (e) { /* ignora */ }
     if (!opts || opts.persist !== false) store.set(LKEY, l);
@@ -723,10 +747,15 @@
     if (c && !c._destroyed && c.rendered && typeof c.relocalize === 'function') { try { c.relocalize(); } catch (e) { console.error('[R4] relocalize:', e); } }
   }));
 
-  // restaura o idioma salvo
+  // restaura o idioma salvo (só um código de idioma válido; migra e APAGA a chave antiga r4-locale)
   (function () {
-    const saved = store.get(LKEY);
-    if (saved && canon(saved) && (dict[canon(saved)] || dict[canon(saved).split('-')[0]])) setLocale(saved, { persist: false });
+    const valido = v => (typeof v === 'string' && v.length <= 35 ? canon(v) || undefined : undefined);
+    const antigo = store.legacy('r4-locale');
+    let saved = store.get(LKEY, valido);
+    if (!saved && antigo) { saved = valido(antigo); if (saved) store.set(LKEY, saved); }
+    if (!saved) return;
+    if (dict[saved] || dict[saved.split('-')[0]]) setLocale(saved, { persist: false });
+    else pendingLocale = saved;
   })();
 
   R4.module('i18n', i18n, {
@@ -734,7 +763,7 @@
     description: 'Internacionalização: R4.t("chave", {params}) com interpolação {nome} e plural via Intl.PluralRules; dicionários pt-BR e en já trazem TODAS as strings fixas da lib sob r4.*; fallback para pt-BR; formatos de número, moeda e data por locale; atributo lang no <html>. No HTML: <r4-t key="r4.empty"></r4-t> ou r4-i18n="chave" em qualquer elemento (atualizam sozinhos ao trocar o idioma). Os textos fixos de TODOS os componentes (grid, form, ui, chart, files, diálogos, aria-labels) vêm de r4.*: ao trocar o idioma, o que está na tela se atualiza (atributo r4-i18n e método relocalize de cada componente; um único ouvinte global) e componentes novos já nascem no idioma atual. Para adicionar um idioma: R4.i18n.add("es", { r4: { empty: "Sin registros.", ... } }) e R4.i18n.set("es") — chaves ausentes usam pt-BR.',
     props: [
       { name: "R4.t('chave', {params})", type: 'string', desc: "Interpola {nome}. Plural: mensagem {um:'{n} item', outros:'{n} itens'} escolhida pelo parâmetro n (ou count). Chave ausente → fallback pt-BR → a própria chave (com aviso). Devolve TEXTO (params não são escapados): <r4-t>/r4-i18n usam textContent; se você concatenar em HTML, escape com R4.util.esc." },
-      { name: "i18n.set('pt-BR' | 'en')", type: 'R4.i18n', desc: 'Troca o idioma: atualiza <html lang>, salva no localStorage, retraduz <r4-t>/r4-i18n e dispara onChange.' },
+      { name: "i18n.set('pt-BR' | 'en')", type: 'R4.i18n', desc: 'Troca o idioma: atualiza <html lang>, salva no R4.store (r4:locale, 180 dias renovados a cada uso), retraduz <r4-t>/r4-i18n e dispara onChange.' },
       { name: 'i18n.add(locale, mensagens)', type: 'R4.i18n', desc: "Adiciona/mescla mensagens (aceita objetos aninhados: {r4:{ok:'OK'}} → 'r4.ok')." },
       { name: 'i18n.locale', type: 'string', desc: 'Idioma atual (somente leitura). i18n.locales lista os disponíveis.' },
       { name: 'i18n.onChange(fn(locale, anterior))', type: 'function', desc: 'Escuta trocas de idioma; devolve a função para cancelar.' },

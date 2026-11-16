@@ -91,19 +91,39 @@ window.R4Demos = {
     } }
   ],
   crypto: [
-    { title: 'Ida e volta', async fn(el, out) {
-      const pacote = await R4.crypto.encrypt({ usuario: 'otavio', senha: '123456' });
-      out({ pacote, original: await R4.crypto.decrypt(pacote) });
+    { title: 'Ida e volta com o servidor (pedido e resposta cifrados)', async fn(el, out) {
+      // pedido cifrado com a chave da sessão; o servidor decifra e devolve CIFRADO (cifrarResposta)
+      const resposta = await R4.http.post('/vitrine/api/echo-cifrado', { usuario: 'otavio', senha: '123456' }, { cifrarResposta: true });
+      out({ sessao: await R4.crypto.sessao(), resposta });
+    } },
+    { title: 'O que vai pela rede (só a chave PÚBLICA do servidor está na página)', async fn(el, out) {
+      // {metodo, caminho} formam o AAD: o pacote só vale para POST /vitrine/api/echo
+      const pacote = await R4.crypto.encrypt({ cartao: '4111 1111 1111 1111' }, { metodo: 'POST', caminho: '/vitrine/api/echo' });
+      out({ chavePublicaDoServidor: window.R4_SERVER_KEY, pacote, decifradoPelaPropriaSessao: await R4.crypto.decrypt(pacote) });
+    } },
+    { title: 'AAD: o mesmo pacote enviado para outra rota é recusado (400)', async fn(el, out) {
+      const pacote = await R4.crypto.encrypt({ valor: 100 }, { metodo: 'POST', caminho: '/vitrine/api/echo' });
+      const enviar = url => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pacote) }).then(async r => r.status + ' ' + JSON.stringify((await r.json()).retorno));
+      out({ rotaCerta: await enviar('/vitrine/api/echo'), outraRota: await enviar('/vitrine/api/cadastro') });
     } }
   ],
   http: [
     { title: 'Corpo criptografado (fetch simulado)', async fn(el, out) {
       const real = window.fetch; let enviado;
-      window.fetch = async (url, o) => { enviado = { url, method: o.method, body: JSON.parse(o.body) }; return { ok: true, text: async () => JSON.stringify({ ok: true }) }; };
+      // simula só /api/exemplo (os outros exemplos da página continuam usando o fetch real)
+      window.fetch = async (url, o) => {
+        if (!String(url).endsWith('/api/exemplo')) return real(url, o);
+        enviado = { url, method: o.method, body: JSON.parse(o.body) };
+        return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true }) };
+      };
       try {
         const resposta = await R4.http.post('/api/exemplo', { nome: 'R4' });
+        // o envelope v2 ({v,kid,k,s,z,x}) só a própria sessão (e o servidor) consegue abrir
         out({ enviado, resposta, corpoDescriptografado: await R4.crypto.decrypt(enviado.body) });
       } finally { window.fetch = real; }
+    } },
+    { title: 'Resposta cifrada (cifrarResposta) com o servidor de teste', async fn(el, out) {
+      out(await R4.http.post('/vitrine/api/echo-cifrado', { pedido: 42, itens: ['a', 'b'] }, { cifrarResposta: true }));
     } }
   ],
   msg: [

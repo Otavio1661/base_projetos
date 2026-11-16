@@ -2,8 +2,9 @@
 (() => {
   const { suite, test, assert } = R4Test;
   const css = () => (document.getElementById('r4-theme') || {}).textContent || '';
-  const KEY = 'r4-theme';
+  const KEY = 'r4:theme';   // o tema é guardado pelo R4.store: { v:1, d:{...tema...}, e:expira, a, b }
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const salvo = () => { try { const r = lsGet(KEY); return r === null ? null : JSON.parse(r).d; } catch (e) { return null; } };
   const dark = () => document.documentElement.classList.contains('r4-dark');
 
   suite('theme', () => {
@@ -164,10 +165,12 @@
       R4.theme.set({ primary: '#0b7d55', mode: 'dark' }, { persist: false });
       assert.eq(lsGet(KEY), null, 'persist:false não grava');
       R4.theme.set({ primary: '#e8590c', radius: 12 });
-      const salvo = JSON.parse(lsGet(KEY));
-      assert.eq(salvo.primary, '#e8590c');
-      assert.eq(salvo.radius, 12);
-      assert.eq(salvo.mode, 'dark');
+      const gravado = salvo();
+      assert.eq(gravado.primary, '#e8590c');
+      assert.eq(gravado.radius, 12);
+      assert.eq(gravado.mode, 'dark');
+      assert.eq(JSON.parse(lsGet(KEY)).v, 1, 'envelope do R4.store');
+      assert.near(JSON.parse(lsGet(KEY)).e - Date.now(), 180 * 86400000, 60000, 'validade de 180 dias');
       assert.eq(R4.theme.storageKey, KEY);
       R4.theme.reset();
       assert.eq(lsGet(KEY), null, 'reset apaga');
@@ -194,7 +197,8 @@
     test('restauração ao carregar: JSON malicioso no localStorage é descartado campo a campo (página recarregada simulada)', async t => {
       const anterior = lsGet(KEY);   // devolve o tema salvo do usuário no fim (o afterEach já o restaurou antes desta limpeza)
       t.cleanup(() => { try { anterior == null ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, anterior); } catch (e) { /* */ } });
-      localStorage.setItem(KEY, '{"mode":"dark","primary":"red;}*{display:none}","font":"a}*{x:y","radius":"1;}","__proto__":{"pwnTheme":1}}');
+      const agora = Date.now();
+      localStorage.setItem(KEY, '{"v":1,"d":{"mode":"dark","primary":"red;}*{display:none}","font":"a}*{x:y","radius":"1;}","__proto__":{"pwnTheme":1}},"e":' + (agora + 1e9) + ',"a":' + agora + ',"b":10}');
       const f = document.createElement('iframe');
       f.style.display = 'none';
       t.box.append(f);
@@ -202,7 +206,7 @@
       ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W[k]) W[k] = window[k]; });   // só ambientes sem suporte (jsdom)
       const erros = [];
       W.addEventListener('error', e => erros.push(e.message));
-      for (const s of ['core', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
+      for (const s of ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
         await new Promise((ok, no) => { const el = D.createElement('script'); el.src = location.origin + '/libr4/' + s + '.js'; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s)); D.head.append(el); });
       }
       const estilo = (D.getElementById('r4-theme') || {}).textContent || '';
@@ -219,7 +223,7 @@
       t.box.append(f2);
       const D2 = f2.contentDocument, W2 = f2.contentWindow;
       ['TextEncoder', 'TextDecoder'].forEach(k => { if (!W2[k]) W2[k] = window[k]; });
-      for (const s of ['core', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
+      for (const s of ['core', 'store', 'net', 'components', 'declarative', 'quick', 'tabs', 'icons', 'form', 'sanitize', 'files', 'ui', 'chart', 'theme']) {
         await new Promise((ok, no) => { const el = D2.createElement('script'); el.src = location.origin + '/libr4/' + s + '.js'; el.onload = ok; el.onerror = () => no(new Error('não carregou ' + s)); D2.head.append(el); });
       }
       assert.eq(W2.R4.theme.get().mode, 'light', 'JSON quebrado: segue o padrão');

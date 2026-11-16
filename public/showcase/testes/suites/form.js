@@ -340,14 +340,11 @@
     });
 
     test('form.submit: cifra o corpo com encrypt, usa PUT/GET conforme method e cabeçalhos extras', async t => {
-      const antes = R4.config.cryptoKey;
-      R4.config.cryptoKey = 'chave-form-teste';
-      t.cleanup(() => { R4.config.cryptoKey = antes; });
       const m = t.mockFetch({ '/api/f-enc': { body: { status: 200 } } });
       const f = t.create({ xtype: 'form', action: '/api/f-enc', encrypt: true, headers: { 'X-Teste': '1' }, fields: [{ type: 'text', name: 'a', value: 'segredo' }] });
       await f.submit();
-      assert.deepEq(Object.keys(m.calls[0].json).sort(), ['x', 'y', 'z'], 'corpo cifrado');
-      assert.deepEq(await R4.crypto.decrypt(m.calls[0].json), { a: 'segredo' });
+      assert.deepEq(Object.keys(m.calls[0].json).sort(), ['k', 'kid', 's', 'v', 'x', 'z'], 'envelope v2 (chave por sessão)');
+      assert.ok(!JSON.stringify(m.calls[0].json).includes('segredo'), 'o valor não vai em claro');
       assert.eq(m.calls[0].init.headers['X-Teste'], '1');
       const g = t.create({ xtype: 'form', action: '/api/f-enc', method: 'GET', fields: [{ type: 'text', name: 'q', value: 'a b&c' }, { type: 'multiselect', name: 'k', options: ['x', 'y'], value: ['x', 'y'] }] });
       await g.submit();

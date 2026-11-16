@@ -12,15 +12,16 @@
  * Classe base para controllers. Fornece utilitários comuns:
  * - `render($view, $data)`: renderiza views com layout padrão e partials;
  * - `json($data, $statusCode)`: responde JSON com código HTTP;
- * - `getPost()`: lê dados POST criptografados pelo frontend
- *    (integração com `App\Utils\Decryption`);
+ * - `getPost()`: lê o corpo JSON; decifra o envelope v2 do frontend
+ *    (`Core\Security\Crypto`, ECDH P-256 + AES-256-GCM, AAD = método + caminho);
+ * - `cifrar()` / `responderCifrado()`: resposta cifrada para a sessão do cliente (cabeçalho X-R4-Res: 1);
  * - `retorno(...)`: padrão simples para retorno JSON com status.
  *
  * Observações de segurança e uso:
  * - `render` faz `extract($data)` para tornar variáveis disponíveis na view;
  *   evite expor dados sensíveis via variáveis extraídas.
- * - `getPost` espera payloads compatíveis com o esquema de criptografia do
- *   frontend (chaves 'x','y','z') ou JSON em claro.
+ * - `getPost` aceita o envelope v2 {v,kid,k,s,z,x} ou JSON em claro (com CRYPTO_OBRIGATORIA=true,
+ *   ou getPost(true), corpo em claro é recusado). O formato antigo {x,y,z} é recusado (400).
  *
  * ============================================
  */
@@ -28,7 +29,7 @@
 namespace Core;
 
 use App\Config;
-use App\Utils\Decryption;
+use Core\Security\Crypto;
 use Core\Security\Input;
 
 class Controller
@@ -44,8 +45,12 @@ class Controller
 
     /** Por que o último getPost() devolveu null: 0 (ok/vazio), 400 (JSON inválido/profundo), 413 (grande demais). */
     public static int $postErro = 0;
+    /** Motivo da última recusa de criptografia (Crypto::motivo() ou 'obrigatoria') — só para LOG, nunca para o cliente. */
+    public static string $cryptoErro = '';
     private static ?array $postCache = null;
     private static bool $postLido = false;
+    /** Sessão do envelope v2 decifrado (para cifrar a resposta); null se o corpo veio em claro. */
+    private static ?array $sessaoCripto = null;
 
     /**
      * Renderiza uma view PHP e a inclui em um layout padrão quando disponível.
@@ -136,26 +141,45 @@ class Controller
     }
 
     /**
-     * Lê os dados do POST e, se necessário, realiza a descriptografia.
+     * Lê os dados do POST e, se vierem no envelope v2 da libr4, decifra (Core\Security\Crypto).
      *
      * Retorna `null` quando o payload é inválido ou vazio.
-     * Integra com `App\Utils\Decryption` para suportar payloads criptografados pelo frontend.
      *
      * Limites (proteção contra corpo gigante e JSON aninhado demais):
      *  - corpo acima de MAX_BODY (2 MB; ou MAX_POST_BYTES no .env) → null e Controller::$postErro = 413;
      *  - JSON inválido ou com profundidade > MAX_JSON_DEPTH (32) → null e $postErro = 400.
+     * Criptografia (falha fechada → null, $postErro = 400 e o motivo em Controller::$cryptoErro):
+     *  - envelope {v:2,kid,k,s,z,x}: AAD = REQUEST_METHOD + caminho de REQUEST_URI; pacote adulterado,
+     *    de outro endpoint/método, fora da janela de tempo, kid desconhecido ou malformado → recusado;
+     *  - formato antigo {x,y,z} (v1, removido) → recusado;
+     *  - corpo em claro com $exigirCifra = true (padrão: CRYPTO_OBRIGATORIA do .env) → recusado.
      * O resultado é guardado: chamar getPost() de novo não relê nem redecifra o corpo.
      *
+     * @param bool|null $exigirCifra true = esta rota só aceita corpo cifrado; null = CRYPTO_OBRIGATORIA
      * @return array|null
      */
-    public static function getPost(): ?array
+    public static function getPost(?bool $exigirCifra = null): ?array
     {
         header('Content-Type: application/json; charset=utf-8');
-        if (self::$postLido) {
-            return self::$postCache;
+        if (!self::$postLido) {
+            self::$postLido = true;
+            self::$postErro = 0;
+            self::$cryptoErro = '';
+            self::$postCache = self::lerCorpo();
         }
-        self::$postLido = true;
-        self::$postErro = 0;
+        $exigir = $exigirCifra ?? (defined('CRYPTO_OBRIGATORIA') && constant('CRYPTO_OBRIGATORIA') === true);
+        if ($exigir && self::$postErro === 0 && self::$sessaoCripto === null && self::$postCache !== null) {
+            self::$postErro = 400;
+            self::$cryptoErro = 'obrigatoria';
+            error_log('[R4 crypto] corpo em claro recusado: a rota exige criptografia (' . Crypto::caminhoDaRequisicao() . ')');
+            return null;
+        }
+        return self::$postErro === 0 ? self::$postCache : null;
+    }
+
+    /** Lê e decodifica o corpo uma única vez (ver getPost). */
+    private static function lerCorpo(): ?array
+    {
         $max = defined('MAX_POST_BYTES') && (int) constant('MAX_POST_BYTES') > 0 ? (int) constant('MAX_POST_BYTES') : self::MAX_BODY;
 
         if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $max) {
@@ -175,18 +199,87 @@ class Controller
             self::$postErro = 400;
             return null;
         }
-        // Pacote criptografado {x,y,z}
-        if (isset($data['x'], $data['y'], $data['z'])) {
-            $data = Decryption::decrypt($data, self::MAX_JSON_DEPTH);
-            if (!is_array($data)) {
+        // Envelope cifrado (v2). Um {x,y,z} antigo também cai aqui e é recusado.
+        if (Crypto::pareceEnvelope($data)) {
+            $r = Crypto::decryptRequest($data, Crypto::aadDaRequisicao(), self::MAX_JSON_DEPTH);
+            if ($r === null) {
                 self::$postErro = 400;
+                self::$cryptoErro = Crypto::motivo() ?: 'invalido';
+                error_log('[R4 crypto] pacote recusado (' . self::$cryptoErro . ') em ' . Crypto::caminhoDaRequisicao());
                 return null;
             }
+            self::$sessaoCripto = $r;
+            $data = $r['d'];
+            if (!is_array($data)) {
+                return null;   // dado cifrado válido, mas não é objeto/lista: getPost só devolve array
+            }
         }
-        if (empty($data)) {
+        return empty($data) ? null : $data;
+    }
+
+    /** O corpo desta requisição veio cifrado (envelope v2 válido)? */
+    public static function postCifrado(): bool
+    {
+        if (!self::$postLido) {
+            self::getPost(false);
+        }
+        return self::$sessaoCripto !== null;
+    }
+
+    /** O cliente pediu resposta cifrada (cabeçalho X-R4-Res: 1) e há sessão para cifrá-la? */
+    public static function respostaCifradaPedida(): bool
+    {
+        return ($_SERVER['HTTP_X_R4_RES'] ?? '') === '1' && self::postCifrado();
+    }
+
+    /**
+     * Cifra $dados para a sessão do cliente (mesma chave de sessão do pedido; IV novo; AAD "R4v2|res|caminho").
+     * Devolve {v:2, z, x} ou null se o pedido não veio cifrado.
+     */
+    public static function cifrar($dados): ?array
+    {
+        if (!self::postCifrado()) {
             return null;
         }
-        return self::$postCache = $data;
+        return Crypto::encryptResponse($dados, self::$sessaoCripto, Crypto::caminhoDaRequisicao());
+    }
+
+    /**
+     * Responde JSON — cifrado se o cliente pediu (X-R4-Res: 1) e o pedido veio cifrado; senão em claro.
+     * (Se pediu e o pedido veio em claro, a resposta vai em claro e a libr4 a RECUSA: falha fechada no cliente.)
+     */
+    public static function responderCifrado($dados, int $status = 200): void
+    {
+        header('Vary: X-R4-Res', false);
+        if (self::respostaCifradaPedida()) {
+            $env = self::cifrar($dados);
+            if ($env !== null) {
+                self::responder($env, $status);
+            }
+        }
+        self::responder($dados, $status);
+    }
+
+    /**
+     * Resposta 400 limpa para corpo cifrado recusado (sem detalhes; o motivo vai só para o log).
+     * Inclui "codigo" apenas quando o cliente pode se recuperar sozinho: R4_CHAVE (chave do servidor
+     * mudou) ou R4_TEMPO (relógio fora da janela) — o R4.http tenta de novo UMA vez.
+     */
+    public static function falhaCripto(): void
+    {
+        if (self::$cryptoErro === 'obrigatoria') {
+            self::responder(['status' => 400, 'retorno' => 'Esta rota exige o corpo cifrado (R4.http com encrypt: true).'], 400);
+        }
+        $r = ['status' => 400, 'retorno' => 'Pacote de criptografia inválido ou expirado.'];
+        $codigo = match (self::$cryptoErro) {
+            'kid' => 'R4_CHAVE',
+            'tempo' => 'R4_TEMPO',
+            default => null,
+        };
+        if ($codigo !== null) {
+            $r['codigo'] = $codigo;
+        }
+        self::responder($r, 400);
     }
 
     /**
@@ -210,6 +303,9 @@ class Controller
         $dados = self::getPost();
         if (self::$postErro === 413) {
             self::retorno('Corpo da requisição grande demais', 413);
+        }
+        if (self::$postErro === 400 && self::$cryptoErro !== '') {
+            self::falhaCripto();
         }
         if (self::$postErro === 400) {
             self::responder(['status' => 400, 'retorno' => 'JSON inválido', 'erros' => ['_' => 'Corpo da requisição inválido.']], 400);

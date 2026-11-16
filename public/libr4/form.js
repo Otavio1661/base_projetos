@@ -1467,7 +1467,7 @@
       Object.entries(data || {}).forEach(([k, v]) => { if (v != null) q.append(k, Array.isArray(v) ? v.join(',') : String(v)); });
       const s = q.toString();
       if (s) url += (url.includes('?') ? '&' : '?') + s;
-    } else body = JSON.stringify(encrypt ? await R4.crypto.encrypt(data) : data);
+    } else body = JSON.stringify(encrypt ? await R4.crypto.encrypt(data, { metodo: method, caminho: url }) : data);
     const res = await fetch(url, { method, body, credentials: 'same-origin',
       headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, headers || {}) });
     const text = await res.text();

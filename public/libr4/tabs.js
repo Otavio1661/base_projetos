@@ -9,6 +9,11 @@
  *   - a aba ativa sempre rola para dentro da vista; a roda do mouse rola a faixa
  *     de abas na horizontal; barra de rolagem fina.
  *   - abas com role="tab", foco por teclado (Enter/Espaço ativa), aria-selected.
+ *   - abas PERSISTENTES: `persist: 'chave'` guarda no R4.store só {chave, título} de cada aba (nada de
+ *     conteúdo/HTML) e a aba ativa, com validade (persistTtl, renovada a cada uso); getSavedState() SEMPRE
+ *     revalida o que está no storage; restoreSaved(fábrica) recria as abas por uma lista permitida.
+ *   - `maxTabs`: ao abrir além do limite, fecha a aba mais antiga que não esteja ativa.
+ *   - fechar uma aba destrói também os componentes que estavam dentro dela (nada sobra em R4.instances).
  * ============================================
  */
 (function (R4) {
@@ -17,12 +22,92 @@
   if (!entry) return;
   const P = entry.cls.prototype;
   P.config.reorderable = true;
+  P.config.persist = '';
+  P.config.persistTtl = '7d';
+  P.config.maxTabs = 30;
   const meta = entry.meta;
   meta.props = (meta.props || []).concat([
     { name: 'reorderable', type: 'boolean', default: 'true', desc: 'Permite reordenar as abas arrastando (ou Alt+←/→ no teclado).' },
-    { name: 'move(aba|chave|índice, novoÍndice)', type: 'método', desc: 'Move uma aba de posição.' }
+    { name: 'move(aba|chave|índice, novoÍndice)', type: 'método', desc: 'Move uma aba de posição.' },
+    { name: 'persist', type: 'string', default: "''", desc: "Chave do R4.store onde guardar as abas abertas (vazio = não guarda). Só abas com key [A-Za-z0-9_.-] (1 a 64) entram; salva {key, título curto} e a aba ativa, nunca conteúdo. Salva ~300 ms depois de abrir/fechar/mover/trocar de aba e ao sair da página." },
+    { name: 'persistTtl', type: 'string | number', default: "'7d'", desc: "Validade do estado salvo ('30m', '12h', '7d' ou ms), renovada a cada uso (sliding). Depois disso a lixeira do R4.store apaga." },
+    { name: 'maxTabs', type: 'number', default: '30', desc: 'Máximo de abas abertas depois de montado o painel: ao passar, fecha a aba mais antiga que não seja a ativa. 0 = sem limite.' },
+    { name: 'getSavedState()', type: '{tabs:[{key,title}], active} | null', desc: 'Estado salvo, SEMPRE revalidado (tipos, tamanhos, chaves, duplicadas, limite). Dado adulterado no storage vira null/é filtrado.' },
+    { name: 'restoreSaved(fábrica)', type: 'number', desc: 'Recria as abas salvas, na ordem. fábrica({key, title}) devolve a config da aba (ex.: { title, html, closable }) ou null para IGNORAR a chave (lista permitida). Reativa a aba ativa salva, não repete chave já aberta, regrava o estado limpo e dispara tabsrestore. Devolve quantas abriu.' },
+    { name: 'saveState() / clearSaved()', type: 'método', desc: 'Grava agora / apaga o estado salvo (não fecha as abas abertas).' }
   ]);
-  meta.events = (meta.events || []).concat(['tabmove']);
+  meta.events = (meta.events || []).concat(['tabmove', 'tabremove', 'tabsrestore']);
+
+  /* ---------- persistência ---------- */
+  const KEYRE = /^[\w.-]{1,64}$/;
+  const BADKEY = new Set(['__proto__', 'constructor', 'prototype']);   // nomes que nunca viram chave de aba salva
+  const HARD = 100;                                // nunca lê/grava mais que isso, mesmo com maxTabs: 0
+  const pending = new Set();                       // painéis com gravação adiada (para gravar ao sair da página)
+  let tabSeq = 0;
+  /** título curto de texto puro: sem controles/bidi/zero-width e sem < > (nunca HTML), até 60 caracteres */
+  // controles, bidi, zero-width e separadores de linha (faixas em código: este arquivo fica 100% ASCII)
+  const BAD_CH = new RegExp('[' + [[0, 31], [127, 159], [0x200b, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]].map(r => r.map(c => '\\u' + ('0000' + c.toString(16)).slice(-4)).join('-')).join('') + '<>]', 'g');
+  const cleanTitle = s => String(s == null ? '' : s).replace(BAD_CH, '').trim().slice(0, 60);
+  /** valida o estado vindo do storage (NÃO confiável): devolve {tabs, active} limpo ou undefined */
+  function validState(o, max) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || !Array.isArray(o.tabs)) return undefined;
+    const seen = new Set(), tabs = [], cap = max > 0 ? Math.min(max, HARD) : HARD;
+    for (const t of o.tabs.slice(0, HARD * 2)) {
+      if (!t || typeof t !== 'object' || typeof t.key !== 'string' || !KEYRE.test(t.key) || BADKEY.has(t.key) || seen.has(t.key)) continue;
+      seen.add(t.key);
+      tabs.push({ key: t.key, title: cleanTitle(typeof t.title === 'string' ? t.title : '') || t.key });
+      if (tabs.length >= cap) break;
+    }
+    return tabs.length ? { tabs, active: typeof o.active === 'string' && seen.has(o.active) ? o.active : null } : undefined;
+  }
+  const canSave = c => !!(c.persist && typeof c.persist === 'string' && R4.store);
+
+  P.getSavedState = function () {
+    if (!canSave(this)) return null;
+    const max = this.maxTabs;
+    return R4.store.get(this.persist, { schema: o => validState(o, max), fallback: null });
+  };
+  P.saveState = function () {
+    clearTimeout(this._pt); this._pt = 0; pending.delete(this);
+    if (!canSave(this) || this._destroyed) return false;
+    const tabs = this.tabs.filter(t => typeof t.key === 'string' && KEYRE.test(t.key)).slice(0, HARD)
+      .map(t => ({ key: t.key, title: cleanTitle(t.el.firstChild && t.el.firstChild.textContent) || t.key }));
+    if (!tabs.length) { R4.store.del(this.persist); return true; }
+    const cur = this.current && this.current.key;
+    return R4.store.set(this.persist, { tabs, active: typeof cur === 'string' && KEYRE.test(cur) ? cur : null }, { ttl: this.persistTtl, sliding: true, now: true });
+  };
+  P.clearSaved = function () {
+    clearTimeout(this._pt); this._pt = 0; pending.delete(this);
+    if (canSave(this)) R4.store.del(this.persist);
+    return this;
+  };
+  /** agenda a gravação (debounce 300 ms) — só depois de montado e se `persist` estiver ligado */
+  P._persistSoon = function () {
+    if (!this._persistOn || !canSave(this)) return;
+    clearTimeout(this._pt); pending.add(this);
+    this._pt = setTimeout(() => this.saveState(), 300);
+  };
+  P.restoreSaved = function (factory) {
+    const st = this.getSavedState();
+    if (!st) return 0;
+    let n = 0;
+    st.tabs.forEach(s => {
+      if (this.find(s.key)) return;                                  // nunca abre a mesma aba duas vezes
+      let cfg = null;
+      try { cfg = typeof factory === 'function' ? factory({ key: s.key, title: s.title }) : null; } catch (e) { cfg = null; }
+      if (!cfg || typeof cfg !== 'object') return;                   // a fábrica é a lista permitida: o resto é descartado
+      this.add(Object.assign({}, cfg, { key: s.key }), false); n++;
+    });
+    const ativa = st.active && this.find(st.active);
+    if (ativa) this.setActive(ativa);
+    this.fire('tabsrestore', this, st, n);
+    this.saveState();                                                // regrava só o que valeu (o descartado some do storage)
+    return n;
+  };
+  if (typeof window !== 'undefined') window.addEventListener('pagehide', () => pending.forEach(p => { try { p.saveState(); } catch (e) { /* ignora */ } }));
+
+  const origDestroy = P.destroy;
+  P.destroy = function () { clearTimeout(this._pt); this._pt = 0; pending.delete(this); return origDestroy.apply(this, arguments); };
 
   const DRAG_START_PX = 5;
   const tabOf = (cmp, ref) => typeof ref === 'number' ? cmp.tabs[ref]
@@ -40,6 +125,7 @@
     const next = this.tabs[to + 1];
     this.strip.insertBefore(tab.el, next ? next.el : null);
     this.fire('tabmove', this, tab.cmp, from, to);
+    this._persistSoon();
     return this;
   };
 
@@ -125,17 +211,38 @@
   P.add = function (cfg, activate = true) {
     const panel = origAdd.call(this, cfg, false);
     const tab = this.tabs[this.tabs.length - 1];
+    tab._n = ++tabSeq;                                         // ordem de criação (para fechar a mais antiga)
     this._enhanceTab(tab);
     if (activate) this.setActive(tab);
+    if (this.rendered && this.maxTabs > 0) {                   // limite: fecha a mais antiga que não seja a ativa nem a nova
+      while (this.tabs.length > this.maxTabs) {
+        const velha = this.tabs.filter(x => x !== this.current && x !== tab).sort((a, b) => a._n - b._n)[0];
+        if (!velha) break;
+        this.remove(velha);
+      }
+    }
+    this._persistSoon();
     return panel;
   };
 
   const origSet = P.setActive;
   P.setActive = function (t) {
+    const antes = this.current;
     const r = origSet.call(this, t);
     this.tabs.forEach(x => x.el.setAttribute('aria-selected', x === this.current ? 'true' : 'false'));
     const cur = this.current;
     if (cur && cur.el.scrollIntoView) cur.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (cur !== antes) this._persistSoon();
+    return r;
+  };
+
+  const origRemove = P.remove;
+  P.remove = function (t) {
+    const tab = this.tabs.indexOf(t) >= 0 ? t : null;
+    // destrói os componentes que estavam DENTRO da aba (o painel só destrói os próprios filhos): nada sobra em R4.instances
+    if (tab && tab.cmp.el) tab.cmp.el.querySelectorAll('.r4-cmp').forEach(n => { const c = R4.instances[n.id]; if (c && c.el === n && c !== tab.cmp) { try { c.destroy(); } catch (e) { /* ignora */ } } });
+    const r = origRemove.call(this, t);
+    if (tab) { this.fire('tabremove', this, tab.cmp, tab.key); this._persistSoon(); }
     return r;
   };
 
@@ -148,7 +255,9 @@
         ev.preventDefault();
       }
     }, { passive: false });
-    return origAfter && origAfter.call(this);
+    const r = origAfter && origAfter.call(this);
+    this._persistOn = true;                                // daqui em diante, mudanças nas abas são gravadas (se persist estiver ligado)
+    return r;
   };
 
   // abas criadas no build() (antes de existir _enhanceTab no protótipo) — nada a fazer: o P.add já está ativo

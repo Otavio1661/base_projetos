@@ -4,7 +4,8 @@ Este documento descreve o modelo de ameaça da libr4 (R4 dev), o que a bibliotec
 continua sendo responsabilidade de quem a usa, a verdade sobre a criptografia no cliente, o
 checklist de produção e a auditoria feita (achados, correções e testes).
 
-Testes automatizados: `node tools/testes-seguranca.js` (veja a seção 12).
+Testes automatizados: `node tools/testes-seguranca.js` e `php tools/testes-transport.php` (veja a seção 12).
+Criptografia v2 (nenhum segredo no navegador) e política HTTPS: seções 5 e 5.1.
 Injeção de SQL, de arquivos e de prompt (servidor + cliente): seção 13.
 
 ---
@@ -39,7 +40,7 @@ atacante que já executa script na página, e o servidor (a validação no backe
 | `r4-click` | Nenhuma ação usa `eval`. `goto:` só navega para relativa, `#`, `http(s)`, `mailto`, `tel` — `javascript:`, `data:`, `vbscript:` são bloqueados (também com espaços/tabs no meio do esquema). `alert:`, `toast:`, `notify:` mostram texto. |
 | URLs em atributos | `R4.util.el` e `domAttrs` recusam handlers inline (`onclick="..."`) e URLs perigosas em `href/src/action/formaction/...`. `dropdown`, `breadcrumb` e `avatar` filtram `href`/`src`. |
 | Protótipos | `R4.create(cfg)`, `R4.util.merge`, `R4.util.assign`, `R4.notify(obj)` e a leitura de atributos ignoram `__proto__`, `constructor`, `prototype`. `parseCSV`/`parseXLSX` gravam `__proto__` como propriedade própria (nunca mudam o protótipo). |
-| Rede | `R4.http`, grid (`src`), form (`action`), select/stat/stats/timeline/chart (`src`): só `http(s)`/relativa; outra origem gera aviso (ou bloqueio com `R4.config.strictOrigins = true`); `credentials: 'same-origin'`. |
+| Rede | `R4.http`, grid (`src`), form (`action`), select/stat/stats/timeline/chart (`src`): só `http(s)`/relativa; página https não envia para `http://` (conteúdo misto); outra origem gera aviso (ou bloqueio com `R4.config.strictOrigins = true`); `credentials: 'same-origin'`. |
 | Dados de servidor como HTML | `<r4-timeline src>` ignora o campo `html` dos eventos vindos do servidor. |
 | Tema | Cor, raio, densidade, modo e fonte passam por allowlist antes de virar CSS; valor adulterado no `localStorage` é descartado. Presets só os próprios (nada de `__proto__`). Cores de gráfico só por allowlist (`#hex`, nome, `var(--x)`, `rgb/hsl/...()` numéricos). |
 | i18n | `<r4-t>`/`r4-i18n` usam `textContent`; `r4-i18n` só escreve `placeholder`, `title`, `aria-label`, `alt`, `label`, `aria-description` (nunca `on*`, `href`, `src`, `style`). |
@@ -47,7 +48,7 @@ atacante que já executa script na página, e o servidor (a validação no backe
 | i18n dos componentes | Os textos fixos da lib vêm de `R4.t` e são gravados com `textContent`/atributos de texto; params (nome de coluna, mensagem do servidor, nome de arquivo) são dados, nunca markup. `R4.util.tx` grava `r4-i18n` (+ `params` em JSON) só nos atributos permitidos pelo i18n. |
 | Arquivos | Exportação CSV/XLSX neutraliza fórmulas (`= + - @ TAB CR` → prefixo `'`; XLSX grava texto como string compartilhada, nunca `<f>`). Leitura: limites de tamanho, XLSX com `DOCTYPE` recusado, limite descompactado ("zip bomb"), de entradas, de linhas e de células, CRC conferido. Nome de download sem caminho, controle ou caracteres bidi (U+202E). |
 | Formulários | `pattern` limitado a 512 caracteres; padrão com quantificador aninhado (`(a+)+`, `(\w*x)*`, `(a+){2,}`) é ignorado com aviso (ReDoS); valor com mais de 5.000 caracteres nem chega à regex. |
-| Criptografia | AES-GCM 256, PBKDF2-SHA-256 100 mil iterações, salt (16 B) e IV (12 B) novos a cada mensagem, tag conferida (pacote adulterado → `null`). **Chave vazia fora de localhost → erro** (não cifra com chave pública "vazia"). |
+| Criptografia | v2: **nenhum segredo no navegador** (só a chave pública P-256 do servidor). ECDH efêmero por sessão de página + HKDF-SHA256 + AES-256-GCM com IV novo por mensagem; AAD = método + caminho; janela de tempo no servidor; tudo que falha → `null`/erro claro no cliente e 400 JSON limpo no servidor. Detalhes e limites na seção 5. |
 
 ---
 
@@ -129,23 +130,121 @@ desliga a montagem automática (aí chame `R4.scan(el)` só onde quiser).
 
 ---
 
-## 5. A verdade sobre a criptografia (`R4.crypto` / `BASE_CRIPTOGRAFIA`)
+## 5. Criptografia v2 (`R4.crypto` / `Core\Security\Crypto`)
 
-- O `public/index.php` injeta `window.BASE_CRIPTOGRAFIA = "..."` em **toda** página HTML.
-  **A chave está no navegador de todo visitante.** Qualquer pessoa (ou script de XSS) que abre a
-  página consegue cifrar e decifrar exatamente como o front-end.
-- Portanto o AES-GCM aqui **protege contra captura passiva** (logs de proxy, ferramentas que gravam
-  corpo de requisição, olhares casuais no DevTools de terceiros) e **ofusca** o corpo — **não é
-  segredo contra o usuário nem contra um atacante que abre a página**, não autentica ninguém e
-  **não substitui HTTPS** (sem TLS, quem intercepta o tráfego também recebe a página com a chave).
-- Parâmetros (corretos para o que se propõe): AES-256-GCM, PBKDF2-SHA-256 com 100 mil iterações,
-  salt de 16 bytes e IV de 12 bytes aleatórios por mensagem (`crypto.getRandomValues`), sem
-  reaproveitamento de IV (cada mensagem também deriva uma chave nova por causa do salt).
-- Chave vazia: em `localhost`/`127.*` só gera aviso; **em qualquer outro host a lib se recusa a
-  cifrar/decifrar** e `R4.http.post` falha antes de enviar (falha segura).
-- Custo: o servidor roda PBKDF2 (100 mil iterações) por requisição cifrada — isso amplifica DoS;
-  limite a taxa de requisições no proxy.
-- O que realmente protege dados: HTTPS + autenticação/autorização no servidor + validação.
+O esquema antigo (v1: `{x,y,z}` com PBKDF2 sobre `BASE_CRIPTOGRAFIA`, uma chave **entregue a todo
+visitante**) foi **removido**. No v2 **nenhum segredo sai do servidor**.
+
+### Como funciona
+
+1. O servidor tem um par de chaves **P-256 fixo**. A chave **privada** fica só no `.env`
+   (`CRYPTO_PRIVATE_KEY`, gerada por `php tools/gerar-chave.php`); em `APP_ENV=local`, se faltar, é
+   gerada em `storage/dev-crypto-key.pem` (0600, fora do Git). Em produção é obrigatória.
+2. A página recebe só a chave **pública**: `window.R4_SERVER_KEY = {v:2, pub, kid}` (injetada pelo
+   `public/index.php`) ou `GET /r4/chave` (mesmo JSON, `Cache-Control: no-cache`). `kid` = 8 primeiros
+   hex do SHA-256 do ponto público; a lib confere que `kid` e `pub` batem.
+3. A cada **sessão de página** a libr4 gera um par ECDH efêmero (WebCrypto, chave privada **não
+   exportável**, só em memória — nunca em `localStorage`/`sessionStorage`/cookie), faz ECDH com a chave
+   do servidor e deriva com **HKDF-SHA256** (salt aleatório de 16 bytes por sessão, info `"R4v2 req"`)
+   uma chave **AES-256-GCM**. Cada mensagem usa **IV aleatório de 12 bytes**.
+4. Envelope enviado: `{v:2, kid, k, s, z, x}` (base64url sem `=`): `k` = chave pública efêmera do
+   cliente (65 bytes), `s` = salt, `z` = IV, `x` = cifra + tag de 16 bytes.
+5. **AAD** = `"R4v2|" + MÉTODO + "|" + caminho` (sem query). O pacote só abre no **mesmo método e
+   endpoint**: copiar o corpo de um `POST /api/perfil` para `POST /api/transferir` (ou trocar por `PUT`)
+   falha na tag.
+6. Texto claro = `{t, n, d}`: `t` = hora (epoch s) e `n` = nonce aleatório. O servidor recusa `t` mais
+   velho que `CRYPTO_JANELA_SEG` (padrão 300 s) ou mais de 60 s no futuro.
+7. **Resposta cifrada** (opcional): com o cabeçalho `X-R4-Res: 1` (`R4.http.post(url, dados,
+   {cifrarResposta: true})`) e a rota usando `Controller::responderCifrado()`, o servidor responde
+   `{v:2, z, x}` com a **mesma sessão** (HKDF info `"R4v2 res"`, IV novo, AAD `"R4v2|res|" + caminho`)
+   e o texto claro leva o nonce do pedido (`{n, d}`): a resposta não serve para outro pedido. Se o
+   servidor responder em claro, o `R4.http` **recusa** (falha fechada).
+8. No PHP: `Controller::getPost()` decifra (AAD montado de `REQUEST_METHOD` + `parse_url(REQUEST_URI,
+   PHP_URL_PATH)`); `Core\Security\Crypto::decryptRequest()` confere versão, `kid`, chaves exatas do
+   envelope, base64url **estrito e canônico**, tamanhos (`k` 65 bytes começando em `0x04` e **na curva** —
+   o OpenSSL recusa ponto inválido), tag GCM, JSON, janela de tempo; qualquer falha → `null` (sem
+   exceção) e a rota responde **400 JSON limpo** (`{status:400, retorno:"Pacote de criptografia inválido
+   ou expirado."}`), com o motivo só no log. JSON em claro continua aceito, salvo com
+   `CRYPTO_OBRIGATORIA=true` (ou `getPost(true)` na rota) → 400.
+9. Recuperação automática: só dois códigos vão ao cliente — `R4_CHAVE` (kid desconhecido: a chave do
+   servidor mudou) e `R4_TEMPO` (relógio fora da janela). O `R4.http` então busca `/r4/chave` (ou ajusta o
+   relógio pelo cabeçalho `Date`) e tenta de novo **uma** vez.
+10. Rotação: `CRYPTO_PRIVATE_KEY_ANTERIOR` continua aceita pelo `kid` (sessões abertas não caem); só a
+    atual é publicada. Passo a passo em `docs/PRODUCAO.md`.
+
+### O que o v2 garante
+
+- **O segredo nunca sai do servidor**: ler o HTML, o JavaScript, o `localStorage` ou o tráfego não
+  entrega nenhuma chave capaz de decifrar o tráfego de **outro** usuário.
+- **Chave por sessão**: cada aba/carregamento tem chave AES própria; capturar o tráfego de uma sessão
+  não ajuda com as outras (a chave efêmera do cliente morre com a página).
+- **Integridade + amarração ao endpoint**: AES-GCM detecta qualquer bit alterado; o AAD impede usar o
+  pacote em outra rota ou método.
+- **Janela temporal**: pacote capturado deixa de valer depois de `CRYPTO_JANELA_SEG`.
+- **Falha fechada** em tudo: pacote inválido nunca vira "dado em claro"; o formato v1 `{x,y,z}` é recusado.
+
+### Limites honestos (leia antes de confiar)
+
+- **Sem HTTPS, um atacante ATIVO no caminho pode se passar pelo servidor**: ele troca a chave pública
+  dentro do HTML (ou da resposta de `/r4/chave`) pela dele, lê tudo e repassa. A criptografia v2 só
+  resolve o atacante **passivo** sem TLS. **HTTPS continua obrigatório em produção** (seção 5.1).
+- **XSS lê os dados em claro**: um script injetado na página vê o que o usuário digita antes de cifrar
+  (e pode chamar `R4.http` como a página). CSP, escape e `r4-ignore` continuam sendo a defesa.
+- **Replay dentro da janela**: sem cache de nonces, o MESMO pacote reenviado para o MESMO endpoint dentro
+  de `CRYPTO_JANELA_SEG` é aceito de novo. Com **APCu** ligado (`apcu_enabled()`), o servidor guarda cada
+  nonce e recusa a repetição (motivo `replay`). Sem APCu (como neste ambiente de dev), torne as rotas
+  sensíveis idempotentes ou use um token de uso único (ex.: id de transação) — ou ligue APCu/Redis.
+- Não autentica o usuário (qualquer um pode fazer uma sessão com a chave pública): **autenticação,
+  autorização e validação** (`ctrl::validate`) continuam obrigatórias no servidor.
+- Relógio: o `t` vem do navegador (corrigido pelo `Date` do servidor quando há diferença > 30 s).
+- O caminho do AAD é o que o PHP vê em `REQUEST_URI`: um proxy que **reescreve o caminho** (ex.: tira
+  um prefixo `/app`) faz o pacote falhar — publique a aplicação no mesmo caminho que o navegador usa.
+- Custo: uma derivação ECDH + HKDF por requisição cifrada (barato; o antigo PBKDF2 de 100 mil
+  iterações por requisição deixou de existir). Limite de taxa no proxy continua recomendado.
+- `form.js` (form com `encrypt`) e `components.js` (grid com `encrypt`) ainda chamam
+  `R4.crypto.encrypt(dados)` sem `{metodo, caminho}`: o AAD vira `POST` + caminho da **página** e o
+  servidor recusa se o `action`/`src` for outra rota (aviso no console). Corrigir passando
+  `{ metodo, caminho: url }` nesses dois pontos (ver relatório da migração).
+
+### API resumida
+
+```js
+// padrão: corpo cifrado; resposta em JSON comum
+await R4.http.post('/api/pedido', { item: 1 });
+// pedido E resposta cifrados (resposta em claro é recusada)
+await R4.http.post('/api/pedido', { item: 1 }, { cifrarResposta: true });
+// baixo nível
+const env = await R4.crypto.encrypt(dados, { metodo: 'POST', caminho: '/api/pedido' });
+await R4.crypto.decrypt(respostaCifrada);    // {v,z,x} da sessão → dados (ou null)
+R4.config.exigirHttps = true;                // página http fora de localhost → recusa enviar
+```
+
+```php
+$d = ctrl::getPost();             // decifrado (ou JSON em claro); null + Controller::$postErro=400 se pacote ruim
+$d = ctrl::getPost(true);         // esta rota só aceita corpo cifrado
+if (ctrl::$postErro === 400 && ctrl::$cryptoErro !== '') ctrl::falhaCripto();   // 400 JSON limpo
+ctrl::responderCifrado(['status' => 200, 'retorno' => $r]);   // cifra se o cliente pediu (X-R4-Res: 1)
+```
+
+## 5.1 Política HTTPS/HTTP (`Core\Security\Transport`)
+
+Aplicada no começo do `public/index.php` (logo após o `src/Env.php`). Variáveis e cenários completos em
+`docs/PRODUCAO.md`. Resumo:
+
+- HTTPS é reconhecido por `$_SERVER['HTTPS']`, porta 443 ou `X-Forwarded-Proto: https` **vindo de um IP
+  em `TRUSTED_PROXIES`**. Cabeçalhos `X-Forwarded-*` de qualquer outro cliente são ignorados (forjá-los
+  não muda nada).
+- `HTTPS_MODE=required` (padrão em produção): GET/HEAD em HTTP → **308** para
+  `https://<host validado><uri>`; outros métodos → **426** (POST nunca é redirecionado). IPs/CIDRs em
+  `HTTP_PERMITIDO_PARA` (padrão `127.0.0.1,::1`) podem usar HTTP (chamadas internas). Em HTTPS envia
+  `Strict-Transport-Security` (`HSTS_MAX_AGE`, `HSTS_SUBDOMAINS`).
+- `HTTPS_MODE=optional` (padrão fora de produção): nada é bloqueado, sem HSTS; em produção registra um
+  aviso no log (no máximo 1x por dia).
+- `APP_HOSTS` preenchido: Host fora da lista → 400 (anti Host-header injection). Vazio: o Host só é
+  usado no redirecionamento se tiver sintaxe válida (nunca é refletido cru).
+- O cookie de sessão usa `secure` = detecção real de HTTPS (`Transport::isHttps()`).
+- No cliente: página https não envia para `http://` (conteúdo misto); página http fora de
+  localhost/rede privada avisa uma vez no console; com `R4.config.exigirHttps = true` recusa enviar.
 
 ---
 
@@ -160,8 +259,10 @@ desliga a montagem automática (aí chame `R4.scan(el)` só onde quiser).
 - `vitrine.php` só carrega arquivos locais (`/libr4`, `/showcase`); o único script inline aplica o
   tema salvo (lê o `localStorage`, só liga/desliga uma classe).
 - A API de teste: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'`, corpo ≤ 1 MB
-  (413), pacote `{x,y,z}` conferido antes de descriptografar (400), parâmetros GET só como texto e
-  com limites, ordenação só por campo existente, JSON com `JSON_HEX_*` (o eco não reflete `<`/`>`).
+  (413), envelope cifrado v2 conferido antes de qualquer rota (400 JSON limpo; `{x,y,z}` antigo
+  também recusado), parâmetros GET só como texto e com limites, ordenação só por campo existente,
+  JSON com `JSON_HEX_*` (o eco não reflete `<`/`>`). `POST /vitrine/api/echo-cifrado` responde
+  cifrado quando o pedido manda `X-R4-Res: 1`.
 
 ---
 
@@ -178,13 +279,15 @@ Aplicado no nginx:
 - `Permissions-Policy` (câmera, microfone, geolocalização, pagamento, USB, sensores desligados),
   `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options`, `Referrer-Policy`, `nosniff`
   (agora repetidos também no bloco de estáticos, que antes os perdia); `X-Powered-By` escondido.
-- `Strict-Transport-Security` está comentado: ligue quando o site estiver atrás de HTTPS.
+- `Strict-Transport-Security` é enviado pelo PHP (`Core\Security\Transport`) só em HTTPS com
+  `HTTPS_MODE=required` — não ligue também no nginx (duplicaria). O `default.conf` tem, comentado, um
+  exemplo de server 443 com TLS, redirecionamento e repasse de `X-Forwarded-Proto` atrás de proxy.
 
-**Para CSP estrita** (sem `'unsafe-inline'` em `script-src`): o `public/index.php` precisa deixar de
-injetar script inline sem nonce. Opções: (a) gerar um nonce por requisição no PHP e mandar a CSP
-pelo PHP; (b) usar o hash do script da chave (comando no comentário do `default.conf`); (c) trocar a
-injeção por `<meta name="r4-crypto-key" content="...">` lida pela lib. A libr4 em si não precisa de
-script inline nem de `eval`. `style-src 'unsafe-inline'` continua necessário (a lib cria `<style>`
+**Para CSP estrita** (sem `'unsafe-inline'` em `script-src`): o `public/index.php` injeta um script
+inline com a chave **pública** (`window.R4_SERVER_KEY`). Opções: (a) gerar um nonce por requisição no
+PHP e mandar a CSP pelo PHP; (b) usar o hash desse script (comando no comentário do `default.conf`;
+muda quando a chave muda); (c) remover a injeção e deixar a lib buscar `GET /r4/chave` (ela já faz isso
+quando `window.R4_SERVER_KEY` não existe). A libr4 em si não precisa de script inline nem de `eval`. `style-src 'unsafe-inline'` continua necessário (a lib cria `<style>`
 de tema e usa `style="..."` nos gráficos).
 
 ---
@@ -192,9 +295,12 @@ de tema e usa `style="..."` nos gráficos).
 ## 8. Checklist de produção
 
 - [ ] `APP_DEBUG=false` no `.env` (vitrine e API de teste viram 404; erros PHP não aparecem).
-- [ ] `BASE_CRIPTOGRAFIA` com chave real, longa e aleatória no `.env` (ex.: `openssl rand -base64 32`);
-      lembre que ela é pública para quem abre a página (seção 5).
-- [ ] HTTPS em tudo + `Strict-Transport-Security` (descomente no nginx).
+- [ ] `CRYPTO_PRIVATE_KEY` gerada com `php tools/gerar-chave.php` (uma por ambiente) e `BASE_CRIPTOGRAFIA`
+      removida do `.env` (deprecada, ignorada).
+- [ ] HTTPS em tudo: `HTTPS_MODE=required` (padrão em produção), `APP_HOSTS` preenchido,
+      `TRUSTED_PROXIES` só com o IP do proxy/LB (se houver) e HSTS ativo (`HSTS_MAX_AGE` > 0).
+- [ ] Rotas sensíveis com `ctrl::getPost(true)` (ou `CRYPTO_OBRIGATORIA=true`) se o corpo precisar vir cifrado;
+      APCu ligado se replay dentro da janela for um risco (seção 5).
 - [ ] CSP do nginx ativa; idealmente estrita (seção 7).
 - [ ] `R4.config.strictOrigins = true` (e `allowedOrigins` se usar API de outro domínio).
 - [ ] Vitrine desabilitada (automático com `APP_DEBUG=false`) e rota `/` apontando para a aplicação.
@@ -282,7 +388,13 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
    `R4.config.allowedOrigins`, `R4.config.autoScan`, atributo `r4-ignore`, opção `maxCells` do
    `parseXLSX`, opção `credentials` do `R4.http.request`.
 3. `goto:` recusa esquemas perigosos; `R4.http`/grid/form/select/... recusam esquemas não-http(s).
-4. `R4.crypto` recusa chave vazia fora de localhost; `decrypt` exige `{x,y,z}` em texto e IV de 12 bytes.
+4. ~~`R4.crypto` recusa chave vazia fora de localhost; `decrypt` exige `{x,y,z}`~~ — substituído pela
+   criptografia v2 (seção 5): `BASE_CRIPTOGRAFIA`, `window.BASE_CRIPTOGRAFIA`, `R4.config.cryptoKey` e o
+   formato `{x,y,z}` **deixaram de existir** (o servidor responde 400 a um `{x,y,z}`); envelope agora
+   `{v:2,kid,k,s,z,x}`; `R4.crypto.encrypt(dados, {metodo, caminho})`; `R4.crypto.decrypt` abre respostas
+   `{v,z,x}` da sessão (ou pedidos da própria sessão); novos `R4.crypto.sessao/novaSessao/chaveServidor`,
+   `R4.http` `cifrarResposta`, `R4.config.serverKey/serverKeyUrl/exigirHttps`, `GET /r4/chave`,
+   `Controller::cifrar/responderCifrado/falhaCripto/postCifrado`, `getPost(?bool $exigirCifra)`.
 5. `R4.util.el`/`domAttrs` ignoram `on*` em texto e URLs perigosas; `merge` não altera objetos herdados.
 6. `pattern` com quantificador aninhado é ignorado (aviso); valor > 5.000 caracteres falha no `pattern`.
 7. `/vitrine` e `/` (vitrine) → 404 com `APP_DEBUG=false`.
@@ -292,14 +404,11 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 
 ## 11. Não corrigido (fora dos arquivos desta tarefa) — recomendações
 
-- **`src/Utils/Decryption.php`**: ~~capturar `\Throwable`, `is_string` em `x/y/z`, IV de 12 bytes,
-  tag de 16~~ (já feito); `base64_decode(..., true)` e profundidade do JSON limitada **feitos na seção 13**.
-  `getDecryptedPost()` ficou só por compatibilidade: `Controller::getPost()` não usa mais (lê o corpo
-  com limite de 2 MB e profundidade 32).
-- **`public/index.php`**: injetar a chave com `json_encode($chave, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)`
-  (aspas ou `</script>` na chave quebrariam/injetariam script); usar nonce de CSP; injetar só nas
-  páginas que usam `R4.crypto`; `session_set_cookie_params(['httponly' => true, 'secure' => true, 'samesite' => 'Lax'])`
-  antes de `session_start()`; `expose_php=Off`.
+- ~~**`src/Utils/Decryption.php`**~~: virou fachada fina da criptografia v2 (`Core\Security\Crypto`);
+  o esquema v1 com PBKDF2 foi removido.
+- **`public/index.php`**: ~~chave com `json_encode` + `JSON_HEX_*`~~ (feito; agora só a chave pública),
+  ~~cookie `secure` pela detecção real de HTTPS~~ (feito, `Transport::isHttps()`); falta usar nonce de
+  CSP e `expose_php=Off`.
 - ~~**`core/Controller.php`**: a página de "view não encontrada" mostra caminhos do servidor~~ —
   corrigido na seção 13 (com `APP_DEBUG=false` só "Erro interno"; detalhe no log).
 - **CSP estrita**: depende do item do `index.php` (seção 7).
@@ -307,7 +416,7 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 - **HTML confiável por design** (seção 3) continua sendo HTML: a lib documenta, não escapa.
 - **Redirecionamento aberto**: `goto:https://outro-site` é permitido (é navegação legítima);
   valide destinos vindos de dados.
-- **Custo do PBKDF2 no servidor** por requisição cifrada: limite de taxa no proxy.
+- ~~Custo do PBKDF2 no servidor~~: removido com o v2 (ECDH + HKDF por requisição cifrada).
 - A configuração do nginx não pôde ser validada com `nginx -t` neste ambiente (sem nginx/docker).
 
 ---
@@ -319,7 +428,20 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 php -S 127.0.0.1:8087 -t public
 # jsdom: npm i -D jsdom   (ou aponte para uma instalação existente)
 JSDOM_PATH=/caminho/node_modules/jsdom node tools/testes-seguranca.js
+# só alguns casos (a vitrine nem é aberta se nenhum caso da seção 1 casar — economiza memória)
+R4_CASOS='^(crypto|api|config|php)' JSDOM_PATH=... node tools/testes-seguranca.js
+# política HTTPS/HTTP + criptografia v2 no servidor (PHP puro, sem servidor nem .env)
+php tools/testes-transport.php
 ```
+
+Criptografia v2 (casos `crypto v2:`): interoperabilidade real Node (`crypto.webcrypto`) → PHP → Node
+(pedido e resposta cifrados), a libr4 de verdade no jsdom → PHP → libr4, e falha fechada (400 JSON
+limpo, sem caminho/stack) para pacote adulterado, AAD de outra rota/método (replay em outro endpoint),
+`t` expirado/no futuro (`R4_TEMPO`), `kid` errado (`R4_CHAVE`), ponto fora da curva/comprimido/zero,
+tamanhos absurdos, `k`/`s`/`z`/`x` fora do base64url, campos com tipo errado/extras, `v` errado, formato
+v1 `{x,y,z}` e corpo gigante (413). `tools/testes-transport.php` cobre a política HTTPS (https direto,
+porta 443, proxy confiável × não confiável, IP isento IPv4/IPv6/CIDR, Host fora de `APP_HOSTS`,
+GET→308, POST→426, optional, HSTS, cabeçalho forjado) e o `Crypto` unitário (rotação de chave, motivos).
 
 Cada caso imprime `PASSOU`/`FALHOU`; o processo sai com código 1 se algum falhar (2 se o ambiente
 não estiver pronto). Os testes usam payloads reais (`<img src=x onerror=...>`, `<script>`,

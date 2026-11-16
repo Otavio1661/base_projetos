@@ -378,7 +378,7 @@
     async _request(url, data) {
       url = R4.http.check(url);   // recusa javascript:/data:, avisa (ou bloqueia, com strictOrigins) outra origem
       const get = /^get$/i.test(this.method);
-      const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data) : data);
+      const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data, { metodo: this.method, caminho: url }) : data);
       const res = await fetch(url, { method: this.method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
       let r = null, bad = false;
       try { r = await res.json(); } catch (e) { bad = true; }

@@ -3,168 +3,74 @@
  * ============================================
  * Decryption.php
  * ============================================
- * 
+ *
  * @author Otavio
  * @github https://github.com/Otavio1661
- * @version 1.0.0
+ * @version 2.0.0
  * @created 2025-12-17
- * 
- * Classe responsável pela descriptografia de dados
- * criptografados pelo frontend usando AES-GCM.
- * 
+ *
+ * Fachada de compatibilidade para a criptografia v2 (Core\Security\Crypto).
+ *
+ * O esquema antigo (v1: {x,y,z} com PBKDF2 sobre BASE_CRIPTOGRAFIA, chave entregue ao navegador)
+ * foi REMOVIDO. No v2 nenhum segredo sai do servidor: o navegador faz ECDH P-256 com a chave
+ * pública do servidor e cifra com AES-256-GCM (AAD = método + caminho). Detalhes em
+ * core/Security/Crypto.php e docs/SEGURANCA.md.
+ *
+ * Em código novo use direto:
+ *   Controller::getPost()            — corpo decifrado (ou JSON em claro)
+ *   Controller::responderCifrado($d) — resposta cifrada quando o cliente pede (X-R4-Res: 1)
  * ============================================
  */
 
 namespace App\Utils;
 
-use App\Config;
+use Core\Controller;
+use Core\Security\Crypto;
 
 class Decryption
 {
     /**
-     * Descriptografa dados enviados pelo frontend usando AES-GCM
-     * 
-     * @param array $encryptedData Array contendo 'x' (dados), 'y' (salt) e 'z' (iv)
-     * @return array|null Retorna os dados descriptografados ou null em caso de erro
+     * Decifra um envelope v2 {v,kid,k,s,z,x}. O AAD padrão é o da requisição atual
+     * (REQUEST_METHOD + caminho de REQUEST_URI). Devolve os dados ou null (pacote inválido,
+     * adulterado, de outro endpoint, expirado ou no formato antigo {x,y,z}).
+     *
+     * @param array $envelope
+     * @param string|null $aad
+     * @param int $maxDepth profundidade máxima do JSON decifrado
+     * @return mixed|null
      */
-    public static function decrypt($encryptedData, int $maxDepth = 512)
+    public static function decrypt($envelope, ?string $aad = null, int $maxDepth = 32)
     {
-        try {
-            // Verificar se os dados necessários estão presentes
-            if (!isset($encryptedData['x'], $encryptedData['y'], $encryptedData['z'])) {
-                throw new \Exception('Dados de criptografia incompletos');
-            }
-
-            // Decodificar base64
-            // Os três campos precisam ser texto (evita TypeError com arrays vindos do JSON)
-            if (!is_string($encryptedData['x']) || !is_string($encryptedData['y']) || !is_string($encryptedData['z'])) {
-                throw new \Exception('Dados de criptografia inválidos');
-            }
-
-            // base64 estrito: lixo fora do alfabeto é erro, não é ignorado
-            $encrypted = base64_decode($encryptedData['x'], true); // data
-            $salt = base64_decode($encryptedData['y'], true);      // salt
-            $iv = base64_decode($encryptedData['z'], true);        // iv
-
-            // GCM: IV de 12 bytes e tag de 16 (tag truncada enfraquece a autenticação)
-            if ($encrypted === false || $salt === false || $iv === false || strlen($iv) !== 12 || strlen($encrypted) < 17) {
-                throw new \Exception('Pacote de criptografia malformado');
-            }
-
-            // Chave base (mesma usada no frontend)
-            $baseKey = Config::BASE_CRIPTOGRAFIA;
-
-            // Derivar chave usando PBKDF2 (compatível com o frontend)
-            $key = hash_pbkdf2('sha256', $baseKey, $salt, 100000, 32, true);
-
-            // Descriptografar usando openssl (AES-256-GCM)
-            // O tag de autenticação está nos últimos 16 bytes
-            $tag = substr($encrypted, -16);
-            $ciphertext = substr($encrypted, 0, -16);
-
-            $decrypted = openssl_decrypt(
-                $ciphertext,
-                'aes-256-gcm',
-                $key,
-                OPENSSL_RAW_DATA,
-                $iv,
-                $tag
-            );
-
-            if ($decrypted === false) {
-                throw new \Exception('Falha ao descriptografar dados');
-            }
-
-            // Retornar dados decodificados (profundidade limitada pelo chamador)
-            return json_decode($decrypted, true, max(1, $maxDepth));
-
-        } catch (\Throwable $e) {
-            error_log('Erro na descriptografia: ' . $e->getMessage());
+        if (!is_array($envelope)) {
             return null;
         }
+        $r = Crypto::decryptRequest($envelope, $aad ?? Crypto::aadDaRequisicao(), $maxDepth);
+        if ($r === null) {
+            error_log('[R4 crypto] Decryption::decrypt recusou o pacote (' . Crypto::motivo() . ')');
+            return null;
+        }
+        return $r['d'];
     }
 
     /**
-     * Criptografa dados usando AES-GCM (compatível com o frontend)
-     * 
-     * @param array|object $data Dados a serem criptografados
-     * @return array|null Retorna array com 'x' (dados), 'y' (salt) e 'z' (iv) ou null em caso de erro
+     * Cifra $data como RESPOSTA para a sessão do cliente desta requisição ({v:2, z, x}).
+     * Só existe sessão se o corpo do pedido veio cifrado (lido por Controller::getPost()).
+     *
+     * @param mixed $data
+     * @return array|null
      */
     public static function encrypt($data)
     {
-        try {
-            // Converter dados para JSON
-            $jsonData = json_encode($data);
-            
-            if ($jsonData === false) {
-                throw new \Exception('Erro ao converter dados para JSON');
-            }
-
-            // Gerar salt e IV aleatórios
-            $salt = random_bytes(16);
-            $iv = random_bytes(12); // GCM usa IV de 12 bytes
-
-            // Chave base (mesma usada no frontend)
-            $baseKey = Config::BASE_CRIPTOGRAFIA;
-
-            // Derivar chave usando PBKDF2 (compatível com o frontend)
-            $key = hash_pbkdf2('sha256', $baseKey, $salt, 100000, 32, true);
-
-            // Criptografar usando openssl (AES-256-GCM)
-            $tag = '';
-            $ciphertext = openssl_encrypt(
-                $jsonData,
-                'aes-256-gcm',
-                $key,
-                OPENSSL_RAW_DATA,
-                $iv,
-                $tag,
-                '',
-                16
-            );
-
-            if ($ciphertext === false) {
-                throw new \Exception('Falha ao criptografar dados');
-            }
-
-            // Concatenar ciphertext com tag
-            $encrypted = $ciphertext . $tag;
-
-            // Retornar dados codificados em base64
-            return [
-                'x' => base64_encode($encrypted), // data
-                'y' => base64_encode($salt),      // salt
-                'z' => base64_encode($iv)         // iv
-            ];
-
-        } catch (\Throwable $e) {
-            error_log('Erro na criptografia: ' . $e->getMessage());
-            return null;
-        }
+        return Controller::cifrar($data);
     }
 
     /**
-     * Pega os dados descriptografados do POST
-     * 
-     * @return array|null Retorna os dados descriptografados ou null em caso de erro
+     * Dados do POST (decifrados se vierem no envelope v2). Mesmo que Controller::getPost().
+     *
+     * @return array|null
      */
     public static function getDecryptedPost()
     {
-        $input = file_get_contents('php://input');
-        $data = json_decode($input, true);
-
-        if (!$data) {
-            return null;
-        }
-
-        // Se os dados estão criptografados (contém 'x', 'y', 'z')
-        if (isset($data['x'], $data['y'], $data['z'])) {
-            return self::decrypt($data);
-        }
-
-        // Se os dados não estão criptografados, retorna como está
-        return $data;
+        return Controller::getPost();
     }
 }
-
-

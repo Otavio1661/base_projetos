@@ -163,13 +163,14 @@
     });
 
     test('persistência do idioma: set() grava no localStorage (e funciona sem ele)', t => {
-      const k = 'r4-locale', antes = (() => { try { return localStorage.getItem(k); } catch (e) { return null; } })();
+      const k = 'r4:locale', antes = (() => { try { return localStorage.getItem(k); } catch (e) { return null; } })();
+      const ler = () => { const r = localStorage.getItem(k); return r === null ? null : JSON.parse(r).d; };   // R4.store: { v:1, d:valor, e, a, b }
       t.cleanup(() => { try { antes == null ? localStorage.removeItem(k) : localStorage.setItem(k, antes); } catch (e) { /* */ } });
       R4.i18n.set('en');
-      let gravado = null; try { gravado = localStorage.getItem(k); } catch (e) { /* bloqueado */ }
+      let gravado = null; try { gravado = ler(); } catch (e) { /* bloqueado */ }
       assert.eq(gravado, 'en', 'idioma salvo');
       R4.i18n.set('pt-BR');
-      try { assert.eq(localStorage.getItem(k), 'pt-BR'); } catch (e) { if (e.name === 'AssertionError') throw e; }
+      try { assert.eq(ler(), 'pt-BR'); } catch (e) { if (e.name === 'AssertionError') throw e; }
       const real = Storage.prototype.setItem;
       Storage.prototype.setItem = () => { throw new Error('bloqueado'); };
       t.cleanup(() => { Storage.prototype.setItem = real; });

@@ -43,9 +43,10 @@ R4.ready(() => {
     return { title: m.title, key: e.id, closable: true, padding: true, html: html.join(''), ex, xtype: e.id, pg: m.playground };
   }
 
-  /** Limpa o que a execução anterior deixou (componentes, janelas no body) */
+  /** Limpa o que a execução anterior deixou: destrói os componentes dentro do palco (HTML declarativo OU criados por código) e esvazia */
   function cleanStage(stage) {
     stage.querySelectorAll('*').forEach(n => { if (n._r4) try { n._r4.destroy(); } catch (e) {} });
+    stage.querySelectorAll('.r4-cmp').forEach(n => { const c = R4.instances[n.id]; if (c && c.el === n) try { c.destroy(); } catch (e) {} });
     stage.replaceChildren();
   }
 
@@ -131,12 +132,14 @@ R4.ready(() => {
       const fit = () => { editor.style.height = 'auto'; editor.style.height = Math.min(editor.scrollHeight + 2, 520) + 'px'; };
 
       const run = () => {
+        if (!stage.isConnected) return;                    // a aba foi fechada (ex.: digitação pendente): não monta nada solto
         cleanStage(stage); outEl.hidden = true; setStatus('');
         try {
           if (isHtml) { stage.innerHTML = editor.value; R4.scan(stage); }
           else {
             const fn = (0, eval)('(' + editor.value + ')');
-            Promise.resolve().then(() => fn(stage, out)).catch(err => fail(err));
+            // se a aba foi fechada enquanto o exemplo (assíncrono) rodava, destrói o que ele montou
+            Promise.resolve().then(() => fn(stage, out)).catch(err => fail(err)).finally(() => { if (!stage.isConnected) cleanStage(stage); });
           }
           setStatus('ok', 'ran');
         } catch (err) { fail(err); }
@@ -190,18 +193,28 @@ R4.ready(() => {
   const home = { title: vt('home'), key: '__home', html: homeHtml() };
 
   let tree, tabs;
+  // config da aba de um item. O conteúdo (playground + exemplos) só é montado quando a aba é ATIVADA pela primeira vez (preguiçoso:
+  // restaurar 10 abas salvas não executa 10 páginas de exemplos).
+  const tabCfg = e => { const c = docPage(e); return { title: c.title, key: c.key, closable: true, html: c.html, vt: { ex: c.ex, xtype: c.xtype, pg: c.pg, done: false } }; };
+  const mountTab = p => {
+    const v = p && p.vt;
+    if (!v || v.done) return;
+    v.done = true;
+    try { v.pg && mountPlayground(p, v.xtype, v.pg); mountExamples(p, v.ex); } catch (err) { console.error('[vitrine] falha ao montar a aba:', err); }
+  };
   const open = id => {
-    const e = entries.find(x => x.id === id);
+    const e = entries.find(x => x.id === id);     // lista permitida: só ids registrados (comparação exata; nada de acesso por nome em objeto)
     if (!e) return tabs.setActive(tabs.find('__home'));
     const found = tabs.find(id);
     if (found) return tabs.setActive(found);
-    const cfg = docPage(e);
-    const panel = tabs.add({ title: cfg.title, key: cfg.key, closable: true, html: cfg.html });
-    cfg.pg && mountPlayground(panel, cfg.xtype, cfg.pg);
-    mountExamples(panel, cfg.ex);
+    tabs.add(tabCfg(e));                            // ativa a nova aba → o tabchange monta o conteúdo
     tree.select(id, true);
     history.replaceState(null, '', '#' + id);
   };
+
+  // textos novos da casca (a vitrine/i18n.js tem os demais)
+  R4.i18n.add('pt-BR', { vt: { clearTabs: 'Limpar abas', clearTabsTip: 'Fecha todas as abas (menos o Início) e apaga as abas salvas', tabsCleared: 'Abas fechadas e estado salvo apagado.' } });
+  R4.i18n.add('en', { vt: { clearTabs: 'Clear tabs', clearTabsTip: 'Closes every tab (except Home) and erases the saved tabs', tabsCleared: 'Tabs closed and saved state erased.' } });
 
   R4.create({
     xtype: 'viewport', renderTo: document.body, items: [
@@ -209,15 +222,32 @@ R4.ready(() => {
         { xtype: 'panel', header: false, padding: false, html: '<b class="vt-logo">libr4</b> <span class="vt-sub" ' + ix('sub') + ' params="' + esc(JSON.stringify({ brand: R4.brand })) + '">' + esc(vt('sub', { brand: R4.brand })) + '</span>', style: { border: 0, background: 'transparent' } },
         '->',
         { xtype: 'vtlang' },
+        { xtype: 'button', icon: R4.icon && R4.icon.has && R4.icon.has('trash') ? 'trash' : '', cls: 'vt-mini vt-clear', id: 'vt-clear' },
         { xtype: 'themeswitch', presets: true }
       ] },
       { region: 'west', xtype: 'treepanel', id: 'vt-tree', nodes, style: { borderRight: '1px solid var(--r4-line)' },
         listeners: { select: (t, n) => open(n.id) } },
-      { region: 'center', xtype: 'tabpanel', id: 'vt-tabs', items: [home] }
+      { region: 'center', xtype: 'tabpanel', id: 'vt-tabs', items: [home], persist: 'vitrine.abas', persistTtl: '7d', maxTabs: 30 }
     ]
   });
   tree = R4.get('vt-tree'); tabs = R4.get('vt-tabs');
-  tabs.on('tabchange', (t, p) => { const tab = tabs.current; if (tab && tab.key && tab.key !== '__home') { tree.select(tab.key, true); history.replaceState(null, '', '#' + tab.key); } });
+
+  // "Limpar abas": fecha tudo menos o Início e apaga o estado salvo (último passo: fechar também agenda gravação)
+  const clearBtn = R4.get('vt-clear');
+  tx(clearBtn.label, 'vt.clearTabs', 'Limpar abas');
+  tx(clearBtn.el, 'vt.clearTabsTip', 'Fecha todas as abas (menos o Início) e apaga as abas salvas', 'title');
+  clearBtn.on('click', () => {
+    tabs.tabs.slice().filter(x => x.key !== '__home').forEach(x => tabs.remove(x));
+    tabs.setActive(tabs.find('__home'));
+    if (tree.sel) { tree.sel.row.classList.remove('r4-selected'); tree.sel = null; }
+    history.replaceState(null, '', location.pathname + location.search);
+    tabs.clearSaved();
+    R4.toast(vt('tabsCleared'));
+  });
+
+  tabs.on('tabchange', (t, p) => {
+    mountTab(p);
+    const tab = tabs.current; if (tab && tab.key && tab.key !== '__home') { tree.select(tab.key, true); history.replaceState(null, '', '#' + tab.key); } });
 
   // troca de idioma (ouvinte único da vitrine): Início, aba Início e selos "sem demo"
   // (o resto da casca se atualiza sozinho pelos atributos r4-i18n / R4.util.tx)
@@ -227,6 +257,11 @@ R4.ready(() => {
     Object.values(tree.nodeEls).forEach(n => { if (n.node.badge === 'sem demo' || n.node.badge === 'no demo') { const b = n.row.querySelector('.r4-badge'); if (b) b.textContent = n.node.badge = vt('noDemo'); } });
   });
 
+  // restaura as abas salvas (revalidadas pelo tabpanel): só entram ids que existem em R4.registry/R4.modules; o resto é descartado e o
+  // estado é regravado limpo. O #hash da URL tem prioridade sobre a aba ativa salva.
+  const hashInicial = location.hash.slice(1);       // lido ANTES: a restauração ativa uma aba e o tabchange reescreve o #hash
+  tabs.restoreSaved(s => { const e = entries.find(x => x.id === s.key); return e ? tabCfg(e) : null; });
+
   window.addEventListener('hashchange', () => open(location.hash.slice(1)));
-  if (location.hash.length > 1) open(location.hash.slice(1));
+  if (hashInicial) open(hashInicial);
 });

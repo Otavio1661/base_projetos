@@ -36,15 +36,18 @@
  * 6) Erros: devolva status HTTP 4xx/5xx com { "status": 4xx, "retorno": "mensagem" }.
  *    Validação de formulário: 422 com { "erros": { "campo": "mensagem" } }.
  *
- * 7) Corpo ENVIADO pelo front com criptografia (R4.http.post / encrypt) é { x, y, z }
- *    (AES-GCM); o PHP descriptografa com Controller::getPost(). A RESPOSTA é JSON comum.
+ * 7) Corpo ENVIADO pelo front com criptografia (R4.http.post / encrypt) é o envelope v2
+ *    { v:2, kid, k, s, z, x } (ECDH P-256 + AES-256-GCM, AAD = método + caminho); o PHP decifra
+ *    com Controller::getPost(). A RESPOSTA é JSON comum — ou cifrada ({v:2, z, x}) quando o
+ *    front pede com R4.http.post(url, dados, { cifrarResposta: true }) e a rota usa
+ *    Controller::responderCifrado() (exemplo: POST /vitrine/api/echo-cifrado).
  * ============================================
  *
  * Arquivos JSON em /showcase/vitrineData/*.json (gerados por tools/gerar-vitrine-data.js)
  * + endpoints de teste em /vitrine/api/* (só com APP_DEBUG=true).
  *
  *   VitrineData.url('clientes')          -> '/showcase/vitrineData/clientes.json'  (use em src="...")
- *   await VitrineData.load('clientes')   -> array/objeto (com cache)
+ *   await VitrineData.load('clientes')   -> array/objeto (com cache limitado: 6 conjuntos, 10 min; VitrineData.limpar() esvazia)
  *   VitrineData.rows(20000)              -> linhas sintéticas na hora (teste de volume)
  *   VitrineData.api.clientes             -> '/vitrine/api/clientes' (paginação/busca/ordem no servidor)
  */
@@ -70,26 +73,39 @@
 
   const api = {
     clientes: '/vitrine/api/clientes',   // GET ?q=&status=&page=&size=&sort=&dir= → {total, page, size, retorno[]}
-    echo: '/vitrine/api/echo',           // POST: devolve o que recebeu (descriptografa {x,y,z})
+    echo: '/vitrine/api/echo',           // POST: devolve o que recebeu (decifra o envelope v2)
+    echoCifrado: '/vitrine/api/echo-cifrado', // POST: igual, mas responde cifrado com X-R4-Res: 1 (cifrarResposta)
     cadastro: '/vitrine/api/cadastro',   // POST: valida nome/email; 422 com {erros:{campo:msg}}
     lento: '/vitrine/api/lento',         // GET ?ms=800 → resposta atrasada (estado de carregamento)
     falha: '/vitrine/api/falha'          // GET ?code=500 → erro proposital
   };
 
-  const cache = {};
+  // cache em memória LIMITADO: no máximo MAX_CACHE conjuntos (o menos usado sai primeiro), cada um vale CACHE_MS e promessa que
+  // falhou nunca fica guardada (senão o erro ficaria "eterno"). VitrineData.limpar() esvazia tudo.
+  const MAX_CACHE = 6, CACHE_MS = 10 * 60 * 1000, MAX_ROWS = 200000;
+  const cache = new Map();   // nome -> { p: Promise, t: instante da carga }
   const VitrineData = {
     base: BASE, names: Object.keys(catalogo), catalogo, api,
     url: nome => BASE + nome + '.json',
     async load(nome) {
-      if (!catalogo[nome]) throw new Error('vitrineData: conjunto desconhecido "' + nome + '"');
-      if (!cache[nome]) cache[nome] = fetch(BASE + nome + '.json').then(r => {
+      if (typeof nome !== 'string' || !Object.prototype.hasOwnProperty.call(catalogo, nome)) throw new Error('vitrineData: conjunto desconhecido "' + String(nome).slice(0, 40) + '"');
+      const agora = Date.now(), hit = cache.get(nome);
+      if (hit && agora - hit.t < CACHE_MS) { cache.delete(nome); cache.set(nome, hit); return hit.p; }   // reinsere = mais recente
+      cache.delete(nome);
+      const p = fetch(BASE + nome + '.json').then(r => {
         if (!r.ok) throw new Error('vitrineData: falha ao carregar ' + nome + ' (' + r.status + ')');
         return r.json();
       });
-      return cache[nome];
+      cache.set(nome, { p, t: agora });
+      p.catch(() => { const c = cache.get(nome); if (c && c.p === p) cache.delete(nome); });   // falha não fica no cache
+      while (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);                 // o mais antigo sai
+      return p;
     },
-    /** Linhas sintéticas determinísticas: VitrineData.rows(50000) */
+    /** Esvazia o cache em memória (conjuntos já carregados por load). Devolve quantos havia. */
+    limpar() { const n = cache.size; cache.clear(); return n; },
+    /** Linhas sintéticas determinísticas: VitrineData.rows(50000) (no máximo 200 mil) */
     rows(n = 1000) {
+      n = Math.max(0, Math.min(MAX_ROWS, Math.floor(Number(n)) || 0));
       let s = 12345;
       const r = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
       const st = ['ok', 'erro', 'alerta'];
@@ -112,11 +128,13 @@
         { name: 'CONTRATO: formatos aceitos pelo grid', type: 'JSON', desc: 'Array puro [{...}]  |  envelope {status, retorno:[{...}]} (ou data/rows)  |  paginado {status, total, page, size, retorno:[{...}]}.' },
         { name: 'CONTRATO: cada linha', type: 'objeto plano', desc: 'Chaves = field das colunas; mesmas chaves em todas as linhas; sem objetos aninhados; sem HTML (texto é escapado).' },
         { name: 'CONTRATO: tipos', type: 'valores', desc: 'Números como number (10.5, não "10,5"); datas "AAAA-MM-DD" ou ISO 8601; booleano true/false; vazio null. Formatação (money, date...) é do front, via format.' },
-        { name: 'CONTRATO: erros', type: 'HTTP', desc: 'Status 4xx/5xx com {status, retorno:"mensagem"}; validação 422 com {erros:{campo:mensagem}}. Corpo enviado criptografado é {x,y,z}; a resposta é JSON comum.' },
-        { name: 'VitrineData.load(nome)', type: 'Promise', desc: 'Carrega e guarda em cache.' },
-        { name: 'VitrineData.rows(n)', type: 'Array', desc: 'Gera n linhas sintéticas na hora (ex.: 50000) para teste de volume.' },
+        { name: 'CONTRATO: erros', type: 'HTTP', desc: 'Status 4xx/5xx com {status, retorno:"mensagem"}; validação 422 com {erros:{campo:mensagem}}. Corpo enviado criptografado é o envelope v2 {v,kid,k,s,z,x}; a resposta é JSON comum (ou {v,z,x} cifrado com cifrarResposta).' },
+        { name: 'VitrineData.load(nome)', type: 'Promise', desc: 'Carrega e guarda em cache na memória (máx. 6 conjuntos, 10 min cada; falha não fica guardada).' },
+        { name: 'VitrineData.limpar()', type: 'number', desc: 'Esvazia o cache em memória e devolve quantos conjuntos havia.' },
+        { name: 'VitrineData.rows(n)', type: 'Array', desc: 'Gera n linhas sintéticas na hora (ex.: 50000) para teste de volume. Máximo 200 mil.' },
         { name: 'GET /vitrine/api/clientes', type: 'api', desc: 'Parâmetros q, status, page, size, sort, dir. Resposta {total, page, size, retorno[]}.' },
-        { name: 'POST /vitrine/api/echo', type: 'api', desc: 'Devolve o corpo recebido; descriptografa {x,y,z} (testa R4.http com criptografia).' },
+        { name: 'POST /vitrine/api/echo', type: 'api', desc: 'Devolve o corpo recebido; decifra o envelope v2 e diz "cifrado": true (testa R4.http com criptografia). Pacote feito para outra rota → 400.' },
+        { name: 'POST /vitrine/api/echo-cifrado', type: 'api', desc: 'Como o /echo, mas a resposta vem cifrada ({v,z,x}) quando o pedido usa cifrarResposta: true.' },
         { name: 'POST /vitrine/api/cadastro', type: 'api', desc: 'Valida nome/email. 422 com {erros:{campo:mensagem}} (testa validação de formulário).' },
         { name: 'GET /vitrine/api/lento?ms=800', type: 'api', desc: 'Resposta atrasada (máx. 3000ms) para testar loading.' },
         { name: 'GET /vitrine/api/falha?code=500', type: 'api', desc: 'Erro proposital para testar tratamento de falhas.' }
@@ -143,9 +161,13 @@
         out(r);
       } },
       { title: 'Enviar dados criptografados para a API (R4.http → /echo)', async fn(el, out) {
-        // o corpo vai em {x, y, z} (AES-GCM); o servidor descriptografa e devolve; "cifrado: true" prova isso
+        // o corpo vai no envelope v2 (ECDH P-256 + AES-GCM); o servidor decifra e devolve; "cifrado: true" prova isso
         const resposta = await R4.http.post(VitrineData.api.echo, { nome: 'R4 dev', segredo: 123 });
         out(resposta);
+      } },
+      { title: 'Pedido E resposta cifrados (R4.http → /echo-cifrado, cifrarResposta)', async fn(el, out) {
+        // a resposta chega como {v:2, z, x} e o R4.http decifra sozinho (resposta em claro seria recusada)
+        out(await R4.http.post(VitrineData.api.echoCifrado, { nome: 'R4 dev', segredo: 123 }, { cifrarResposta: true }));
       } },
       { title: 'Carregar um conjunto e mostrar os cartões (JS)', async fn(el) {
         const kpis = await VitrineData.load('kpis');

@@ -64,6 +64,7 @@ $router->get('/vitrine/testes', 'VitrineController@testes');   // testes automat
 // API de teste da vitrine (só com APP_DEBUG=true)
 $router->get('/vitrine/api/clientes', 'VitrineApiController@clientes');
 $router->post('/vitrine/api/echo', 'VitrineApiController@echo');
+$router->post('/vitrine/api/echo-cifrado', 'VitrineApiController@echoCifrado');   // resposta cifrada (X-R4-Res: 1)
 $router->post('/vitrine/api/cadastro', 'VitrineApiController@cadastro');
 $router->get('/vitrine/api/lento', 'VitrineApiController@lento');
 $router->get('/vitrine/api/falha', 'VitrineApiController@falha');

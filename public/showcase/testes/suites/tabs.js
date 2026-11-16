@@ -1,4 +1,4 @@
-/* suíte tabs: tabpanel (abas, fechar, key), reordenar com move()/Alt+setas/arrastar, ARIA de tablist */
+/* suíte tabs: tabpanel (abas, fechar, key), reordenar com move()/Alt+setas/arrastar, ARIA de tablist, abas persistentes (persist/restoreSaved/maxTabs) */
 (() => {
   const { suite, test, assert } = R4Test;
   const tecla = (alvo, key, extra) => alvo.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key, bubbles: true, cancelable: true }, extra)));
@@ -196,6 +196,213 @@
       const ev = new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true });
       p.strip.dispatchEvent(ev);
       assert.eq(ev.defaultPrevented, false, 'sem barra de rolagem a roda do mouse não é capturada (a página rola normal)');
+    });
+
+    /* ---------- abas persistentes (persist / persistTtl / maxTabs) ---------- */
+    const T0 = 1700000000000, CH = 'teste.abas', RAW = 'r4:' + CH;
+    const RLO = String.fromCharCode(0x202e), NUL = String.fromCharCode(0);
+    const SUJO = new RegExp('[<>' + RLO + NUL + ']');
+    /** área de armazenamento falsa que conta gravações por chave */
+    class Area {
+      constructor() { this.m = new Map(); this.w = {}; }
+      get length() { return this.m.size; }
+      key(i) { const k = [...this.m.keys()][i]; return k === undefined ? null : k; }
+      getItem(k) { return this.m.has(k) ? this.m.get(k) : null; }
+      setItem(k, v) { this.m.set(k, String(v)); this.w[k] = (this.w[k] || 0) + 1; }
+      removeItem(k) { this.m.delete(k); }
+    }
+    /** troca o R4.store principal por uma área e um relógio falsos (volta ao normal no fim do teste) */
+    function falso(t) {
+      const orig = R4.store._area(), antes = R4.store._agora, area = new Area(), clock = { t: T0 };
+      R4.store.use(area); R4.store._agora = () => clock.t;
+      t.cleanup(() => { R4.store.use(orig); R4.store._agora = antes; });
+      return { area, clock, salvo: () => { const r = area.getItem(RAW); return r === null ? null : JSON.parse(r); } };
+    }
+    // grava DIRETO na área (como outro script/extensão) e faz o store reler (ele guarda em cache o que já leu)
+    const direto = (area, raw) => { area.setItem(RAW, raw); R4.store.use(area); };
+    const grava = (area, d, extra) => direto(area, JSON.stringify(Object.assign({ v: 1, d, e: T0 + 1e9, a: T0, b: 10 }, extra)));
+    const persiste = (t, extra) => mk(t, Object.assign({ persist: CH }, extra));
+
+    test('persist: salva só {key, título curto} de cada aba e a aba ativa (nunca conteúdo/HTML); aba sem key não entra; título é texto puro e curto', t => {
+      const { area, salvo } = falso(t);
+      const p = t.create({ xtype: 'tabpanel', persist: CH, items: [
+        { title: 'Um', key: 'a', html: 'SEGREDO-DE-CONTEUDO' }, { title: 'Sem chave', html: 'x' },
+        { title: '<img src=x onerror=1>Dois' + RLO + NUL + 'z'.repeat(100), key: 'b.x-1_2', html: '<b>html</b>' }, { title: 'Chave ruim', key: 'a b/../c' }] });
+      assert.eq(area.getItem(RAW), null, 'montar o painel não grava nada (só mudanças)');
+      p.setActive(p.find('b.x-1_2'));
+      assert.eq(p.saveState(), true);
+      const d = salvo().d;
+      assert.deepEq(d.tabs.map(x => x.key), ['a', 'b.x-1_2'], 'só chaves [A-Za-z0-9_.-]');
+      assert.eq(d.active, 'b.x-1_2');
+      assert.ok(d.tabs.every(x => x.title.length <= 60 && !SUJO.test(x.title)), 'título curto, sem < > nem controles');
+      assert.notContains(area.getItem(RAW), 'SEGREDO'); assert.notContains(area.getItem(RAW), 'html');
+      assert.eq(salvo().e, T0 + 7 * 86400000, 'persistTtl padrão: 7 dias');
+      p.setActive(p.find('a')); p.saveState();
+      assert.eq(salvo().d.active, 'a');
+    });
+
+    test('gravação com debounce (~300 ms): abrir, fechar, mover e trocar de aba em rajada viram UMA gravação; sem persist não grava', async t => {
+      const { area, salvo } = falso(t);
+      const p = persiste(t);
+      p.add({ title: 'Quatro', key: 'd', closable: true }); p.move('d', 0); p.setActive(p.find('b')); p.remove(p.find('c')); p.add({ title: 'Cinco', key: 'e' });
+      assert.eq(area.w[RAW] || 0, 0, 'ainda não gravou (debounce)');
+      await t.sleep(450);
+      assert.eq(area.w[RAW], 1, 'uma gravação só');
+      assert.deepEq(salvo().d.tabs.map(x => x.key), ['d', 'a', 'b', 'e']);
+      assert.eq(salvo().d.active, 'e');
+      p.find('b').el.click(); p.find('d').el.querySelector('.r4-x').click();
+      await t.sleep(450);
+      assert.deepEq(salvo().d.tabs.map(x => x.key), ['a', 'b', 'e'], 'fechar remove do estado salvo');
+      const antes = Object.keys(area.w).length;
+      const q = mk(t); q.add({ title: 'x', key: 'zz' }); q.move('a', 2);
+      await t.sleep(400);
+      assert.eq(Object.keys(area.w).length, antes, 'sem persist nada novo é gravado');
+    });
+
+    test('restaurar: restoreSaved(fábrica) recria na ordem, reativa a aba ativa, não repete chave aberta, ignora chave fora da lista permitida e dispara tabsrestore', t => {
+      const { salvo } = falso(t);
+      const a = persiste(t); a.add({ title: 'Quatro', key: 'd' }); a.setActive(a.find('b')); a.move('d', 0); a.saveState();
+      assert.deepEq(salvo().d.tabs.map(x => x.key), ['d', 'a', 'b', 'c']);
+      const vistas = [], rest = t.spy();
+      const b = t.create({ xtype: 'tabpanel', persist: CH, items: [{ title: 'Início', key: 'a', html: 'já aberta' }], listeners: { tabsrestore: rest } });
+      const n = b.restoreSaved(s => { vistas.push(s.key); return s.key === 'c' ? null : { title: 'T-' + s.key, html: 'conteúdo ' + s.key, closable: true }; });
+      assert.eq(n, 2, 'abriu d e b (a já existia, c foi barrada pela fábrica)');
+      assert.deepEq(vistas, ['d', 'b', 'c'], 'a fábrica só é consultada para o que ainda não está aberto (a não passa por ela)');
+      assert.deepEq(b.tabs.map(x => x.key), ['a', 'd', 'b']);
+      assert.eq(b.current.key, 'b', 'aba ativa salva reativada');
+      assert.eq(b.find('d').el.firstChild.textContent, 'T-d', 'título vem da fábrica (não do storage)');
+      assert.eq(rest.count, 1); assert.eq(rest.lastArgs[0], b); assert.eq(rest.lastArgs[2], 2);
+      assert.deepEq(salvo().d.tabs.map(x => x.key), ['a', 'd', 'b'], 'estado regravado só com o que valeu (c descartada)');
+      assert.eq(b.restoreSaved(s => ({ title: s.key })), 0, 'de novo: nada novo, nada duplicado');
+      assert.eq(b.tabs.length, 3);
+      const c = t.create({ xtype: 'tabpanel', persist: 'teste.outra', items: [] });
+      assert.eq(c.restoreSaved(() => ({ title: 'x' })), 0, 'sem estado salvo'); assert.eq(c.getSavedState(), null);
+      assert.eq(t.create({ xtype: 'tabpanel', items: [] }).restoreSaved(() => ({ title: 'x' })), 0, 'sem persist');
+    });
+
+    test('getSavedState SEMPRE valida: estado adulterado (chaves maliciosas, tipos errados, duplicadas, 500 abas) é filtrado ou apagado', t => {
+      const { area, salvo } = falso(t);
+      const p = persiste(t, { maxTabs: 30 });
+      const mal = [{ key: '__proto__', title: 'x' }, { key: 'constructor' }, { key: 'prototype' }, { key: 'a b' }, { key: '../etc/passwd' }, { key: '' }, { key: 'x'.repeat(65) }, { key: 5 }, { key: ['a'] },
+        null, 7, 'texto', [], { title: 'sem key' }, { key: 'ok', title: '<b>negrito</b>' + RLO }, { key: 'ok', title: 'duplicada' }, { key: 'ok2', title: 42 }, { key: 'ok3', title: 'y'.repeat(500) }];
+      grava(area, { tabs: mal, active: 'naoexiste' });
+      const st = p.getSavedState();
+      assert.deepEq(st.tabs.map(x => x.key), ['ok', 'ok2', 'ok3'], 'só as chaves válidas, sem duplicata');
+      assert.eq(st.active, null, 'ativa inexistente vira null');
+      assert.ok(st.tabs.every(x => typeof x.title === 'string' && x.title.length >= 1 && x.title.length <= 60 && !SUJO.test(x.title)), 'títulos limpos e curtos');
+      assert.eq(st.tabs[1].title, 'ok2', 'título que não é texto vira a própria chave');
+      assert.eq(({}).polui, undefined);
+      grava(area, { tabs: [{ key: 'a' }, { key: 'b' }], active: 'b' });
+      assert.eq(p.getSavedState().active, 'b');
+      // tipos errados no nível de cima: descartado e a chave é APAGADA pela lixeira
+      ['texto', 123, [], null, {}, { tabs: 'x' }, { tabs: {} }, { tabs: [] }, { tabs: [null, 3, 'a'] }, { active: 'a' }].forEach(d => {
+        grava(area, d);
+        assert.eq(p.getSavedState(), null, 'inválido: ' + JSON.stringify(d));
+        assert.eq(area.getItem(RAW), null, 'e apagado do storage: ' + JSON.stringify(d));
+      });
+      // 500 abas: só entram até maxTabs (ou 100 sem limite)
+      const muitas = Array.from({ length: 500 }, (_, i) => ({ key: 'k' + i, title: 'Aba ' + i }));
+      grava(area, { tabs: muitas, active: 'k499' });
+      const s30 = p.getSavedState();
+      assert.eq(s30.tabs.length, 30, 'respeita maxTabs'); assert.eq(s30.active, null, 'a ativa ficou fora do corte');
+      const q = persiste(t, { maxTabs: 0 });
+      grava(area, { tabs: muitas }); assert.eq(q.getSavedState().tabs.length, 100, 'sem maxTabs: teto de 100');
+      // JSON quebrado, versão antiga e envelope vencido
+      direto(area, '{quebrado'); assert.eq(p.getSavedState(), null); assert.eq(area.getItem(RAW), null);
+      direto(area, JSON.stringify({ v: 9, d: { tabs: [{ key: 'a' }] } })); assert.eq(p.getSavedState(), null); assert.eq(area.getItem(RAW), null);
+      grava(area, { tabs: [{ key: 'a' }] }, { e: T0 - 1 }); assert.eq(p.getSavedState(), null, 'vencido'); assert.eq(area.getItem(RAW), null);
+      // restaurar com estado adulterado nunca abre o que a fábrica não permite
+      grava(area, { tabs: [{ key: '__proto__' }, { key: 'constructor' }, { key: 'ok' }, { key: 'hasOwnProperty' }], active: 'ok' });
+      const alvo = t.create({ xtype: 'tabpanel', persist: CH, items: [{ title: 'Início', key: 'home' }] });
+      const PERMITIDAS = { ok: 'Ok' };
+      assert.eq(alvo.restoreSaved(s => (Object.prototype.hasOwnProperty.call(PERMITIDAS, s.key) ? { title: PERMITIDAS[s.key] } : null)), 1);
+      assert.deepEq(alvo.tabs.map(x => x.key), ['home', 'ok']);
+      assert.deepEq(salvo().d.tabs.map(x => x.key), ['home', 'ok'], 'estado regravado limpo');
+    });
+
+    test('TTL das abas: a validade (persistTtl) é renovada a cada uso e, vencida, a lixeira apaga o estado', t => {
+      const { area, clock, salvo } = falso(t);
+      const p = persiste(t, { persistTtl: '1h' });
+      p.add({ title: 'N', key: 'n' }); p.saveState();
+      assert.eq(salvo().e, T0 + 3600000);
+      assert.eq(salvo().s, 3600000, 'sliding');
+      clock.t += 50 * 60000; assert.ok(p.getSavedState(), 'ainda vale aos 50 min');
+      clock.t += 50 * 60000; assert.ok(p.getSavedState(), 'a leitura renovou: vale aos 100 min');
+      clock.t += 61 * 60000; assert.eq(p.getSavedState(), null, 'sem uso por mais de 1 h: expirou');
+      assert.eq(area.getItem(RAW), null, 'e foi apagado');
+      p.saveState(); assert.ok(salvo(), 'grava de novo normalmente');
+      const q = persiste(t, { persistTtl: 'lixo' });
+      q.saveState(); assert.eq(salvo().e - clock.t, 7 * 86400000, 'ttl inválido: padrão do store (7 dias)');
+    });
+
+    test('maxTabs: ao passar do limite fecha a aba mais ANTIGA que não esteja ativa (nunca a ativa nem a nova); 0 = sem limite; itens iniciais não são cortados', t => {
+      const fechadas = [];
+      const p = mk(t, { maxTabs: 3, listeners: { tabremove: (c, painel, key) => fechadas.push(key) } });   // a, b, c
+      assert.eq(p.tabs.length, 3);
+      const novo = p.add({ title: 'D', key: 'd' });
+      assert.deepEq(p.tabs.map(x => x.key), ['b', 'c', 'd'], 'a (a mais antiga) saiu');
+      assert.eq(R4.get(novo.id), novo);
+      p.setActive(p.find('b'));
+      p.add({ title: 'E', key: 'e' }, false);
+      assert.deepEq(p.tabs.map(x => x.key), ['b', 'd', 'e'], 'b é a mais antiga mas está ativa: saiu c');
+      assert.eq(p.current.key, 'b');
+      p.move('e', 0); p.add({ title: 'F', key: 'f' }, false);
+      assert.deepEq(p.tabs.map(x => x.key).sort(), ['b', 'e', 'f'], 'a ordem de criação conta, não a posição: d (mais antiga) saiu');
+      assert.deepEq(fechadas, ['a', 'c', 'd']);
+      const livre = mk(t, { maxTabs: 0 });
+      for (let i = 0; i < 40; i++) livre.add({ title: 'n' + i, key: 'n' + i }, false);
+      assert.eq(livre.tabs.length, 43, 'sem limite');
+      const grande = t.create({ xtype: 'tabpanel', maxTabs: 2, items: ['a', 'b', 'c', 'd'].map(k => ({ title: k, key: k })) });
+      assert.eq(grande.tabs.length, 4, 'itens iniciais (config) não são cortados');
+      grande.add({ title: 'e', key: 'e' });
+      assert.eq(grande.tabs.length, 2, 'ao abrir uma nova, o limite passa a valer');
+      assert.eq(grande.current.key, 'e');
+      assert.eq(t.create({ xtype: 'tabpanel', items: [] }).maxTabs, 30, 'padrão 30');
+    });
+
+    test('clearSaved(): apaga o estado salvo (sem fechar abas) e cancela gravação pendente; persist vazio/inválido/sensível nunca grava nem lança', async t => {
+      const { area, salvo } = falso(t);
+      const p = persiste(t);
+      p.saveState(); assert.ok(salvo());
+      assert.eq(p.clearSaved(), p, 'encadeável'); assert.eq(area.getItem(RAW), null); assert.eq(p.tabs.length, 3, 'as abas abertas continuam');
+      p.move('a', 2);                            // agenda gravação...
+      p.clearSaved();                            // ...e o apagar cancela
+      await t.sleep(450);
+      assert.eq(area.getItem(RAW), null, 'gravação pendente cancelada');
+      p.setActive(p.find('b')); await t.sleep(450);
+      assert.ok(salvo(), 'depois de limpar, novas mudanças voltam a ser salvas');
+      assert.eq(mk(t).saveState(), false, 'persist vazio: não grava'); assert.eq(mk(t).getSavedState(), null);
+      ['a b', 'x'.repeat(70), '__meta'].forEach(k => { const q = mk(t, { persist: k }); assert.eq(q.saveState(), false); assert.eq(q.getSavedState(), null); q.clearSaved(); });
+      assert.gt(t.logs.take('warn').length, 0, 'chave inválida avisa no console');
+      const s = mk(t, { persist: 'auth.abas' }); assert.eq(s.saveState(), false, 'nome sensível é recusado pelo R4.store'); assert.eq(area.getItem('r4:auth.abas'), null);
+      t.logs.take('warn');
+    });
+
+    test('ciclo de vida: fechar a aba destrói também os componentes de dentro (nada sobra em R4.instances); destroy cancela gravação adiada; pagehide grava a pendente', async t => {
+      const { area, salvo } = falso(t);
+      const base = Object.keys(R4.instances).length;
+      const p = persiste(t);
+      const painel = p.add({ title: 'Com botão', key: 'btn', closable: true, html: '<r4-button id="r4t-dentro">ok</r4-button><r4-textfield label="x"></r4-textfield>' });
+      R4.scan(painel.el);
+      const dentro = Object.keys(R4.instances).filter(id => R4.instances[id] !== painel && R4.instances[id].el && painel.el.contains(R4.instances[id].el));
+      assert.gt(dentro.length, 0, 'há componentes montados dentro da aba');
+      p.find('btn').el.querySelector('.r4-x').click();
+      assert.eq(dentro.filter(id => R4.instances[id]).length, 0, 'todos destruídos junto com a aba');
+      assert.eq(R4.instances[painel.id], undefined);
+      p.destroy();
+      assert.eq(Object.keys(R4.instances).length, base, 'nada sobrou em R4.instances (' + (Object.keys(R4.instances).length - base) + ' a mais)');
+      // destroy antes do debounce: não grava depois
+      const q = persiste(t); q.add({ title: 'z', key: 'z' }); const antes = area.w[RAW] || 0; q.destroy();
+      await t.sleep(450);
+      assert.eq(area.w[RAW] || 0, antes, 'painel destruído não grava');
+      // sair da página (pagehide) grava o que estava pendente
+      const r = persiste(t); r.add({ title: 'y', key: 'y' });
+      const n = area.w[RAW] || 0;
+      window.dispatchEvent(new Event('pagehide'));
+      assert.eq(area.w[RAW], n + 1, 'pagehide gravou na hora');
+      assert.ok(salvo().d.tabs.some(x => x.key === 'y'));
+      await t.sleep(400);
+      assert.eq(area.w[RAW], n + 1, 'e o timer adiado não grava de novo');
     });
 
     // BUG REAL da lib (components.js, tabpanel.add): o painel de cada aba é criado com R4.create + render(stage) mas não entra em

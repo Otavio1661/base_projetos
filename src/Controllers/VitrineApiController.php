@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Config;
 use Core\Controller as ctrl;
+use Core\Security\Crypto;
 use Core\Security\Input;
 use Core\Security\Prompt;
 use Core\Security\Upload;
@@ -14,9 +15,13 @@ use Core\Security\Upload;
  *
  * Endurecimento (mesmo sendo só de teste, servem de modelo para APIs reais):
  *  - cabeçalhos: nosniff, Cache-Control: no-store, CSP "default-src 'none'" (resposta é só JSON);
- *  - corpo limitado a 1 MB (413), pacote cifrado {x,y,z} conferido antes de descriptografar (400);
+ *  - corpo limitado a 1 MB (413); envelope cifrado v2 conferido antes de qualquer rota (falha → 400
+ *    JSON limpo; o formato antigo {x,y,z} também é recusado);
  *  - parâmetros GET só como texto (q[]=... não vira "Array" nem aviso PHP), com limites de tamanho;
  *  - ordenação só por campo existente e escalar; JSON com < > & ' " escapados (JSON_HEX_*).
+ *
+ * Criptografia v2 (docs/SEGURANCA.md, seção 5): POST /vitrine/api/echo e /vitrine/api/echo-cifrado
+ * (este último responde cifrado quando o cliente manda X-R4-Res: 1).
  *
  * Demonstrações de defesa contra injeção (docs/SEGURANCA.md, seção 13):
  *  - POST /vitrine/api/cadastro   → validação por ESQUEMA (Core\Security\Input), recusa campos extras;
@@ -55,9 +60,14 @@ class VitrineApiController extends ctrl
             if ($tamanho > self::MAX_BODY || strlen((string)$bruto) > self::MAX_BODY) {
                 $this->json(['status' => 413, 'retorno' => 'Corpo da requisição grande demais (máx. 1 MB)'], 413);
             }
+            // envelope cifrado (v2) é conferido ANTES de qualquer rota: falha → 400 JSON limpo
+            // (o formato antigo {x,y,z} também cai aqui e é recusado)
             $json = json_decode((string)$bruto, true);
-            if (is_array($json) && (isset($json['x']) || isset($json['y']) || isset($json['z'])) && !$this->pacoteValido($json)) {
-                $this->json(['status' => 400, 'retorno' => 'Pacote de criptografia inválido'], 400);
+            if (Crypto::pareceEnvelope($json)) {
+                ctrl::getPost(false);
+                if (ctrl::$postErro === 400) {
+                    ctrl::falhaCripto();
+                }
             }
         }
     }
@@ -69,18 +79,6 @@ class VitrineApiController extends ctrl
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
-    }
-
-    /** {x,y,z}: strings base64; salt de 16 bytes, IV de 12 bytes, dados com pelo menos a tag GCM (16). */
-    private function pacoteValido(array $p): bool
-    {
-        foreach (['x', 'y', 'z'] as $k) {
-            if (!isset($p[$k]) || !is_string($p[$k]) || strlen($p[$k]) > self::MAX_BODY) return false;
-        }
-        $x = base64_decode($p['x'], true);
-        $y = base64_decode($p['y'], true);
-        $z = base64_decode($p['z'], true);
-        return $x !== false && $y !== false && $z !== false && strlen($y) === 16 && strlen($z) === 12 && strlen($x) >= 16;
     }
 
     private function dados(string $nome): array
@@ -148,16 +146,39 @@ class VitrineApiController extends ctrl
         ]);
     }
 
-    /** POST /vitrine/api/echo — devolve o que recebeu (descriptografado, se vier em {x,y,z}) */
+    /**
+     * POST /vitrine/api/echo — devolve o que recebeu. Envelope v2 → decifrado e "cifrado": true
+     * (o pacote só vale para POST /vitrine/api/echo: AAD = método + caminho). A resposta é JSON comum.
+     */
     public function echo()
     {
-        $bruto = json_decode(file_get_contents('php://input'), true);
-        $cifrado = is_array($bruto) && isset($bruto['x'], $bruto['y'], $bruto['z']);
+        $this->json(['status' => 200, 'retorno' => $this->eco()]);
+    }
+
+    /**
+     * POST /vitrine/api/echo-cifrado — igual ao /echo, mas a RESPOSTA vai cifrada para a sessão do
+     * cliente quando ele pede (cabeçalho X-R4-Res: 1 + corpo cifrado): {v:2, z, x}.
+     * R4.http.post(url, dados, { cifrarResposta: true }) decifra sozinho.
+     */
+    public function echoCifrado()
+    {
+        $eco = $this->eco();
+        $eco['respostaCifrada'] = ctrl::respostaCifradaPedida();
+        ctrl::responderCifrado(['status' => 200, 'retorno' => $eco]);
+    }
+
+    /** Corpo recebido (decifrado se veio no envelope v2) + se veio cifrado. */
+    private function eco(): array
+    {
         $dados = ctrl::getPost();
-        if ($cifrado && $dados === null) {
-            $this->json(['status' => 400, 'retorno' => 'Falha ao descriptografar (chave diferente?)'], 400);
+        if (ctrl::$postErro === 400 && ctrl::$cryptoErro !== '') {
+            ctrl::falhaCripto();
         }
-        $this->json(['status' => 200, 'retorno' => ['cifrado' => $cifrado, 'recebido' => $dados ?? $bruto]]);
+        $cifrado = ctrl::postCifrado();
+        if ($dados === null && !$cifrado) {
+            $dados = json_decode((string) file_get_contents('php://input', false, null, 0, self::MAX_BODY), true, 32);
+        }
+        return ['cifrado' => $cifrado, 'recebido' => $dados ?? ($cifrado ? [] : null)];
     }
 
     private const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',

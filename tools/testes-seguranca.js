@@ -10,7 +10,11 @@
  *        JSDOM_PATH=/caminho/para/node_modules/jsdom node tools/testes-seguranca.js
  *   3. node tools/testes-seguranca.js
  *
- * Variáveis opcionais: R4_BASE (padrão http://127.0.0.1:8087), JSDOM_PATH, R4_ROOT (raiz do projeto).
+ * Variáveis opcionais: R4_BASE (padrão http://127.0.0.1:8087), JSDOM_PATH, R4_ROOT (raiz do projeto),
+ * R4_CASOS (expressão regular: roda só os casos cujo nome casa; ex.: R4_CASOS="crypto|api:" — se nenhum
+ * caso da seção 1 casar, a vitrine nem é aberta no jsdom, o que economiza memória).
+ * Criptografia v2: os casos "crypto v2" montam o envelope com crypto.webcrypto do Node (interoperabilidade
+ * real Node → PHP → Node) e conferem falha fechada (400 JSON limpo) para cada tipo de pacote ruim.
  * Saída: uma linha "PASSOU"/"FALHOU" por caso; código de saída 1 se algum caso falhar
  * (2 se o ambiente não estiver pronto). Nenhum arquivo do projeto é alterado.
  *
@@ -46,7 +50,9 @@ function check(name, ok, detail) {
   console.log((ok ? 'PASSOU' : 'FALHOU') + '  ' + name + (!ok && detail ? '\n        -> ' + String(detail).slice(0, 400) : ''));
 }
 let limpar = null;   // remove o que o caso deixou na página (caixas, avisos, menus)
+const FILTRO = process.env.R4_CASOS ? new RegExp(process.env.R4_CASOS, 'i') : null;
 async function caso(name, fn) {
+  if (FILTRO && !FILTRO.test(name)) return;
   try { await fn(); } catch (e) { check(name, false, 'exceção: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
   try { limpar && limpar(name); } catch (e) { /* ignora */ }
 }
@@ -170,11 +176,15 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
   catch (e) { console.error('Servidor fora do ar em ' + BASE + ' (suba com: php -S 127.0.0.1:8087 -t public)'); process.exit(2); }
 
   /* ===================== 1. página da vitrine (lib completa) ===================== */
-  const pg = await openPage('/vitrine#__nada');
+  // com R4_CASOS que não pega nenhum caso desta seção, a vitrine não é aberta (economiza memória)
+  const SECAO1 = ['core', 'declarativo', 'grid', 'rede', 'ui', 'form', 'files', 'sanitize', 'chart', 'theme', 'i18n', 'icon', 'vitrine'];
+  const usaVitrine = !FILTRO || SECAO1.some(p => FILTRO.test(p + ':'));
+  const pg = usaVitrine ? await openPage('/vitrine#__nada') : { w: { R4: null }, d: null, close() {} };
   const { w, d } = pg, R4 = w.R4;
   const box = () => { const b = d.createElement('div'); b.className = 'sec-box'; d.body.append(b); return b; };
   const tick = () => sleep(60);
   limpar = name => {
+    if (!d) return;
     if (w.__pwn !== undefined) { pwnLog.push(name); w.__pwn = undefined; }
     d.querySelectorAll('.sec-box').forEach(b => { b.querySelectorAll('*').forEach(n => { if (n._r4) try { n._r4.destroy(); } catch (e) { /* */ } }); b.remove(); });
     R4.notify && R4.notify.closeAll && R4.notify.closeAll();
@@ -668,28 +678,56 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
   });
 
   /* ===================== 2. página de "produção" (outra origem) ===================== */
-  await caso('crypto: chave vazia fora de localhost é recusada', async () => {
-    const p = openLocal('https://app.exemplo.com/', ['core.js', 'net.js'], w2 => { w2.BASE_CRIPTOGRAFIA = ''; });
-    let msg = ''; try { await p.w.R4.crypto.encrypt({ a: 1 }); } catch (e) { msg = e.message; }
-    let msg2 = ''; try { await p.w.R4.http.post('/x', { a: 1 }); } catch (e) { msg2 = e.message; }
-    check('crypto: chave vazia fora de localhost é recusada', /chave/i.test(msg) && /chave/i.test(msg2) && p.w.__fetchLog.length === 0, 'encrypt="' + msg + '" post="' + msg2 + '" fetches=' + p.w.__fetchLog.length);
+  // chave PÚBLICA real do servidor (a mesma injetada nas páginas); usada pelos casos crypto v2
+  let CHAVE = null;
+  try { CHAVE = await (await fetch(BASE + '/r4/chave')).json(); } catch (e) { /* o caso abaixo reprova */ }
+
+  await caso('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid}); BASE_CRIPTOGRAFIA sumiu da página', async () => {
+    const r = await fetch(BASE + '/r4/chave');
+    const html = await (await fetch(BASE + '/vitrine')).text();
+    const m = html.match(/window\.R4_SERVER_KEY = (\{[^<]*?\});<\/script>/);
+    const injetada = m ? JSON.parse(m[1]) : null;
+    const ok = CHAVE && Object.keys(CHAVE).sort().join() === 'kid,pub,v' && CHAVE.v === 2 && Buffer.from(CHAVE.pub, 'base64url').length === 65
+      && Buffer.from(CHAVE.pub, 'base64url')[0] === 4 && require('crypto').createHash('sha256').update(Buffer.from(CHAVE.pub, 'base64url')).digest('hex').slice(0, 8) === CHAVE.kid
+      && JSON.stringify(injetada) === JSON.stringify(CHAVE) && !/BASE_CRIPTOGRAFIA|PRIVATE KEY|CRYPTO_PRIVATE/.test(html)
+      && /no-cache/.test(r.headers.get('cache-control') || '') && /application\/json/.test(r.headers.get('content-type') || '');
+    check('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid}); BASE_CRIPTOGRAFIA sumiu da página', ok, JSON.stringify({ CHAVE, injetada }));
+  });
+  await caso('crypto v2: sem chave pública (ou chave adulterada) a lib recusa cifrar e nada é enviado', async () => {
+    const p = openLocal('https://app.exemplo.com/', ['core.js', 'net.js']);
+    p.w.__mock['/r4/chave'] = { status: 404, body: { status: 404 } };
+    let m1 = ''; try { await p.w.R4.http.post('/x', { a: 1 }); } catch (e) { m1 = e.message; }
+    p.w.R4.config.serverKey = { ...CHAVE, pub: CHAVE.pub.slice(0, -2) + (CHAVE.pub.endsWith('AA') ? 'AQ' : 'AA') };
+    let m2 = ''; try { await p.w.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }); } catch (e) { m2 = e.message; }
+    const enviados = p.w.__fetchLog.filter(f => !/\/r4\/chave$/.test(f.url)).length;
+    check('crypto v2: sem chave pública (ou chave adulterada) a lib recusa cifrar e nada é enviado', /chave pública/.test(m1) && /chave pública|kid/.test(m2) && enviados === 0, 'post="' + m1 + '" encrypt="' + m2 + '" enviados=' + enviados);
     p.close();
   });
-  await caso('crypto: chave vazia em localhost só avisa', async () => {
-    const p = openLocal('http://localhost:8087/', ['core.js', 'net.js'], w2 => { w2.BASE_CRIPTOGRAFIA = ''; });
-    const pack = await p.w.R4.crypto.encrypt({ a: 1 });
-    check('crypto: chave vazia em localhost só avisa', pack && pack.x && p.logs.warn.some(m => /chave/i.test(m)));
-    p.close();
+  await caso('crypto v2: página http pública avisa uma vez; exigirHttps=true recusa; página https não envia para http:// (conteúdo misto)', async () => {
+    const a = openLocal('http://app.exemplo.com/', ['core.js', 'net.js'], w2 => { w2.R4_SERVER_KEY = CHAVE; w2.__mock['/x'] = { status: 200, body: { ok: 1 } }; });
+    await a.w.R4.http.post('/x', { a: 1 }); await a.w.R4.http.post('/x', { b: 2 });
+    const avisos = a.logs.warn.filter(m => /HTTP fora de localhost/.test(m)).length;
+    a.w.R4.config.exigirHttps = true;
+    let m1 = ''; try { await a.w.R4.http.post('/x', { a: 1 }); } catch (e) { m1 = e.message; }
+    a.close();
+    const b = openLocal('https://app.exemplo.com/', ['core.js', 'net.js'], w2 => { w2.R4_SERVER_KEY = CHAVE; });
+    let m2 = ''; try { await b.w.R4.http.get('http://api.exemplo.com/dados'); } catch (e) { m2 = e.message; }
+    const local = openLocal('http://127.0.0.1:8087/', ['core.js', 'net.js'], w2 => { w2.R4_SERVER_KEY = CHAVE; });
+    await local.w.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' });
+    const avisoLocal = local.logs.warn.some(m => /HTTP fora de localhost/.test(m));
+    check('crypto v2: página http pública avisa uma vez; exigirHttps=true recusa; página https não envia para http:// (conteúdo misto)',
+      avisos === 1 && /exigirHttps/.test(m1) && /conteúdo misto/.test(m2) && b.w.__fetchLog.length === 0 && !avisoLocal, JSON.stringify({ avisos, m1, m2, avisoLocal }));
+    b.close(); local.close();
   });
-  await caso('crypto: AES-GCM com salt/IV novos a cada mensagem; adulteração → null', async () => {
-    const p = openLocal('https://app.exemplo.com/', ['core.js', 'net.js'], w2 => { w2.BASE_CRIPTOGRAFIA = 'segredo-de-teste'; });
-    const C = p.w.R4.crypto;
-    const a = await C.encrypt({ v: 1 }), b = await C.encrypt({ v: 1 });
-    const back = await C.decrypt(a);
-    const raw = Buffer.from(a.x, 'base64'); raw[0] ^= 1;
-    const bad = await C.decrypt({ x: raw.toString('base64'), y: a.y, z: a.z });
-    const ivLen = Buffer.from(a.z, 'base64').length, saltLen = Buffer.from(a.y, 'base64').length;
-    check('crypto: AES-GCM com salt/IV novos a cada mensagem; adulteração → null', back && back.v === 1 && a.z !== b.z && a.y !== b.y && ivLen === 12 && saltLen === 16 && bad === null);
+  await caso('crypto v2: par efêmero só em memória (nada em localStorage/sessionStorage/cookie) e IV novo por mensagem', async () => {
+    const p = openLocal('https://app.exemplo.com/', ['core.js', 'net.js'], w2 => { w2.R4_SERVER_KEY = CHAVE; });
+    const a = await p.w.R4.crypto.encrypt({ v: 1 }, { metodo: 'POST', caminho: '/a' }), b = await p.w.R4.crypto.encrypt({ v: 1 }, { metodo: 'POST', caminho: '/a' });
+    const raw = Buffer.from(a.x, 'base64url'); raw[0] ^= 1;
+    const bad = await p.w.R4.crypto.decrypt({ ...a, x: raw.toString('base64url') });
+    const ok = p.w.localStorage.length === 0 && p.w.sessionStorage.length === 0 && p.w.document.cookie === '' && a.k === b.k && a.s === b.s && a.z !== b.z
+      && Buffer.from(a.z, 'base64url').length === 12 && Buffer.from(a.s, 'base64url').length === 16 && bad === null
+      && (await p.w.R4.crypto.decrypt(a)).v === 1;
+    check('crypto v2: par efêmero só em memória (nada em localStorage/sessionStorage/cookie) e IV novo por mensagem', ok);
     p.close();
   });
 
@@ -721,6 +759,145 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
     const r = await fetch(BASE + '/vitrine/api/echo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: '</script>' + P_IMG }) });
     const t = await r.text();
     check('api: eco não reflete < > crus (JSON_HEX_TAG) e é application/json', !/[<>]/.test(t) && /application\/json/.test(r.headers.get('content-type') || ''), t.slice(0, 200));
+  });
+
+  /* ===================== 3b. criptografia v2 no SERVIDOR (Node webcrypto → PHP → Node) ===================== */
+  const WC = require('crypto').webcrypto, SB = WC.subtle, te = new TextEncoder(), td = new TextDecoder();
+  const u64 = b => Buffer.from(b).toString('base64url');
+  /** sessão "de navegador" feita só com o webcrypto do Node (interoperabilidade real, sem a libr4) */
+  const sessaoNode = async (info = CHAVE) => {
+    const pubSrv = await SB.importKey('raw', Buffer.from(info.pub, 'base64url'), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    const par = await SB.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+    const hk = await SB.importKey('raw', await SB.deriveBits({ name: 'ECDH', public: pubSrv }, par.privateKey, 256), 'HKDF', false, ['deriveKey']);
+    const salt = WC.getRandomValues(new Uint8Array(16));
+    const der = i => SB.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: te.encode(i) }, hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    return { kid: info.kid, k: u64(await SB.exportKey('raw', par.publicKey)), s: u64(salt), req: await der('R4v2 req'), res: await der('R4v2 res') };
+  };
+  const selarNode = async (ss, d, metodo, caminho, o = {}) => {
+    const n = u64(WC.getRandomValues(new Uint8Array(16))), iv = WC.getRandomValues(new Uint8Array(12));
+    const claro = JSON.stringify({ t: o.t ?? Math.floor(Date.now() / 1000), n, d });
+    const x = await SB.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode('R4v2|' + metodo + '|' + caminho) }, ss.req, te.encode(claro));
+    return { env: { v: 2, kid: ss.kid, k: ss.k, s: ss.s, z: u64(iv), x: u64(x) }, n };
+  };
+  const postC = async (p, body, h = {}) => {
+    const r = await fetch(BASE + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...h }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+    const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) { /* */ }
+    return { s: r.status, t, j, ct: r.headers.get('content-type') || '' };
+  };
+  /** 400 + JSON {status:400, retorno} sem caminho/stack/aviso PHP */
+  const limpo400 = r => r.s === 400 && r.j && r.j.status === 400 && typeof r.j.retorno === 'string' && /application\/json/.test(r.ct) && !/\.php|Stack trace|Warning|Fatal|Notice/i.test(r.t);
+
+  await caso('crypto v2: interoperabilidade Node (webcrypto) → PHP /vitrine/api/echo (cifrado:true, dados idênticos)', async () => {
+    const ss = await sessaoNode();
+    const dados = { nome: "O'Brien — ação ✓ 日本", n: [1, 2.5, null, true], aninhado: { a: { b: 'c' } } };
+    const { env } = await selarNode(ss, dados, 'POST', '/vitrine/api/echo');
+    const r = await postC('/vitrine/api/echo', env);
+    check('crypto v2: interoperabilidade Node (webcrypto) → PHP /vitrine/api/echo (cifrado:true, dados idênticos)',
+      r.s === 200 && r.j.retorno.cifrado === true && JSON.stringify(r.j.retorno.recebido) === JSON.stringify(dados), r.s + ' ' + r.t.slice(0, 200));
+  });
+  await caso('crypto v2: resposta cifrada (X-R4-Res: 1) Node → PHP → Node: só {v,z,x}, decifra com a chave da sessão e traz o nonce do pedido', async () => {
+    const ss = await sessaoNode();
+    const { env, n } = await selarNode(ss, { pedido: 7 }, 'POST', '/vitrine/api/echo-cifrado');
+    const r = await postC('/vitrine/api/echo-cifrado', env, { 'X-R4-Res': '1' });
+    let o = null, outraRota = 'abriu';
+    try {
+      const iv = Buffer.from(r.j.z, 'base64url'), x = Buffer.from(r.j.x, 'base64url');
+      o = JSON.parse(td.decode(await SB.decrypt({ name: 'AES-GCM', iv, additionalData: te.encode('R4v2|res|/vitrine/api/echo-cifrado') }, ss.res, x)));
+      try { await SB.decrypt({ name: 'AES-GCM', iv, additionalData: te.encode('R4v2|res|/vitrine/api/echo') }, ss.res, x); } catch (e) { outraRota = 'recusou'; }
+    } catch (e) { /* o = null reprova */ }
+    const semPedido = await postC('/vitrine/api/echo-cifrado', { pedido: 7 }, { 'X-R4-Res': '1' });
+    check('crypto v2: resposta cifrada (X-R4-Res: 1) Node → PHP → Node: só {v,z,x}, decifra com a chave da sessão e traz o nonce do pedido',
+      r.s === 200 && Object.keys(r.j).sort().join() === 'v,x,z' && o && o.n === n && o.d.retorno.recebido.pedido === 7 && o.d.retorno.respostaCifrada === true
+      && outraRota === 'recusou' && semPedido.s === 200 && semPedido.j.retorno.cifrado === false && !('x' in semPedido.j),
+      JSON.stringify({ s: r.s, o, outraRota, semPedido: semPedido.t.slice(0, 120) }));
+  });
+  await caso('crypto v2: pacote adulterado / AAD de outra rota ou método / replay em outra rota → 400 JSON limpo', async () => {
+    const ss = await sessaoNode();
+    const { env } = await selarNode(ss, { a: 1 }, 'POST', '/vitrine/api/echo');
+    const x = Buffer.from(env.x, 'base64url'); x[5] ^= 0x10;
+    const z = Buffer.from(env.z, 'base64url'); z[0] ^= 1;
+    const putEnv = (await selarNode(ss, { a: 1 }, 'PUT', '/vitrine/api/echo')).env;
+    const rs = [
+      await postC('/vitrine/api/echo', { ...env, x: x.toString('base64url') }),
+      await postC('/vitrine/api/echo', { ...env, z: z.toString('base64url') }),
+      await postC('/vitrine/api/cadastro', env),            // replay em outra rota
+      await postC('/vitrine/api/echo-cifrado', env),        // idem
+      await postC('/vitrine/api/echo', putEnv),             // AAD de outro método
+      await postC('/vitrine/api/echo/../cadastro', env)
+    ];
+    const certo = await postC('/vitrine/api/echo', env);
+    check('crypto v2: pacote adulterado / AAD de outra rota ou método / replay em outra rota → 400 JSON limpo',
+      rs.slice(0, 5).every(limpo400) && rs[5].s !== 200 && certo.s === 200 && certo.j.retorno.cifrado === true, rs.map(r => r.s + ' ' + r.t.slice(0, 80)).join(' | '));
+  });
+  await caso('crypto v2: t expirado / no futuro → 400 (código R4_TEMPO); kid errado → 400 (código R4_CHAVE)', async () => {
+    const ss = await sessaoNode(), agora = Math.floor(Date.now() / 1000);
+    const velho = await postC('/vitrine/api/echo', (await selarNode(ss, 1, 'POST', '/vitrine/api/echo', { t: agora - 900 })).env);
+    const futuro = await postC('/vitrine/api/echo', (await selarNode(ss, 1, 'POST', '/vitrine/api/echo', { t: agora + 600 })).env);
+    const tTexto = await postC('/vitrine/api/echo', (await selarNode(ss, 1, 'POST', '/vitrine/api/echo', { t: String(agora) })).env);
+    const { env } = await selarNode(ss, 1, 'POST', '/vitrine/api/echo');
+    const kid = await postC('/vitrine/api/echo', { ...env, kid: CHAVE.kid === '00000000' ? '11111111' : '00000000' });
+    const kidRuim = await postC('/vitrine/api/echo', { ...env, kid: 'XYZ' });
+    check('crypto v2: t expirado / no futuro → 400 (código R4_TEMPO); kid errado → 400 (código R4_CHAVE)',
+      [velho, futuro, tTexto, kid, kidRuim].every(limpo400) && velho.j.codigo === 'R4_TEMPO' && futuro.j.codigo === 'R4_TEMPO' && kid.j.codigo === 'R4_CHAVE',
+      [velho, futuro, tTexto, kid, kidRuim].map(r => r.s + ' ' + r.t.slice(0, 90)).join(' | '));
+  });
+  await caso('crypto v2: ponto fora da curva, ponto comprimido, tamanhos absurdos e k/s/z/x fora do base64url → 400 JSON limpo', async () => {
+    const ss = await sessaoNode();
+    const { env } = await selarNode(ss, { a: 1 }, 'POST', '/vitrine/api/echo');
+    const fora = Buffer.alloc(65, 7); fora[0] = 4;
+    const comp = Buffer.from(env.k, 'base64url').subarray(0, 33); comp[0] = 2;
+    const zero = Buffer.alloc(65); zero[0] = 4;
+    const b64comum = s => Buffer.from(s, 'base64url').toString('base64');
+    const variantes = {
+      foraDaCurva: { k: fora.toString('base64url') }, comprimido: { k: comp.toString('base64url') }, pontoZero: { k: zero.toString('base64url') },
+      k66: { k: u64(Buffer.concat([Buffer.from(env.k, 'base64url'), Buffer.from([1])])) }, s15: { s: u64(WC.getRandomValues(new Uint8Array(15))) },
+      s1000: { s: u64(Buffer.alloc(1000, 1)) }, z13: { z: u64(WC.getRandomValues(new Uint8Array(13))) }, x5: { x: u64(Buffer.alloc(5, 1)) },
+      kComum: { k: b64comum(env.k) + '=' }, sComum: { s: b64comum(env.s) }, zEspaco: { z: env.z + ' ' }, xBarra: { x: env.x.replace(/^./, '/') },
+      kVazio: { k: '' }, kNumero: { k: 12345 }, kArray: { k: [env.k] }, zNull: { z: null }, vTexto: { v: '2' }, v1: { v: 1 }, extra: { admin: true }
+    };
+    const rs = {};
+    for (const [nome, m] of Object.entries(variantes)) rs[nome] = await postC('/vitrine/api/echo', { ...env, ...m });
+    const semK = { ...env }; delete semK.k;
+    rs.semK = await postC('/vitrine/api/echo', semK);
+    rs.lista = await postC('/vitrine/api/echo', '[' + JSON.stringify(env) + ']', {});
+    const ruins = Object.entries(rs).filter(([n, r]) => n !== 'lista' && !limpo400(r));
+    check('crypto v2: ponto fora da curva, ponto comprimido, tamanhos absurdos e k/s/z/x fora do base64url → 400 JSON limpo',
+      !ruins.length && rs.lista.s === 200 && rs.lista.j.retorno.cifrado === false, ruins.map(([n, r]) => n + '=' + r.s + ' ' + r.t.slice(0, 60)).join(' | '));
+  });
+  await caso('crypto v2: corpo gigante cifrado → 413; formato antigo {x,y,z} → 400; JSON em claro continua aceito', async () => {
+    const ss = await sessaoNode();
+    const { env } = await selarNode(ss, { a: 'x'.repeat(1200000) }, 'POST', '/vitrine/api/echo');
+    const grande = await postC('/vitrine/api/echo', env);
+    const v1 = await postC('/vitrine/api/echo', { x: 'YWJj', y: 'MDEyMzQ1Njc4OWFiY2RlZg==', z: 'MDEyMzQ1Njc4OWFi' });
+    const claro = await postC('/vitrine/api/echo', { nome: 'em claro' });
+    const cadastroCifrado = await postC('/vitrine/api/cadastro', (await selarNode(ss, { nome: 'Ana Souza', email: 'ana@exemplo.com' }, 'POST', '/vitrine/api/cadastro')).env);
+    check('crypto v2: corpo gigante cifrado → 413; formato antigo {x,y,z} → 400; JSON em claro continua aceito',
+      grande.s === 413 && limpo400(v1) && claro.s === 200 && claro.j.retorno.cifrado === false && claro.j.retorno.recebido.nome === 'em claro'
+      && cadastroCifrado.s === 200 && cadastroCifrado.j.retorno.nome === 'Ana Souza',
+      [grande, v1, claro, cadastroCifrado].map(r => r.s + ' ' + r.t.slice(0, 80)).join(' | '));
+  });
+  await caso('crypto v2: libr4 de verdade (jsdom) → PHP → libr4: R4.http.post com cifrarResposta e /echo cifrado', async () => {
+    const p = openLocal(BASE + '/pagina-de-teste', ['core.js', 'net.js'], w2 => { w2.R4_SERVER_KEY = CHAVE; });
+    const dados = { cliente: 'Ana', valor: 10.5, itens: ['a', 'b'] };
+    let r1 = null, r2 = null, erro = '';
+    try {
+      r1 = await p.w.R4.http.post('/vitrine/api/echo-cifrado', dados, { cifrarResposta: true });
+      r2 = await p.w.R4.http.post('/vitrine/api/echo', dados);
+    } catch (e) { erro = e.message; }
+    let recusou = '';
+    try { await p.w.R4.http.post('/vitrine/api/echo', dados, { cifrarResposta: true }); } catch (e) { recusou = e.message; }
+    check('crypto v2: libr4 de verdade (jsdom) → PHP → libr4: R4.http.post com cifrarResposta e /echo cifrado',
+      r1 && r1.retorno.respostaCifrada === true && JSON.stringify(r1.retorno.recebido) === JSON.stringify(dados) && r2 && r2.retorno.cifrado === true
+      && /não cifrou a resposta/.test(recusou) && p.logs.error.length === 0, JSON.stringify({ r1, r2, erro, recusou, err: p.logs.error }).slice(0, 400));
+    p.close();
+  });
+  await caso('crypto v2 (código): Controller tem CRYPTO_OBRIGATORIA; index.php e net.js sem segredo nem storage da chave', async () => {
+    const ctl = fs.readFileSync(path.join(ROOT, 'core/Controller.php'), 'utf8');
+    const idx = fs.readFileSync(path.join(ROOT, 'public/index.php'), 'utf8');
+    const net = fs.readFileSync(path.join(ROOT, 'public/libr4/net.js'), 'utf8');
+    const ok = /CRYPTO_OBRIGATORIA/.test(ctl) && /'obrigatoria'/.test(ctl) && !/BASE_CRIPTOGRAFIA/.test(idx) && /R4_SERVER_KEY/.test(idx)
+      && !/PBKDF2|BASE_CRIPTOGRAFIA\s*\|\||localStorage|sessionStorage/.test(net) && /generateKey\(\{ name: 'ECDH'/.test(net);
+    check('crypto v2 (código): Controller tem CRYPTO_OBRIGATORIA; index.php e net.js sem segredo nem storage da chave', ok);
   });
   await caso('config: vitrine só com APP_DEBUG (controller) e nginx com CSP/Permissions-Policy', async () => {
     const ctl = fs.readFileSync(path.join(ROOT, 'src/Controllers/VitrineController.php'), 'utf8');

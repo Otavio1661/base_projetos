@@ -44,7 +44,8 @@ cd base_projetos
 ```text
 APP_ENV=local
 APP_DEBUG=true
-BASE_CRIPTOGRAFIA=...
+CRYPTO_PRIVATE_KEY=""
+HTTPS_MODE=optional
 DB_HOST=localhost
 DB_PORT=3306
 DB_DATABASE=nome_do_banco
@@ -136,7 +137,8 @@ Principais arquivos/folders:
 - `core/RouterBase.php` — lógica de roteamento, dispatch e middleware.
 - `core/Database.php` — singleton PDO, `switchParams()` e `runMigration()`.
 - `core/Generator/` — scripts CLI para gerar/remover MVC.
-- `src/Utils/Decryption.php` e `public/libr4/net.js` (R4.crypto) — criptografia AES-GCM (frontend/backend).
+- `core/Security/Crypto.php` e `public/libr4/net.js` (R4.crypto) — criptografia v2 (ECDH P-256 + AES-256-GCM; `src/Utils/Decryption.php` é só uma fachada).
+- `core/Security/Transport.php` — política HTTPS/HTTP por ambiente (308/426, HSTS, proxies confiáveis, `APP_HOSTS`).
 
 --------------------------------------------------------------------------------
 
@@ -176,10 +178,12 @@ class HomeController extends ctrl
 
 ## Criptografia (frontend ↔ backend)
 
-- O frontend contém a libr4 (`public/libr4/net.js`, `R4.crypto`/`R4.http`) que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
-- O backend usa `src/Utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
-- A chave base está definida em `BASE_CRIPTOGRAFIA` no `.env` e é injetada nas views pelo `public/index.php`.
-- **Importante:** por ser injetada na página, a chave fica no navegador de todo visitante. A criptografia protege contra leitura passiva do tráfego/logs e ofusca o corpo, mas **não é segredo contra quem abre a página** e não substitui HTTPS nem validação no servidor. Com a chave vazia, fora de `localhost` a libr4 se recusa a cifrar. Detalhes em [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
+- **Nenhum segredo vai para o navegador.** O servidor tem um par de chaves P-256: a privada fica só no `.env` (`CRYPTO_PRIVATE_KEY`, gerada com `php tools/gerar-chave.php`; em `APP_ENV=local` ela é criada sozinha em `storage/dev-crypto-key.pem`) e a pública vai para a página (`window.R4_SERVER_KEY`, injetada pelo `public/index.php`, ou `GET /r4/chave`).
+- A libr4 (`R4.crypto`/`R4.http`) gera a cada sessão de página um par ECDH efêmero (só em memória), deriva com HKDF-SHA256 uma chave AES-256-GCM e envia `{v:2, kid, k, s, z, x}` com IV novo por mensagem. O AAD (`método + caminho`) amarra o pacote ao endpoint e o servidor recusa pacotes fora da janela de tempo (`CRYPTO_JANELA_SEG`).
+- No PHP, `Controller::getPost()` decifra (`Core\Security\Crypto`); pacote inválido, adulterado, de outra rota ou expirado → 400 JSON limpo. Resposta cifrada opcional: `R4.http.post(url, dados, { cifrarResposta: true })` + `Controller::responderCifrado($dados)`.
+- `BASE_CRIPTOGRAFIA` e o formato antigo `{x, y, z}` deixaram de existir (a variável é ignorada, com aviso no log).
+- **HTTPS continua obrigatório em produção** (`HTTPS_MODE=required`, padrão): sem TLS um atacante ativo pode trocar a chave pública entregue com a página. Política HTTPS/HTTP (redireciono 308, 426 para POST em HTTP, HSTS, IPs isentos, proxies confiáveis, `APP_HOSTS`) em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).
+- Limites (XSS lê os dados antes de cifrar; replay dentro da janela só some com APCu) em [`docs/SEGURANCA.md`](docs/SEGURANCA.md), seção 5.
 
 --------------------------------------------------------------------------------
 
@@ -276,4 +280,4 @@ A lib não depende de Node em nenhum momento; o Node só é usado em `tools/` pa
 
 ## Produção e `.env`
 
-O `.env` real **nunca** vai para o Git (só `Exemplo.env` e `Exemplo.producao.env`). Em produção o debug é desligado automaticamente e a aplicação só sobe com `BASE_CRIPTOGRAFIA` de 32+ caracteres. Passo a passo e checklist em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).
+O `.env` real **nunca** vai para o Git (só `Exemplo.env` e `Exemplo.producao.env`). Em produção o debug é desligado automaticamente e a aplicação só sobe com `CRYPTO_PRIVATE_KEY` válida (`php tools/gerar-chave.php`); HTTPS é exigido por padrão (`HTTPS_MODE=required`). Passo a passo, variáveis e cenários (HTTP em dev, HTTPS, proxy/Load Balancer, chamadas internas, rotação de chave) em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).

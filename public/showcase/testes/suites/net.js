@@ -1,56 +1,73 @@
-/* suíte net: R4.crypto (AES-GCM) e R4.http.request com fetch simulado (mockFetch) */
+/* suíte net: R4.crypto (criptografia v2: ECDH P-256 + AES-GCM, AAD) e R4.http.request com fetch simulado (mockFetch) */
 (() => {
   const { suite, test, assert } = R4Test;
-  const comChave = (t, k = 'chave-de-teste-' + Math.random().toString(36).slice(2)) => {
-    const antes = R4.config.cryptoKey;
-    R4.config.cryptoKey = k;
-    t.cleanup(() => { R4.config.cryptoKey = antes; });
-    return k;
-  };
   const unica = () => 'https://origem-' + Math.random().toString(36).slice(2, 10) + '.exemplo.test';
+  const b64uLen = s => atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)).length;
+  const ECO = '/vitrine/api/echo', ECO_CIF = '/vitrine/api/echo-cifrado';
+  /** envia um corpo já pronto direto (sem R4.http) e devolve {status, json} */
+  const cru = async (url, corpo, headers = {}) => {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo) });
+    let json = null; try { json = JSON.parse(await r.text()); } catch (e) { /* não JSON */ }
+    return { status: r.status, json };
+  };
 
   suite('net', () => {
-    test('crypto: encrypt → decrypt volta o valor original (objeto, array, texto, número, unicode)', async t => {
-      comChave(t);
+    test('crypto: a página tem só a chave PÚBLICA do servidor ({v:2, pub de 65 bytes, kid}) e nenhum segredo', async t => {
+      const k = window.R4_SERVER_KEY;
+      assert.ok(k && typeof k === 'object', 'window.R4_SERVER_KEY injetada pelo index.php');
+      assert.deepEq(Object.keys(k).sort(), ['kid', 'pub', 'v']);
+      assert.eq(k.v, 2);
+      assert.eq(b64uLen(k.pub), 65, 'ponto P-256 não comprimido');
+      assert.ok(/^[0-9a-f]{8}$/.test(k.kid), 'kid = 8 hex');
+      assert.eq(window.BASE_CRIPTOGRAFIA, undefined, 'BASE_CRIPTOGRAFIA não existe mais na página');
+      const r = await fetch('/r4/chave');
+      assert.deepEq(await r.json(), k, 'GET /r4/chave devolve o mesmo JSON');
+      assert.contains(r.headers.get('cache-control') || '', 'no-cache');
+    });
+
+    test('crypto: envelope {v,kid,k,s,z,x}; mesma sessão (k, s) e IV novo a cada mensagem; nada em claro', async t => {
+      const a = await R4.crypto.encrypt({ n: 1 }, { metodo: 'POST', caminho: '/api/a' });
+      const b = await R4.crypto.encrypt({ n: 1 }, { metodo: 'POST', caminho: '/api/a' });
+      assert.deepEq(Object.keys(a).sort(), ['k', 'kid', 's', 'v', 'x', 'z']);
+      assert.eq(a.v, 2);
+      assert.eq(a.kid, window.R4_SERVER_KEY.kid, 'kid da chave do servidor');
+      assert.eq(b64uLen(a.k), 65, 'chave pública efêmera do cliente (65 bytes)');
+      assert.eq(b64uLen(a.s), 16, 'salt de 16 bytes');
+      assert.eq(b64uLen(a.z), 12, 'IV de 12 bytes');
+      assert.gt(b64uLen(a.x), 16, 'dados + tag GCM');
+      assert.eq(a.k, b.k, 'mesma sessão de página: mesmo par efêmero');
+      assert.eq(a.s, b.s, 'mesmo salt na sessão');
+      assert.notEq(a.z, b.z, 'IV diferente a cada mensagem');
+      assert.notEq(a.x, b.x, 'mesmo texto claro, cifra diferente');
+      assert.ok([a.k, a.s, a.z, a.x].every(v => /^[A-Za-z0-9_-]+$/.test(v)), 'base64url sem "="');
+      assert.notContains(JSON.stringify(a), '"n"', 'o conteúdo não aparece em claro');
+    });
+
+    test('crypto: o próprio pedido decifra na sessão (objeto, array, texto, número, unicode)', async t => {
       const casos = [{ a: 1, b: [1, 2, { c: 'x' }], d: null }, [1, 'dois', true], 'texto simples', 42, 'ação — ✓ 日本語 😀', { vazio: {} }];
       for (const v of casos) {
-        const pack = await R4.crypto.encrypt(v);
+        const pack = await R4.crypto.encrypt(v, { metodo: 'PUT', caminho: '/api/x' });
         assert.deepEq(await R4.crypto.decrypt(pack), v, 'ida e volta de ' + JSON.stringify(v).slice(0, 30));
       }
     });
 
-    test('crypto: o pacote é {x,y,z} em base64, com salt de 16 e IV de 12 bytes novos a cada chamada', async t => {
-      comChave(t);
-      const a = await R4.crypto.encrypt({ n: 1 }), b = await R4.crypto.encrypt({ n: 1 });
-      assert.deepEq(Object.keys(a).sort(), ['x', 'y', 'z']);
-      assert.eq(atob(a.y).length, 16, 'salt de 16 bytes');
-      assert.eq(atob(a.z).length, 12, 'IV de 12 bytes');
-      assert.gt(atob(a.x).length, 16, 'dados + tag GCM');
-      assert.notEq(a.y, b.y, 'salt diferente');
-      assert.notEq(a.z, b.z, 'IV diferente');
-      assert.notEq(a.x, b.x, 'mesmo texto claro, cifra diferente');
-      assert.notContains(a.x, '"n"', 'o conteúdo não aparece em claro');
-    });
-
-    test('crypto: pacote adulterado, incompleto ou com chave errada devolve null (e registra console.error)', async t => {
-      comChave(t, 'chave-A');
-      const pack = await R4.crypto.encrypt({ segredo: 123 });
+    test('crypto: AAD — pacote adulterado, de outra rota/método, incompleto ou de outra sessão devolve null (console.error)', async t => {
+      const pack = await R4.crypto.encrypt({ segredo: 123 }, { metodo: 'POST', caminho: '/api/pagar' });
       const troca = s => (s[0] === 'A' ? 'B' : 'A') + s.slice(1);
       assert.eq(await R4.crypto.decrypt({ ...pack, x: troca(pack.x) }), null, 'dados adulterados (tag GCM)');
-      assert.eq(await R4.crypto.decrypt({ ...pack, y: btoa('0123456789abcdef') }), null, 'salt trocado');
-      assert.eq(await R4.crypto.decrypt({ ...pack, z: btoa('curto') }), null, 'IV de tamanho errado');
-      assert.eq(await R4.crypto.decrypt({ x: pack.x, y: pack.y }), null, 'pacote incompleto');
+      assert.eq(await R4.crypto.decrypt(pack, { caminho: '/api/outra' }), null, 'outra rota (AAD)');
+      assert.eq(await R4.crypto.decrypt(pack, { metodo: 'DELETE' }), null, 'outro método (AAD)');
+      assert.eq(await R4.crypto.decrypt({ ...pack, z: 'curto' }), null, 'IV de tamanho errado');
+      assert.eq(await R4.crypto.decrypt({ ...pack, k: troca(pack.k) }), null, 'chave de outra sessão');
+      assert.eq(await R4.crypto.decrypt({ x: pack.x, y: 'a', z: pack.z }), null, 'formato antigo {x,y,z}');
       assert.eq(await R4.crypto.decrypt(null), null, 'null');
       assert.eq(await R4.crypto.decrypt('texto'), null, 'não é objeto');
-      assert.eq(await R4.crypto.decrypt({ x: 1, y: 2, z: 3 }), null, 'tipos errados');
-      assert.eq(await R4.crypto.decrypt({ x: '***', y: '***', z: '***' }), null, 'base64 inválido');
-      R4.config.cryptoKey = 'chave-B';
-      assert.eq(await R4.crypto.decrypt(pack), null, 'chave diferente não decifra');
+      assert.eq(await R4.crypto.decrypt({ v: 2, z: '***', x: '***' }), null, 'base64url inválido');
       assert.eq(t.logs.take('error').length, 9, 'cada falha registra um console.error');
     });
 
-    test('crypto: chave vazia fora de localhost é recusada (falha segura); com chave funciona', async t => {
-      // location.hostname de um iframe about:blank é "" (≠ localhost): carrega core+net lá dentro
+    test('crypto: sem chave pública válida recusa cifrar (mensagem clara); com a chave do servidor funciona', async t => {
+      // iframe about:blank com core + net: configura a chave à mão
       const f = document.createElement('iframe');
       f.style.display = 'none';
       t.box.append(f);
@@ -60,13 +77,76 @@
       const carrega = src => new Promise((ok, no) => { const s = D.createElement('script'); s.src = location.origin + src; s.onload = ok; s.onerror = () => no(new Error('não carregou ' + src)); D.head.append(s); });
       await carrega('/libr4/core.js'); await carrega('/libr4/net.js');
       assert.ok(W.R4 && W.R4.crypto, 'lib carregada no iframe');
-      assert.notEq(W.location.hostname, '127.0.0.1', 'o iframe não é localhost');
-      assert.eq(W.R4.config.cryptoKey, null);
-      await assert.rejects(W.R4.crypto.encrypt({ a: 1 }), /chave de criptografia vazia/, 'sem chave: recusa cifrar');
-      W.R4.config.cryptoKey = 'chave-do-iframe';
-      const p = await W.R4.crypto.encrypt({ a: 1 });
-      assert.deepEq(await W.R4.crypto.decrypt(p), { a: 1 }, 'com chave: funciona');
+      W.R4.config.serverKey = { v: 2, pub: 'AAAA', kid: '00000000' };
+      await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /chave pública do servidor/, 'pub inválida');
+      W.R4.config.serverKey = { ...window.R4_SERVER_KEY, kid: 'ffffffff' };
+      await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /kid não confere/, 'kid que não é o da chave');
+      W.R4.config.serverKey = { v: 1, pub: window.R4_SERVER_KEY.pub, kid: window.R4_SERVER_KEY.kid };
+      await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /chave pública/, 'versão errada');
+      W.R4.config.serverKey = window.R4_SERVER_KEY;
+      const p = await W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' });
+      assert.deepEq(await W.R4.crypto.decrypt(p), { a: 1 }, 'com a chave do servidor: funciona');
       f.remove();
+    });
+
+    test('crypto: encrypt sem {metodo, caminho} avisa uma vez e usa POST + caminho da página', async t => {
+      const pack = await R4.crypto.encrypt({ a: 1 });
+      const w = t.logs.take('warn');
+      assert.ok(w.length <= 1, 'no máximo um aviso (uma vez por página)');
+      assert.deepEq(await R4.crypto.decrypt(pack, { metodo: 'POST', caminho: location.pathname }), { a: 1 });
+    });
+
+    test('servidor: R4.http → PHP → R4.http com pedido e resposta cifrados (ida e volta real)', async t => {
+      const dados = { nome: 'Ana — ação ✓', itens: [1, 2, { a: null }] };
+      const r = await R4.http.post(ECO_CIF, dados, { cifrarResposta: true });
+      assert.eq(r.status, 200);
+      assert.eq(r.retorno.cifrado, true, 'o servidor recebeu o envelope v2');
+      assert.eq(r.retorno.respostaCifrada, true, 'e respondeu cifrado');
+      assert.deepEq(r.retorno.recebido, dados);
+      const r2 = await R4.http.post(ECO, { x: 1 });
+      assert.eq(r2.retorno.cifrado, true, '/echo: corpo cifrado por padrão');
+      const r3 = await R4.http.post(ECO, { x: 1 }, { encrypt: false });
+      assert.eq(r3.retorno.cifrado, false, 'encrypt:false manda em claro');
+    });
+
+    test('servidor: pacote em outra rota, adulterado, formato antigo ou com kid errado → 400 JSON limpo', async t => {
+      const pack = await R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: ECO });
+      const ok = await cru(ECO, pack);
+      assert.eq(ok.status, 200, 'na rota certa passa');
+      const outra = await cru('/vitrine/api/cadastro', pack);
+      assert.eq(outra.status, 400, 'mesmo pacote em outra rota (AAD)');
+      assert.contains(outra.json.retorno, 'inválido');
+      const x = pack.x[0] === 'A' ? 'B' + pack.x.slice(1) : 'A' + pack.x.slice(1);
+      assert.eq((await cru(ECO, { ...pack, x })).status, 400, 'adulterado');
+      assert.eq((await cru(ECO, { x: 'YQ', y: 'Yg', z: 'Yw' })).status, 400, 'v1 {x,y,z} não é mais aceito');
+      const kid = await cru(ECO, { ...pack, kid: '00000000' });
+      assert.eq(kid.status, 400, 'kid desconhecido');
+      assert.eq(kid.json.codigo, 'R4_CHAVE', 'código para o cliente se recuperar');
+      assert.notContains(JSON.stringify([outra.json, kid.json]), '.php', 'sem caminho do servidor');
+    });
+
+    test('http: cifrarResposta recusa resposta em claro (falha fechada) e exige corpo cifrado', async t => {
+      t.mockFetch({ '/api/claro': { body: { status: 200, retorno: 'em claro' } } });
+      await assert.rejects(R4.http.post('/api/claro', { a: 1 }, { cifrarResposta: true }), /não cifrou a resposta/);
+      await assert.rejects(R4.http.get('/api/claro', { cifrarResposta: true }), /cifrarResposta exige corpo cifrado/);
+      await assert.rejects(R4.http.post('/api/claro', { a: 1 }, { cifrarResposta: true, encrypt: false }), /cifrarResposta exige/);
+    });
+
+    test('http: R4_CHAVE (chave do servidor mudou) → busca /r4/chave, nova sessão e tenta de novo UMA vez', async t => {
+      let n = 0;
+      const m = t.mockFetch({
+        'POST /api/rot': () => (++n === 1 ? { status: 400, body: { status: 400, retorno: 'Pacote de criptografia inválido ou expirado.', codigo: 'R4_CHAVE' } } : { body: { status: 200, retorno: 'ok' } }),
+        'GET /r4/chave': { body: window.R4_SERVER_KEY },
+        'POST /api/sempre': { status: 400, body: { status: 400, retorno: 'x', codigo: 'R4_CHAVE' } }
+      });
+      const k1 = (await R4.crypto.sessao() || {}).k;
+      assert.deepEq(await R4.http.post('/api/rot', { a: 1 }), { status: 200, retorno: 'ok' });
+      assert.eq(m.calls.filter(c => c.path === '/api/rot').length, 2, 'duas tentativas');
+      assert.eq(m.calls.filter(c => c.path === '/r4/chave').length, 1, 'chave buscada de novo');
+      assert.notEq(m.calls[2].json.k, k1, 'nova sessão (novo par efêmero)');
+      const e = await assert.rejects(R4.http.post('/api/sempre', { a: 1 }));
+      assert.eq(e.status, 400);
+      assert.eq(m.calls.filter(c => c.path === '/api/sempre').length, 2, 'só UMA nova tentativa');
     });
 
     test('http.get: devolve o JSON, usa GET sem corpo, credentials same-origin e cabeçalho JSON', async t => {
@@ -82,21 +162,23 @@
       assert.eq(c.url.searchParams.get('x'), '1');
     });
 
-    test('http.post: corpo cifrado por padrão ({x,y,z} que decifra para os dados); encrypt:false manda em claro', async t => {
-      comChave(t);
+    test('http.post: corpo cifrado por padrão (envelope v2 com AAD do método + caminho); encrypt:false manda em claro', async t => {
       const m = t.mockFetch({ '/api/salvar': { body: { status: 200, retorno: 'ok' } } });
       const dados = { nome: 'Ana', itens: [1, 2] };
-      assert.deepEq(await R4.http.post('/api/salvar', dados), { status: 200, retorno: 'ok' });
+      assert.deepEq(await R4.http.post('/api/salvar?id=3', dados), { status: 200, retorno: 'ok' });
       const pack = m.calls[0].json;
-      assert.deepEq(Object.keys(pack).sort(), ['x', 'y', 'z'], 'corpo cifrado');
-      assert.deepEq(await R4.crypto.decrypt(pack), dados, 'o servidor decifraria para os dados originais');
+      assert.deepEq(Object.keys(pack).sort(), ['k', 'kid', 's', 'v', 'x', 'z'], 'corpo cifrado');
+      assert.deepEq(await R4.crypto.decrypt(pack, { metodo: 'POST', caminho: '/api/salvar' }), dados, 'AAD = POST + /api/salvar (sem query)');
+      assert.eq(await R4.crypto.decrypt(pack, { metodo: 'PUT', caminho: '/api/salvar' }), null, 'outro método não abre');
+      t.logs.take('error');
       await R4.http.post('/api/salvar', dados, { encrypt: false, headers: { 'X-Teste': 'sim' } });
       assert.deepEq(m.calls[1].json, dados, 'em claro');
       assert.eq(m.calls[1].init.headers['X-Teste'], 'sim', 'cabeçalhos extras');
       assert.eq(m.calls[1].init.headers['Content-Type'], 'application/json', 'sem perder o Content-Type');
       assert.eq(m.calls[1].method, 'POST');
-      await R4.http.request('/api/salvar', { method: 'PUT', data: { a: 1 }, encrypt: false });
+      await R4.http.request('/api/salvar', { method: 'PUT', data: { a: 1 } });
       assert.eq(m.calls[2].method, 'PUT');
+      assert.deepEq(await R4.crypto.decrypt(m.calls[2].json, { metodo: 'PUT', caminho: '/api/salvar' }), { a: 1 }, 'PUT cifrado com AAD de PUT');
     });
 
     test('http: 422 com corpo — err.status e err.data.erros ficam disponíveis; mensagem vem de "retorno"', async t => {
