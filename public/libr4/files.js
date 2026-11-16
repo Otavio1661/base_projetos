@@ -502,7 +502,8 @@
     const wb = xml(await get('xl/workbook.xml', true));
     const sheets = [...T(wb, 'sheet')];
     if (!sheets.length) fail('XLSX sem planilhas.');
-    const sh = sheets[o.sheet] || sheets[0];
+    if (Array.isArray(o.sheetsOut)) sheets.forEach(x => o.sheetsOut.push(x.getAttribute('name') || ''));
+    const sh = (typeof o.sheet === 'string' ? sheets.find(x => x.getAttribute('name') === o.sheet) : sheets[o.sheet]) || sheets[0];
     const rid = sh.getAttributeNS(RNS, 'id') || sh.getAttribute('r:id');
     let target = 'worksheets/sheet1.xml';
     const relsTxt = await get('xl/_rels/workbook.xml.rels', false);
@@ -575,8 +576,323 @@
     });
   }
 
+  /* ================= interpretar: o arquivo "se explica" (sem esquema pré-definido) ================= */
+  const LIM = { rows: 200000, cols: 200, text: 5 * MB, cell: 5000, sample: 2000, depth: 4 };
+  const badKey = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
+  const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && !ArrayBuffer.isView(v);
+  const isPrim = v => v == null || typeof v !== 'object';
+  const nfmt = n => R4.util.number(n, 0);
+
+  /** "dataNascimento" / "data_nascimento" / "endereco.cidade" → "Data Nascimento" / "Endereco Cidade" (siglas ficam como estão). */
+  function humanize(key) {
+    const s = String(key).replace(/[._\-\s]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim();
+    return s ? s.split(' ').map(w => (w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ') : String(key);
+  }
+  /** Valor de célula seguro: só primitivos (texto limitado, número finito, booleano ou null). */
+  function cell(v, ctx) {
+    if (v == null) return null;
+    if (typeof v === 'string') {
+      if (v.length > LIM.cell) { ctx.cut = true; return v.slice(0, LIM.cell); }
+      return v;
+    }
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'bigint') return String(v);
+    if (v instanceof Date) return isNaN(v) ? null : v.toISOString();
+    return null;   // função, símbolo...
+  }
+  /** Achata um objeto: aninhado vira chave pontuada; lista de primitivos vira "a, b"; lista de objetos vira JSON curto. */
+  function flatten(o, ctx, prefix, out, depth) {
+    for (const k of Object.keys(o)) {
+      if (badKey(k)) { ctx.badKeys.add(k); continue; }
+      const key = prefix ? prefix + '.' + k : k, v = o[k];
+      if (Array.isArray(v)) {
+        let t;
+        if (v.every(isPrim)) t = v.map(x => (x == null ? '' : String(x))).join(', ');
+        else { try { t = JSON.stringify(v, (kk, vv) => (badKey(kk) ? undefined : vv)); } catch (e) { t = ''; } }
+        out[key] = cell(t, ctx);
+      } else if (isObj(v) && depth < LIM.depth) flatten(v, ctx, key, out, depth + 1);
+      else if (isObj(v)) { let t = ''; try { t = JSON.stringify(v, (kk, vv) => (badKey(kk) ? undefined : vv)); } catch (e) { /* ok */ } out[key] = cell(t, ctx); }
+      else out[key] = cell(v, ctx);
+    }
+    return out;
+  }
+  /** Listas de objetos dentro de um objeto (até 3 níveis): [{ path, length }]. */
+  function listCandidates(o, base, depth, out) {
+    for (const k of Object.keys(o)) {
+      if (badKey(k)) continue;
+      const v = o[k], path = base ? base + '.' + k : k;
+      if (Array.isArray(v) && v.length && v.filter(isObj).length * 2 >= v.length) out.push({ path, length: v.length });
+      else if (isObj(v) && depth < 3) listCandidates(v, path, depth + 1, out);
+    }
+    return out;
+  }
+  const byPath = (o, path) => {
+    let cur = o;
+    for (const p of String(path).split('.')) { if (badKey(p) || cur == null || typeof cur !== 'object' || !Object.prototype.hasOwnProperty.call(cur, p)) return undefined; cur = cur[p]; }
+    return cur;
+  };
+
+  /* ---- inferência de tipos ---- */
+  const TRUE_ = new Set(['true', 'sim', 'yes', 'verdadeiro']), FALSE_ = new Set(['false', 'nao', 'não', 'no', 'falso']);
+  const RE_ISO_D = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const RE_ISO_DT = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/;
+  const RE_BR_D = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+  const okDate = (y, m, d) => m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1000;
+  const pad2 = n => String(n).padStart(2, '0');
+  const NAME_MONEY = /(valor|preco|preço|total|saldo|limite|custo|price|amount|salario|salário|receita|faturamento|desconto|frete|subtotal)/i;
+  const NAME_TEXT = /(^|[^a-z])(cpf|cnpj|cep|telefone|celular|fone|documento|rg|codigo|código|cod|sku|ean|matricula|matrícula|zip|phone|chave)([^a-z]|$)/i;
+
+  /** Converte uma string de número (pt-BR "1.234,56", en "1,234.56", "1234.5") conforme o estilo da coluna; null se não for número. */
+  function parseNum(s, style) {
+    let t = String(s).trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+    if (!t || !/^[+-]?[\d.,]+$/.test(t) || !/\d/.test(t)) return null;
+    if (/^[+-]?0\d/.test(t)) return null;                 // zeros à esquerda (código, CEP): continua texto
+    if (/^[+-]?\d{16,}$/.test(t)) return null;            // inteiro enorme: perderia precisão
+    const hasC = t.includes(','), hasD = t.includes('.');
+    let dec = null;
+    if (hasC && hasD) dec = t.lastIndexOf(',') > t.lastIndexOf('.') ? ',' : '.';
+    else if (hasC) dec = (t.match(/,/g).length > 1) ? null : (style === 'en' && /,\d{3}$/.test(t) ? null : ',');
+    else if (hasD) dec = (t.match(/\./g).length > 1) ? null : (style !== 'en' && /\.\d{3}$/.test(t) && /^[+-]?\d{1,3}\.\d{3}$/.test(t) ? null : '.');
+    let norm;
+    if (dec === ',') { if (/,.*,/.test(t) || (t.indexOf('.') > -1 && t.indexOf('.') > t.indexOf(','))) return null; norm = t.replace(/\./g, '').replace(',', '.'); }
+    else if (dec === '.') { if (/\..*\./.test(t) || (t.indexOf(',') > -1 && t.indexOf(',') > t.indexOf('.'))) return null; norm = t.replace(/,/g, ''); }
+    else {   // só separador de milhar
+      if (hasC && !/^[+-]?\d{1,3}(,\d{3})+$/.test(t)) return null;
+      if (hasD && !/^[+-]?\d{1,3}(\.\d{3})+$/.test(t)) return null;
+      norm = t.replace(/[.,]/g, '');
+    }
+    const n = Number(norm);
+    return Number.isFinite(n) ? n : null;
+  }
+  const dateOf = (s, us) => {
+    let m = RE_ISO_D.exec(s);
+    if (m) return okDate(+m[1], +m[2], +m[3]) ? { kind: 'date', v: s } : null;
+    m = RE_ISO_DT.exec(s);
+    if (m) return okDate(+m[1], +m[2], +m[3]) ? { kind: 'datetime', v: s } : null;
+    m = RE_BR_D.exec(s);
+    if (m) {
+      const a = +m[1], b = +m[2], y = +m[3], d = us ? b : a, mo = us ? a : b;
+      if (!okDate(y, mo, d)) return null;
+      const iso = y + '-' + pad2(mo) + '-' + pad2(d);
+      return m[4] != null ? { kind: 'datetime', v: iso + ' ' + pad2(+m[4]) + ':' + m[5] + ':' + (m[6] || '00') } : { kind: 'date', v: iso };
+    }
+    return null;
+  };
+
+  /**
+   * Descobre o tipo de UMA coluna olhando até LIM.sample valores e devolve {type, conv(v)} — conv só converte o que cabe no tipo.
+   * Regra de segurança: só vira número/data/booleano se TODOS os valores não vazios da amostra couberem (senão fica texto).
+   */
+  function inferColumn(key, values) {
+    const vals = [];
+    for (let i = 0; i < values.length && vals.length < LIM.sample; i++) { const v = values[i]; if (v != null && v !== '') vals.push(v); }
+    const text = { type: 'text', conv: v => v };
+    if (!vals.length) return text;
+    const strs = vals.filter(v => typeof v === 'string'), nStr = strs.length;
+    // booleano
+    if (vals.every(v => typeof v === 'boolean' || (typeof v === 'string' && (TRUE_.has(v.trim().toLowerCase()) || FALSE_.has(v.trim().toLowerCase())))))
+      return { type: 'boolean', conv: v => (typeof v === 'boolean' ? v : typeof v === 'string' && TRUE_.has(v.trim().toLowerCase()) ? true : typeof v === 'string' && FALSE_.has(v.trim().toLowerCase()) ? false : v) };
+    // números
+    if (!(nStr && NAME_TEXT.test(key))) {
+      let pt = 0, en = 0;
+      strs.forEach(s => { const t = s.trim(); if (/^[+-]?\d{1,3}(\.\d{3}){2,}$/.test(t)) pt++; else if (/^[+-]?\d{1,3}(,\d{3}){2,}$/.test(t)) en++; else if (/,\d{1,2}$|,\d{4,}$/.test(t) || (/\./.test(t) && /,/.test(t) && t.lastIndexOf(',') > t.lastIndexOf('.'))) pt++; else if (/\.\d{1,2}$|\.\d{4,}$/.test(t) || (/\./.test(t) && /,/.test(t) && t.lastIndexOf('.') > t.lastIndexOf(','))) en++; });
+      const style = pt > en ? 'pt' : en > pt ? 'en' : (strs.some(s => s.includes(',')) || (strs.some(s => s.includes('.')) && strs.every(x => !x.includes('.') || /^[+-]?\d{1,3}(\.\d{3})+$/.test(x.trim()))) ? 'pt' : 'en');   // sem pistas: "1.500" é milhar (pt-BR)
+      const conv = v => (typeof v === 'number' ? v : typeof v === 'string' ? (parseNum(v, style) ?? v) : v);
+      if (vals.every(v => (typeof v === 'number') || (typeof v === 'string' && parseNum(v, style) != null))) {
+        const nums = vals.map(v => (typeof v === 'number' ? v : parseNum(v, style)));
+        const int = nums.every(Number.isInteger), money = vals.some(v => typeof v === 'string' && /^R\$/i.test(v.trim())) || NAME_MONEY.test(key);
+        return { type: money ? 'money' : int ? 'integer' : 'number', conv };
+      }
+    }
+    // datas
+    if (nStr === vals.length) {
+      const probe = strs.map(s => s.trim());
+      let us = false;
+      const br = probe.map(s => RE_BR_D.exec(s)).filter(Boolean);
+      if (br.length && br.every(m => +m[1] <= 12) && br.some(m => +m[2] > 12)) us = true;
+      const ds = probe.map(s => dateOf(s, us));
+      if (ds.every(Boolean)) {
+        const kinds = new Set(ds.map(d => d.kind));
+        return { type: kinds.has('datetime') ? 'datetime' : 'date', conv: v => { if (typeof v !== 'string') return v; const d = dateOf(v.trim(), us); return d ? (kinds.has('datetime') && d.kind === 'date' ? d.v + ' 00:00:00' : d.v) : v; } };
+      }
+    }
+    return text;
+  }
+  function columnDef(key, inf, values) {
+    const type = inf.type;
+    let maxLen = 0;
+    for (let i = 0; i < values.length && i < LIM.sample; i++) { const v = values[i]; if (v != null) { const l = String(v).length; if (l > maxLen) maxLen = l; } }
+    const col = { dataIndex: key, header: humanize(key), type };
+    if (type === 'number' || type === 'integer' || type === 'money') col.align = 'right';
+    if (type === 'boolean') col.align = 'center';
+    if (type === 'money') col.format = 'money';
+    else if (type === 'number') col.format = 'number';
+    else if (type === 'date') col.format = 'date';
+    else if (type === 'boolean') col.format = 'bool';
+    const chars = type === 'money' ? 14 : type === 'datetime' ? 19 : type === 'date' ? 11 : Math.min(maxLen, 40);
+    col.width = Math.max(70, Math.min(320, Math.max(chars, col.header.length + 2) * 8 + 28));
+    return col;
+  }
+
+  /* ---- montagem: linhas planas + colunas ---- */
+  function build(rowsIn, ctx, meta) {
+    let truncated = false;
+    if (rowsIn.length > LIM.rows) { rowsIn = rowsIn.slice(0, LIM.rows); truncated = true; ctx.warn.push(T('r4.files.warnRows', { n: nfmt(LIM.rows) }, 'Arquivo truncado em ' + nfmt(LIM.rows) + ' linhas.')); }
+    const keys = [], seen = new Set();
+    for (const r of rowsIn) for (const k of Object.keys(r)) if (!seen.has(k)) { if (keys.length >= LIM.cols) { ctx.colCut = true; continue; } seen.add(k); keys.push(k); }
+    if (ctx.colCut) { truncated = true; ctx.warn.push(T('r4.files.warnCols', { n: nfmt(LIM.cols) }, 'Colunas limitadas a ' + nfmt(LIM.cols) + '.')); }
+    const colDefs = [], tipos = {}, convs = [];
+    keys.forEach(k => {
+      const vals = new Array(rowsIn.length);
+      for (let i = 0; i < rowsIn.length; i++) vals[i] = rowsIn[i][k];
+      const inf = inferColumn(k, vals);
+      colDefs.push(columnDef(k, inf, vals)); tipos[k] = inf.type;
+      convs.push(inf.type === 'text' ? null : inf.conv);
+    });
+    const rows = rowsIn.map(r => {
+      const o = {};
+      keys.forEach((k, j) => { const v = r[k] === undefined ? null : r[k]; o[k] = convs[j] && v != null && v !== '' ? convs[j](v) : v; });
+      return o;
+    });
+    if (ctx.cut) ctx.warn.push(T('r4.files.warnCell', { n: nfmt(LIM.cell) }, 'Textos longos foram cortados em ' + nfmt(LIM.cell) + ' caracteres.'));
+    if (ctx.badKeys.size) ctx.warn.push(T('r4.files.warnKey', { keys: [...ctx.badKeys].join(', ') }, 'Chaves ignoradas por segurança: ' + [...ctx.badKeys].join(', ') + '.'));
+    return { rows, columns: colDefs, meta: Object.assign({ total: rows.length, truncated: truncated || !!meta.truncated, warnings: ctx.warn, tipos }, meta) };
+  }
+  /** objetos quaisquer → linhas planas (achata) */
+  const flatRows = (list, ctx) => list.map(it => (isObj(it) ? flatten(it, ctx, '', {}, 0) : { valor: cell(it, ctx) }));
+  /** Nomes de coluna únicos e seguros a partir de uma linha de cabeçalho. */
+  function uniqueKeys(hdr, ctx) {
+    const used = new Map(), out = [];
+    hdr.forEach((h, i) => {
+      let k = String(h ?? '').trim().slice(0, 120) || 'coluna_' + (i + 1);
+      if (badKey(k)) { ctx.badKeys.add(k); out.push(null); return; }
+      const n = used.get(k) || 0; used.set(k, n + 1);
+      out.push(n ? k + '_' + (n + 1) : k);
+    });
+    return out;
+  }
+  // 1ª linha é cabeçalho? todas as células preenchidas são texto "de rótulo" (nem número, data ou booleano) e há ao menos uma preenchida
+  const looksLikeHeader = r => { const f = r.filter(c => c != null && String(c).trim() !== ''); return f.length > 0 && f.length >= r.length / 2 && f.every(c => typeof c === 'string' && parseNum(c, 'pt') == null && !dateOf(c.trim(), false) && !TRUE_.has(c.trim().toLowerCase()) && !FALSE_.has(c.trim().toLowerCase())); };
+
+  /** Fábrica de resultado a partir de dados já "parseados" (array, objeto, primitivo). */
+  function fromData(data, opts, ctx, extra) {
+    const meta = Object.assign({}, extra);
+    if (Array.isArray(data)) {
+      if (!data.length) return build([], ctx, Object.assign(meta, { shape: 'vazio' }));
+      if (data.every(isObj)) return build(flatRows(data, ctx), ctx, Object.assign(meta, { shape: 'array-de-objetos' }));
+      if (data.every(Array.isArray)) {
+        const header = opts.header === true || (opts.header !== false && data.length > 1 && looksLikeHeader(data[0]));
+        let keys, body = data;
+        const largura = data.reduce((m, r) => Math.max(m, r.length), 0);
+        if (header) { const h = data[0].slice(); while (h.length < largura) h.push(''); keys = uniqueKeys(h, ctx); body = data.slice(1); }
+        else keys = uniqueKeys(Array.from({ length: largura }, () => ''), ctx);
+        const rows = body.map(r => {
+          const o = {};
+          keys.forEach((k, j) => { if (k != null) o[k] = cell(r[j], ctx); });
+          return o;
+        });
+        // colunas além do cabeçalho
+        return build(rows, ctx, Object.assign(meta, { shape: 'array-de-arrays', header }));
+      }
+      if (data.every(isPrim)) return build(data.map(v => ({ valor: cell(v, ctx) })), ctx, Object.assign(meta, { shape: 'array-de-primitivos' }));
+      return build(flatRows(data, ctx), ctx, Object.assign(meta, { shape: 'misto' }));
+    }
+    if (isObj(data)) {
+      if (opts.path) {
+        const sub = byPath(data, opts.path);
+        if (sub === undefined) { ctx.warn.push(T('r4.files.warnPath', { path: String(opts.path) }, 'Caminho "' + opts.path + '" não encontrado; usando a estrutura inteira.')); }
+        else return fromData(sub, Object.assign({}, opts, { path: null }), ctx, Object.assign(meta, { path: String(opts.path) }));
+      }
+      const cands = listCandidates(data, '', 1, []);
+      if (cands.length) {
+        const best = cands.reduce((a, b) => (b.length > a.length ? b : a));
+        const r = fromData(byPath(data, best.path), Object.assign({}, opts, { path: null }), ctx, Object.assign(meta, { path: best.path }));
+        r.meta.shape = 'objeto-com-lista'; r.meta.candidates = cands;
+        return r;
+      }
+      const keys = Object.keys(data).filter(k => !badKey(k)), vals = keys.map(k => data[k]);
+      if (keys.length !== Object.keys(data).length) Object.keys(data).filter(badKey).forEach(k => ctx.badKeys.add(k));
+      if (keys.length >= 2 && vals.every(isObj)) {
+        return build(keys.map(k => Object.assign({ chave: k }, flatten(data[k], ctx, '', {}, 0))), ctx, Object.assign(meta, { shape: 'objeto-de-objetos' }));
+      }
+      if (opts.keyValue) return build(keys.map(k => ({ chave: k, valor: cell(isPrim(data[k]) ? data[k] : JSON.stringify(data[k]), ctx) })), ctx, Object.assign(meta, { shape: 'chave-valor' }));
+      return build([flatten(data, ctx, '', {}, 0)], ctx, Object.assign(meta, { shape: 'objeto' }));
+    }
+    return build([{ valor: cell(data, ctx) }], ctx, Object.assign(meta, { shape: 'primitivo' }));
+  }
+
+  const newCtx = () => ({ warn: [], badKeys: new Set(), cut: false, colCut: false });
+  /** Texto (JSON, NDJSON, CSV/TSV/;) → resultado. */
+  function fromText(text, opts, ctx) {
+    text = String(text ?? '');
+    const extra = {};
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    if (text.length > LIM.text) {
+      // JSON inteiro não dá para "cortar no meio"; CSV e NDJSON (uma linha por registro) são truncados na última linha completa
+      const inteiro = /^\s*\[/.test(text) || (/^\s*\{/.test(text) && !/\}\s*\r?\n\s*\{/.test(text.slice(0, 20000)));
+      if (inteiro) fail(T('r4.files.textTooBig', { n: bytes(LIM.text) }, 'Texto grande demais (máximo ' + bytes(LIM.text) + ').'));
+      const cut = text.lastIndexOf('\n', LIM.text);
+      text = text.slice(0, cut > 0 ? cut : LIM.text); extra.truncated = true;
+      ctx.warn.push(T('r4.files.warnText', { n: bytes(LIM.text) }, 'Arquivo truncado em ' + bytes(LIM.text) + '.'));
+    }
+    const t = text.trim();
+    if (!t) return build([], ctx, { shape: 'vazio' });
+    if (t[0] === '{' || t[0] === '[') {
+      let data, ok = true;
+      try { data = JSON.parse(t); } catch (e) { ok = false; }
+      if (ok) return fromData(data, opts, ctx, Object.assign(extra, { formato: 'json' }));
+      const lines = t.split(/\r?\n/).filter(l => l.trim()), arr = [];   // NDJSON / JSON Lines
+      if (lines.length > 1) { for (const l of lines) { try { arr.push(JSON.parse(l)); } catch (x) { ok = false; break; } ok = true; } }
+      if (ok && arr.length > 1) { const r = fromData(arr, opts, ctx, Object.assign(extra, { formato: 'ndjson' })); r.meta.shape = 'ndjson'; return r; }
+      fail(T('r4.files.badJson', 0, 'JSON inválido.'));
+    }
+    const grid = parseCSV(t, { header: false, delimiter: opts.delimiter || 'auto', maxRows: LIM.rows + 2 });
+    const r = fromData(grid, Object.assign({}, opts), ctx, Object.assign(extra, { formato: 'csv' }));
+    r.meta.shape = 'csv';
+    return r;
+  }
+  const isBinary = v => v instanceof ArrayBuffer || ArrayBuffer.isView(v) || (typeof Blob !== 'undefined' && v instanceof Blob);
+  /** Binário (ArrayBuffer/Uint8Array/File/Blob): XLSX (ZIP "PK") ou texto. Devolve Promise. */
+  async function fromBinary(v, opts) {
+    const ctx = newCtx();
+    let u8;
+    if (typeof Blob !== 'undefined' && v instanceof Blob) u8 = new Uint8Array(await readArrayBuffer(v, { maxSize: opts.maxSize || 50 * MB }));
+    else u8 = v instanceof Uint8Array ? v : ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : new Uint8Array(v);
+    if (u8.length > 3 && u8[0] === 0x50 && u8[1] === 0x4B) {
+      const sheets = [];
+      const grid = await parseXLSX(u8, { header: false, sheet: opts.sheet ?? 0, sheetsOut: sheets, maxRows: LIM.rows });
+      const r = fromData(grid, opts, ctx, { formato: 'xlsx', sheets });
+      r.meta.shape = 'planilha';
+      return r;
+    }
+    return fromText(new TextDecoder('utf-8').decode(u8.length > LIM.text * 2 ? u8.subarray(0, LIM.text * 2) : u8), opts, ctx);
+  }
+  /**
+   * interpret(entrada, opts) → { rows, columns, meta }  (Promise quando a entrada é binária: XLSX, ArrayBuffer, File/Blob)
+   * entrada: texto (JSON, NDJSON, CSV/TSV), objeto/array já lidos ou o resultado do filedrop (parse). Sem esquema: tudo é descoberto.
+   * opts: path ('dados.itens'), header (true|false|auto), sheet (índice|nome), keyValue, delimiter.
+   */
+  function interpret(entrada, opts) {
+    const o = Object.assign({}, opts);
+    if (isBinary(entrada)) return fromBinary(entrada, o);
+    const ctx = newCtx();
+    if (typeof entrada === 'string') return fromText(entrada, o, ctx);
+    return fromData(entrada, o, ctx, { formato: 'objeto' });
+  }
+  const interpretFile = (file, opts) => Promise.resolve(fromBinary(file, Object.assign({}, opts)));
+  /** Interpreta e já cria o grid: toGrid(alvo, entrada, { columnFilters, path, header, sheet, ...configDoGrid }) → Promise<{ grid, meta }> */
+  async function toGrid(alvo, entrada, opts) {
+    const o = Object.assign({}, opts), keep = {};
+    ['path', 'header', 'sheet', 'keyValue', 'delimiter'].forEach(k => { if (k in o) { keep[k] = o[k]; delete o[k]; } });
+    const r = await interpret(entrada, keep);
+    const cfg = Object.assign({ pageSize: 25, pageSizeSelector: true, exportable: true, columnMenu: true, resizable: true }, o, { columns: r.columns.map(c => { const d = Object.assign({}, c); delete d.type; return d; }), data: r.rows });
+    const grid = R4.create(Object.assign({ xtype: 'grid' }, cfg, { renderTo: alvo }));
+    return { grid, meta: r.meta, columns: r.columns };
+  }
+
   /* ================= módulo ================= */
-  const api = { toCSV, parseCSV, csvSafe, toJSON, toXLSX, parseXLSX, download, pick, validate, readText, readArrayBuffer, zip, crc32 };
+  const api = { toCSV, parseCSV, csvSafe, toJSON, toXLSX, parseXLSX, download, pick, validate, readText, readArrayBuffer, zip, crc32, interpret, interpretFile, toGrid };
   R4.module('files', api, {
     title: 'R4.files', group: 'Dados',
     description: 'Arquivos sem dependências: CSV (RFC 4180) com proteção contra injeção de fórmula, JSON, XLSX gerado à mão (ZIP + CRC32) e lido com DecompressionStream, download sem navegar, escolha e leitura de arquivos com validação. O grid usa este módulo para exportar.',
@@ -587,6 +903,9 @@
       { name: 'toJSON(linhas, {columns, space:2})', type: 'string', desc: 'JSON só com as colunas pedidas.' },
       { name: 'toXLSX(linhas, {columns, sheetName, dates:true, bytes:false})', type: 'Blob | Uint8Array', desc: 'Planilha .xlsx válida sem bibliotecas: cabeçalho em negrito e congelado, autofiltro, largura das colunas, números, booleanos, datas reais (dd/mm/aaaa) e moeda (format:"money"). Textos vão como texto (nunca fórmula).' },
       { name: 'parseXLSX(buffer, {header:true, sheet:0, maxSize, maxUncompressed, maxEntries, maxRows, maxCells})', type: 'Promise<Array>', desc: 'Lê a 1ª planilha (texto, números, booleanos, datas → "AAAA-MM-DD"). Limites contra "zip bomb" (padrão: 50 MB de arquivo, 200 MB descompactados, 200 mil linhas, 10 milhões de células); XML com DOCTYPE é recusado. Requer navegador moderno (DecompressionStream: Chrome/Edge 103+, Firefox 113+, Safari 16.4+).' },
+      { name: 'interpret(entrada, {path, header, sheet, keyValue, delimiter})', type: '{rows, columns, meta} | Promise', desc: 'O arquivo "se explica": sem esquema, devolve linhas planas e colunas inferidas (header legível, type number|integer|money|date|datetime|boolean|text, align, format, width). Entrada: texto JSON/NDJSON/CSV/TSV, objeto/array, ou o resultado do filedrop. JSON: array de objetos, objeto com listas (escolhe a maior; meta.candidates lista as outras; path:"dados.itens" escolhe), objeto de objetos (coluna chave), array de arrays (header auto), primitivos, objeto simples. Aninhados viram chave pontuada. ArrayBuffer/Uint8Array/File/Blob (XLSX ou texto) devolvem Promise (meta.sheets lista as abas; sheet:índice|nome). Limites: 200 mil linhas, 200 colunas, 5 MB de texto, 5.000 caracteres por célula (meta.truncated + meta.warnings). Chaves __proto__/constructor/prototype são ignoradas.' },
+      { name: 'interpretFile(file, opts)', type: 'Promise<{rows, columns, meta}>', desc: 'Lê o File respeitando o limite de tamanho e interpreta (XLSX, CSV, JSON...).' },
+      { name: 'toGrid(alvo, entrada, {columnFilters, pageSize, ...config do grid, path, header, sheet})', type: 'Promise<{grid, meta, columns}>', desc: 'interpret + cria o grid com as colunas descobertas (paginação com seletor, exportar, menu de colunas e redimensionar ligados por padrão). Equivale a R4.grid(alvo, rows, { columns }).' },
       { name: 'download(conteúdo|Blob, nome, mime)', type: 'Blob', desc: 'Baixa sem navegar (link temporário + URL revogada). Nome é saneado.' },
       { name: 'pick({accept, multiple, maxSize})', type: 'Promise<File[]>', desc: 'Abre o seletor do sistema e valida extensão/tipo e tamanho; rejeita com mensagens em português (erro.errors).' },
       { name: 'validate(file, {accept, maxSize})', type: 'string|null', desc: 'Mensagem de erro ou null.' },

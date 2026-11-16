@@ -94,12 +94,14 @@ $router->group('/erp', 'ErpAuth@handle', function ($r) {
         $r->get("/api/$rec", "$ctl@listar");
         $r->get("/api/$rec/obter", "$ctl@obter");
         $r->get("/api/$rec/opcoes", "$ctl@opcoes");
+        $r->get("/api/$rec/valores", "$ctl@valores");
         $r->post("/api/$rec/salvar", "$ctl@salvar");
         $r->post("/api/$rec/excluir", "$ctl@excluir");
     }
     $r->post('/api/clientes/importar', 'ErpClientesController@importar');
     $r->get('/api/transacoes', 'ErpTransacoesController@listar');
     $r->get('/api/transacoes/resumo', 'ErpTransacoesController@resumo');
+    $r->get('/api/transacoes/valores', 'ErpTransacoesController@valores');
 });
 
 

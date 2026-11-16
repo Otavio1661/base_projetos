@@ -873,5 +873,191 @@
       await t.waitFor(() => idsVis(g).includes(500), 3000, 'última linha (500)');
       assert.ok(g.scroller.scrollHeight >= 500 * 36 - 200, 'altura real (sem escala)');
     });
+
+    /* ======== filtro por valores da coluna (funil no cabeçalho) ======== */
+    const PED = [
+      ...Array.from({ length: 5 }, (_, i) => ({ id: i + 1, status: 'pago', uf: i % 2 ? 'SP' : 'RJ', nome: 'Pago ' + (i + 1) })),
+      ...Array.from({ length: 3 }, (_, i) => ({ id: i + 6, status: 'aberto', uf: 'SP', nome: 'Aberto ' + (i + 1) })),
+      ...Array.from({ length: 2 }, (_, i) => ({ id: i + 9, status: 'enviado', uf: 'MG', nome: 'Enviado ' + (i + 1) })),
+      { id: 11, status: '', uf: 'RJ', nome: 'Sem status' }
+    ];
+    const COLS_PED = [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status' }, { header: 'UF', dataIndex: 'uf' }, { header: 'Nome', dataIndex: 'nome' }];
+    const funil = (g, k) => g.thead.querySelector('.r4-th-filter[data-cf="' + k + '"]');
+    const pop = () => document.querySelector('.r4-cf');
+    const itens = () => [...document.querySelectorAll('.r4-cf .r4-cf-item')].map(l => [l.querySelector('.r4-cf-val').textContent, l.querySelector('.r4-cf-n') ? l.querySelector('.r4-cf-n').textContent : null]);
+    const marcar = (nome, on = true) => {
+      const l = [...document.querySelectorAll('.r4-cf .r4-cf-item')].find(x => x.querySelector('.r4-cf-val').textContent === nome), cb = l.querySelector('input');
+      cb.checked = on; cb.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const abrir = async (t, g, k) => { funil(g, k).click(); await t.waitFor(() => pop() && document.querySelectorAll('.r4-cf .r4-cf-item').length > 0, 2000, 'popover com valores'); };
+
+    test('filtro por valores: desligado por padrão; columnFilters põe o funil em toda coluna de dados (menos ações) e filterValues liga só uma', t => {
+      const g0 = t.create({ xtype: 'grid', data: PED, columns: COLS_PED });
+      assert.eq(g0.thead.querySelectorAll('.r4-th-filter').length, 0, 'sem columnFilters: nenhum funil');
+      const g1 = t.create({ xtype: 'grid', data: PED, columnFilters: true, columns: [...COLS_PED, { header: 'Ações', actions: [{ text: 'x' }] }] });
+      assert.eq(g1.thead.querySelectorAll('.r4-th-filter').length, 4, 'uma por coluna de dados');
+      const g2 = t.create({ xtype: 'grid', data: PED, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status', filterValues: true }] });
+      assert.eq(g2.thead.querySelectorAll('.r4-th-filter').length, 1, 'só a coluna com filterValues');
+      const g3 = t.create({ xtype: 'grid', data: PED, columnFilters: true, columns: [{ header: 'Id', dataIndex: 'id', filterable: false }, { header: 'Status', dataIndex: 'status' }] });
+      assert.eq(g3.thead.querySelectorAll('.r4-th-filter').length, 1, 'filterable:false desliga');
+    });
+
+    test('filtro por valores (local): lista os distintos com contagem, marcar um/vários filtra (OU), E entre colunas, (vazio), limpar e API', async t => {
+      const g = t.create({ xtype: 'grid', data: PED, columnFilters: true, columns: COLS_PED });
+      const evs = []; g.on('filterchange', (_, f) => evs.push(JSON.stringify(f)));
+      await abrir(t, g, 'status');
+      assert.deepEq(itens(), [['pago', '5'], ['aberto', '3'], ['enviado', '2'], ['(vazio)', '1']], 'distintos por quantidade');
+      assert.contains(pop(), '0 de 4', 'rodapé do popover');
+      marcar('aberto');
+      await t.waitFor(() => linhas(g).length === 3, 2000, 'só aberto');
+      assert.contains(pop(), '1 de 4');
+      assert.deepEq(g.getColumnFilters(), { status: ['aberto'] });
+      marcar('enviado');
+      await t.waitFor(() => linhas(g).length === 5, 2000, 'aberto OU enviado');
+      assert.eq(funil(g, 'status').querySelector('.r4-fn').textContent, '2', 'contador no funil');
+      assert.ok(funil(g, 'status').classList.contains('r4-on'), 'funil destacado');
+      marcar('(vazio)');
+      await t.waitFor(() => linhas(g).length === 6, 2000, 'vazio entra');
+      marcar('(vazio)', false); marcar('enviado', false);
+      await t.waitFor(() => linhas(g).length === 3, 2000, 'volta a aberto');
+      pop().querySelector('[data-k="clear"]').click();
+      await t.waitFor(() => linhas(g).length === 11, 2000, 'limpar = sem filtro');
+      assert.deepEq(g.getColumnFilters(), {});
+      assert.ok(evs.length >= 4, 'evento filterchange disparado');
+      // E entre colunas: status pago + UF SP => só o pago de SP
+      g.setColumnFilter('status', ['pago']); g.setColumnFilter('uf', ['SP']);
+      assert.eq(linhas(g).length, 2, 'pago E SP');
+      funil(g, 'uf').click();
+      await t.waitFor(() => itens().length > 0, 2000, 'popover uf');
+      assert.deepEq(itens().filter(i => i[0] === 'SP'), [['SP', '2']], 'contagem reflete os OUTROS filtros (pago)');
+      g.clearColumnFilters();
+      assert.eq(linhas(g).length, 11);
+    });
+
+    test('filtro por valores: busca interna, ordem A-Z, funil não ordena, filtro + busca do grid + destaque e ordenação continuam valendo', async t => {
+      const g = t.create({ xtype: 'grid', data: PED, columnFilters: true, columns: COLS_PED });
+      await abrir(t, g, 'status');
+      const bu = pop().querySelector('.r4-cf-search'); bu.value = 'en'; bu.dispatchEvent(new Event('input', { bubbles: true }));
+      assert.deepEq(itens().map(i => i[0]), ['enviado'], 'busca interna');
+      bu.value = ''; bu.dispatchEvent(new Event('input', { bubbles: true }));
+      pop().querySelector('[data-k="ord"]').click();
+      assert.deepEq(itens().map(i => i[0]), ['(vazio)', 'aberto', 'enviado', 'pago'].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), 'A–Z');
+      assert.eq(g.thead.querySelector('[aria-sort]'), null, 'clicar no funil não ordena');
+      marcar('pago');
+      await t.waitFor(() => linhas(g).length === 5, 2000, 'pago');
+      g.setFilter('sp');
+      assert.eq(linhas(g).length, 2, 'filtro por valores + busca do grid (E)');
+      assert.ok(hits(g).flat().length > 0, 'destaque da busca continua');
+      g.sort('id', 'desc');
+      assert.eq(col(g, 0)[0], '4', 'ordenação continua (pago + SP: ids 4 e 2)');
+    });
+
+    test('filtro por valores: usa o texto EXIBIDO (renderer/format), options fixas e limite de 1000 distintos (só pela busca)', async t => {
+      const dados = [{ v: 1 }, { v: 1 }, { v: 2 }];
+      const g = t.create({ xtype: 'grid', data: dados, columnFilters: true, columns: [{ header: 'V', dataIndex: 'v', renderer: v => (v === 1 ? 'um' : 'dois') }] });
+      await abrir(t, g, 'v');
+      assert.deepEq(itens(), [['um', '2'], ['dois', '1']], 'texto do renderer');
+      marcar('dois'); await t.waitFor(() => linhas(g).length === 1, 2000, 'filtra pelo texto exibido');
+      g.destroy();
+      const g2 = t.create({ xtype: 'grid', data: PED, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status', filterValues: true, options: ['pago', { value: 'aberto', label: 'Em aberto' }, 'cancelado'] }] });
+      await abrir(t, g2, 'status');
+      assert.deepEq(itens(), [['pago', '5'], ['Em aberto', '3'], ['cancelado', '0']], 'options fixas com contagem local');
+      g2.destroy();
+      const muitos = Array.from({ length: 1500 }, (_, i) => ({ id: i, cod: 'C' + i }));
+      const g3 = t.create({ xtype: 'grid', data: muitos, columnFilters: true, columns: [{ header: 'Cod', dataIndex: 'cod' }] });
+      funil(g3, 'cod').click();
+      await t.waitFor(() => pop() && pop().querySelector('.r4-cf-msg'), 2000, 'aviso de muitos valores');
+      assert.contains(pop(), 'Muitos valores', 'aviso');
+      assert.eq(itens().length, 0, 'sem a busca não lista');
+      const bu = pop().querySelector('.r4-cf-search'); bu.value = 'C149'; bu.dispatchEvent(new Event('input', { bubbles: true }));
+      assert.ok(itens().length >= 11, 'a busca lista os que casam');
+    });
+
+    test('filtro por valores: acessibilidade (aria, role dialog, Esc fecha e devolve o foco ao funil, Alt+↓ no cabeçalho abre)', async t => {
+      const g = t.create({ xtype: 'grid', data: PED, columnFilters: true, columns: COLS_PED });
+      const b = funil(g, 'status');
+      assert.eq(b.getAttribute('aria-haspopup'), 'dialog');
+      assert.eq(b.getAttribute('aria-expanded'), 'false');
+      assert.contains(b.getAttribute('aria-label'), 'Filtrar valores de Status');
+      await abrir(t, g, 'status');
+      assert.eq(b.getAttribute('aria-expanded'), 'true');
+      assert.eq(pop().getAttribute('role'), 'dialog');
+      pop().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      assert.eq(pop(), null, 'Esc fecha');
+      assert.eq(document.activeElement, b, 'foco volta ao funil');
+      assert.eq(b.getAttribute('aria-expanded'), 'false');
+      const th = b.closest('th'); th.focus();
+      th.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }));
+      await t.waitFor(() => pop(), 1000, 'Alt+↓ abre');
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      assert.eq(pop(), null, 'clique fora fecha');
+    });
+
+    test('filtro por valores (remoto): envia filtro[coluna][]=valor, busca os valores em optionsUrl (col, q, com cache) e volta à página 1', async t => {
+      const todos = Array.from({ length: 40 }, (_, i) => ({ id: i + 1, status: i % 2 ? 'pago' : 'aberto', nome: 'N' + (i + 1) }));
+      const m = t.mockFetch({
+        '/api/g-cf': req => {
+          const sp = req.url.searchParams, st = sp.getAll('filtro[status][]'), page = +sp.get('page'), size = +sp.get('size');
+          const l = todos.filter(r => !st.length || st.includes(r.status));
+          return { body: { status: 200, total: l.length, retorno: l.slice((page - 1) * size, page * size) } };
+        },
+        '/api/g-cf-vals': () => ({ body: { status: 200, retorno: [{ valor: 'aberto', qtd: 20 }, { valor: 'pago', qtd: 20 }] } })
+      });
+      const g = t.create({ xtype: 'grid', src: '/api/g-cf', remote: true, pageSize: 10, columnFilters: true, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status', optionsUrl: '/api/g-cf-vals' }, { header: 'Nome', dataIndex: 'nome' }] });
+      await t.waitFor(() => linhas(g).length === 10, 2000, 'primeira página');
+      g.setPage(1);
+      await t.waitFor(() => col(g, 0)[0] === '11', 2000, 'página 2');
+      funil(g, 'status').click();
+      await t.waitFor(() => itens().length === 2, 2000, 'valores do servidor');
+      const cv = m.calls.filter(c => c.url.pathname === '/api/g-cf-vals');
+      assert.eq(cv.length, 1);
+      assert.eq(cv[0].url.searchParams.get('col'), 'status');
+      assert.deepEq(itens(), [['aberto', '20'], ['pago', '20']]);
+      marcar('pago');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.getAll('filtro[status][]').length === 1, 3000, 'filtro enviado');
+      const q = m.calls.at(-1).url.searchParams;
+      assert.deepEq(q.getAll('filtro[status][]'), ['pago']);
+      assert.eq(q.get('page'), '1', 'filtrar volta à página 1');
+      await t.waitFor(() => linhas(g).length === 10 && col(g, 1).every(v => v === 'pago'), 2000, 'só pago');
+      assert.contains(g.pager, '20 registros', 'total do servidor');
+      marcar('aberto');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.getAll('filtro[status][]').length === 2, 3000, 'dois valores');
+      assert.deepEq(m.calls.at(-1).url.searchParams.getAll('filtro[status][]'), ['pago', 'aberto']);
+      g.destroy();
+    });
+
+    test('filtro por valores (remoto): optionsUrl recebe q da busca e o cache invalida quando a busca muda; valor com acento e & é codificado', async t => {
+      const m = t.mockFetch({
+        '/api/g-cf2': req => ({ body: { status: 200, total: 1, retorno: [{ id: 1, status: 'em análise & revisão' }] } }),
+        '/api/g-cf2-vals': () => ({ body: { status: 200, retorno: [{ valor: 'em análise & revisão', qtd: 1 }] } })
+      });
+      const g = t.create({ xtype: 'grid', src: '/api/g-cf2', remote: true, pageSize: 10, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status', filterValues: true, optionsUrl: '/api/g-cf2-vals' }] });
+      await t.waitFor(() => linhas(g).length === 1, 2000, 'carregou');
+      g.setFilter('ana');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('q') === 'ana', 2000, 'busca');
+      await abrir(t, g, 'status');
+      assert.eq(m.calls.filter(c => c.url.pathname === '/api/g-cf2-vals').at(-1).url.searchParams.get('q'), 'ana', 'optionsUrl recebe a busca atual');
+      g.setColumnFilter('status', ['em análise & revisão']);
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.getAll('filtro[status][]').length === 1, 2000, 'filtro enviado');
+      assert.deepEq(m.calls.at(-1).url.searchParams.getAll('filtro[status][]'), ['em análise & revisão'], 'acento e & chegam inteiros');
+      assert.contains(m.calls.at(-1).url.search, 'filtro%5Bstatus%5D%5B%5D=', 'chave com colchetes codificada');
+    });
+
+    test('filtro por valores (janela remota): com "Todos" o filtro é enviado em cada bloco e a janela volta ao topo', async t => {
+      const m = t.mockFetch({ '/api/g-cf3': req => {
+        const sp = req.url.searchParams, st = sp.getAll('filtro[status][]'), page = +sp.get('page'), size = +sp.get('size'), n = st.length ? 250 : 5000, out = [];
+        for (let i = (page - 1) * size; i < Math.min(n, page * size); i++) out.push({ id: i + 1, status: st[0] || 'x' });
+        return { body: { status: 200, total: n, retorno: out } };
+      } });
+      const g = t.create({ xtype: 'grid', src: '/api/g-cf3', remote: true, pageSizes: 'all', columnFilters: true, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Status', dataIndex: 'status' }] });
+      g.setPageSize(0);
+      await t.waitFor(() => g._vr() && trsDados(g).length > 5, 3000, 'janela');
+      g.scroller.scrollTop = 2000;
+      g.setColumnFilter('status', ['pago']);
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.getAll('filtro[status][]').join() === 'pago', 3000, 'bloco com filtro');
+      await t.waitFor(() => g.pager.textContent.includes('250'), 3000, 'novo total 250');
+      assert.eq(g.scroller.scrollTop, 0, 'voltou ao topo');
+      assert.eq(m.calls.at(-1).url.searchParams.get('size'), '100');
+    });
   });
 })();

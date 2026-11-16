@@ -22,8 +22,8 @@ body.erp-login { display: block; }   /* a classe também está no <body>: só o 
 .erp-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--r4-panel, #fff); border-bottom: 1px solid var(--r4-line, #d3d9e6); }
 .erp-top .erp-fill { flex: 1; }
 .erp-menu-btn { display: none; }
-.erp-side { background: var(--r4-panel, #fff); border-right: 1px solid var(--r4-line, #d3d9e6); overflow: auto; padding: 8px 0; }
-.erp-side .r4-tree { border: 0; }
+.erp-side { background: var(--r4-panel, #fff); border-right: 1px solid var(--r4-line, #d3d9e6); overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
+.erp-side .r4-tree { border: 0; min-width: 0; width: 100%; }   /* a lib dá min-width:250px à árvore: estourava os 232px do menu e criava rolagem horizontal embaixo */
 .erp-main { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .erp-page-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .erp-page-title h2 { margin: 0; font-size: 18px; }
@@ -57,7 +57,8 @@ body.erp-login { display: block; }   /* a classe também está no <body>: só o 
 .erp-main .r4-table td, .erp-main .r4-table th { white-space: nowrap; }
 .erp-bar .r4-btn { white-space: nowrap; }
 .erp-main > * { min-width: 0; max-width: 100%; flex-shrink: 0; }
-.erp-card { overflow-x: auto; }
+.erp-card { overflow: visible; }   /* overflow-x:auto forçava overflow-y:auto e gerava uma barra de rolagem dentro do card (perfil) */
+.erp-card .r4-tabs { height: auto; }
 .erp-main .r4-stat-value { font-size: 24px; white-space: nowrap; }
 @media (max-width: 860px) {
   .erp-top .r4-btn-group, .erp-top .erp-user, .erp-top .r4-dropdown { display: none; }

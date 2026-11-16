@@ -9,10 +9,10 @@
         { header: '#', dataIndex: 'id', width: 70, align: 'right' },
         { header: 'SKU', dataIndex: 'sku', width: 110 },
         { header: 'Produto', dataIndex: 'nome', width: 240 },
-        { header: 'Categoria', dataIndex: 'categoria', width: 150 },
+        { header: 'Categoria', dataIndex: 'categoria', filtrar: true, width: 150 },
         { header: 'Preço', dataIndex: 'preco', format: 'money', align: 'right', width: 120 },
         { header: 'Estoque', dataIndex: 'estoque', align: 'right', width: 110, renderer: v => (+v < 20 ? tag(v + ' baixo', 'warn') : document.createTextNode(String(v))) },
-        { header: 'Ativo', dataIndex: 'ativo', width: 80, align: 'center', renderer: v => tag(v ? 'Sim' : 'Não', v ? 'ok' : 'err') }
+        { header: 'Ativo', dataIndex: 'ativo', filtrar: true, width: 80, align: 'center', renderer: v => tag(v ? 'Sim' : 'Não', v ? 'ok' : 'err') }
       ],
       padrao: { ativo: true, estoque: 10, preco: 10 },
       paraForm: r => ({ sku: r.sku, nome: r.nome, categoria: r.categoria, preco: r.preco, estoque: r.estoque, ativo: !!r.ativo }),

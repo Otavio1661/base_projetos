@@ -30,12 +30,38 @@ abstract class ErpCrudBase extends ctrl
         return max(0, (int) ($_GET['id'] ?? 0));
     }
 
+    /** filtro[coluna][]=valor (PHP já monta o array): só colunas conhecidas, só texto, no máximo 200 valores por coluna. */
+    protected static function filtros(): array
+    {
+        $f = $_GET['filtro'] ?? [];
+        $out = [];
+        if (is_array($f)) {
+            foreach ($f as $col => $vals) {
+                if (is_string($col) && in_array($col, static::COLUNAS, true) && is_array($vals)) {
+                    $out[$col] = array_slice(array_values(array_filter(array_map(static fn ($v) => is_scalar($v) ? mb_substr((string) $v, 0, 200) : null, $vals), static fn ($v) => $v !== null)), 0, 200);
+                }
+            }
+        }
+        return array_filter($out);
+    }
+
     public function listar()
     {
         $r = JsonDb::listar(static::TABELA, [
             'page' => $_GET['page'] ?? 1, 'size' => $_GET['size'] ?? 25, 'sort' => $_GET['sort'] ?? '', 'dir' => $_GET['dir'] ?? 'asc', 'q' => $_GET['q'] ?? '',
+            'filtro' => self::filtros(),
         ], static::COLUNAS, static::BUSCA);
         ctrl::responder(['status' => 200, 'total' => $r['total'], 'retorno' => $r['retorno']]);
+    }
+
+    /** GET .../valores?col=status[&q=] — valores distintos da coluna com contagem (alimenta o filtro por valores do cabeçalho). */
+    public function valores()
+    {
+        $col = (string) ($_GET['col'] ?? '');
+        if (!in_array($col, static::COLUNAS, true)) {
+            ctrl::retorno('Coluna inválida.', 422);
+        }
+        ctrl::retorno(JsonDb::valores(static::TABELA, $col, static::BUSCA, (string) ($_GET['q'] ?? ''), self::filtros()), 200);
     }
 
     public function obter()

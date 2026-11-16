@@ -13,6 +13,8 @@ class ErpTransacoesController extends ctrl
 {
     private const COLUNAS = ['id', 'cliente', 'cidade', 'uf', 'produto', 'categoria', 'valor', 'data', 'status'];
     private const TAM_MAX = 500;
+    /** colunas que aceitam filtro por valores (baixa/média cardinalidade) */
+    private const FILTRAVEIS = ['cliente', 'cidade', 'uf', 'produto', 'categoria', 'status'];
 
     private static function pdo(): \PDO
     {
@@ -43,6 +45,65 @@ class ErpTransacoesController extends ctrl
         return $v;
     }
 
+    /** filtro[coluna][]=valor → ['uf' => ['SP','RJ']] (só colunas filtráveis, só texto, até 200 valores por coluna). */
+    private static function filtros(): array
+    {
+        $f = $_GET['filtro'] ?? [];
+        $out = [];
+        if (is_array($f)) {
+            foreach ($f as $col => $vals) {
+                if (is_string($col) && in_array($col, self::FILTRAVEIS, true) && is_array($vals)) {
+                    $v = array_slice(array_values(array_filter($vals, 'is_string')), 0, 200);
+                    if ($v) {
+                        $out[$col] = array_map(static fn ($x) => mb_substr($x, 0, 120), $v);
+                    }
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** WHERE com parâmetros nomeados: busca (instr) + IN por coluna. Devolve [sql, params]. */
+    private static function onde(string $q, array $filtros, ?string $ignorar = null): array
+    {
+        $w = [];
+        $par = [];
+        if ($q !== '') {
+            $w[] = 'instr(busca, :q) > 0';
+            $par[':q'] = $q;
+        }
+        foreach ($filtros as $col => $vals) {
+            if ($col === $ignorar) {
+                continue;
+            }
+            $ph = [];
+            foreach ($vals as $i => $v) {
+                $ph[] = ':f_' . $col . '_' . $i;
+                $par[':f_' . $col . '_' . $i] = $v;
+            }
+            $w[] = $col . ' IN (' . implode(',', $ph) . ')';   // $col vem da allowlist FILTRAVEIS
+        }
+        return [$w ? 'WHERE ' . implode(' AND ', $w) : '', $par];
+    }
+
+    /** GET /erp/api/transacoes/valores?col=status[&q=][&filtro[...]] — valores distintos com contagem (cache 1 h). */
+    public function valores()
+    {
+        $col = (string) ($_GET['col'] ?? '');
+        if (!in_array($col, self::FILTRAVEIS, true)) {
+            ctrl::retorno('Coluna inválida.', 422);
+        }
+        $q = mb_strtolower(trim(mb_substr((string) ($_GET['q'] ?? ''), 0, 60)), 'UTF-8');
+        $f = self::filtros();
+        [$onde, $par] = self::onde($q, $f, $col);
+        $r = self::cache('valores|' . $col . '|' . $q . '|' . json_encode($f), static function () use ($col, $onde, $par) {
+            $st = self::pdo()->prepare("SELECT $col AS valor, count(*) AS qtd FROM transacoes $onde GROUP BY $col ORDER BY qtd DESC, valor LIMIT 1000");
+            $st->execute($par);
+            return $st->fetchAll();
+        });
+        ctrl::retorno($r, 200);
+    }
+
     public function listar()
     {
         $page = max(1, (int) ($_GET['page'] ?? 1));
@@ -54,16 +115,18 @@ class ErpTransacoesController extends ctrl
         $q = mb_strtolower(trim(mb_substr((string) ($_GET['q'] ?? ''), 0, 60)), 'UTF-8');
         $pdo = self::pdo();
 
-        $onde = $q !== '' ? 'WHERE instr(busca, :q) > 0' : '';
-        $total = self::cache('total|' . $q, static function () use ($pdo, $onde, $q) {
+        $f = self::filtros();
+        [$onde, $par] = self::onde($q, $f);
+        $total = self::cache('total|' . $q . '|' . json_encode($f), static function () use ($pdo, $onde, $par) {
             $st = $pdo->prepare("SELECT count(*) FROM transacoes $onde");
-            $q !== '' ? $st->bindValue(':q', $q) : null;
-            $st->execute();
+            $st->execute($par);
             return (int) $st->fetchColumn();
         });
         // desempate por id: a ordem fica estável entre as páginas
         $st = $pdo->prepare("SELECT id, cliente, cidade, uf, produto, categoria, valor, data, status FROM transacoes $onde ORDER BY $sort $dir, id $dir LIMIT :n OFFSET :o");
-        $q !== '' ? $st->bindValue(':q', $q) : null;
+        foreach ($par as $k => $v) {
+            $st->bindValue($k, $v);
+        }
         $st->bindValue(':n', $size, \PDO::PARAM_INT);
         $st->bindValue(':o', ($page - 1) * $size, \PDO::PARAM_INT);
         $st->execute();

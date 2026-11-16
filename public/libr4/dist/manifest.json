@@ -2,14 +2,14 @@
     "versao": "2.0.0",
     "arquivos": {
         "libr4.min.js": {
-            "bytes": 457154,
-            "gzip": 153987,
-            "sha384": "sha384-C1HgSuHInCGdWUaQzIckjs718A7+chHWh1L8LHQXy2Kz0kCrqdQZFmm0XjD90ETh"
+            "bytes": 487654,
+            "gzip": 163442,
+            "sha384": "sha384-ydDbNxtTSgsoL0QEsUIz8a8Awfeg446R31vXcjlvLnPsuPXktTLBtqST7bYcE6yQ"
         },
         "libr4.min.css": {
-            "bytes": 57164,
-            "gzip": 11294,
-            "sha384": "sha384-TVsa2qj7smd6mACckv0aeYBgHxdzNV++6FrvKXQgalidWDxV/extDkWvMvCtHu+i"
+            "bytes": 58579,
+            "gzip": 11523,
+            "sha384": "sha384-SntAzY7E60WQ6KIbgdsM6jS7EHR59tFf5dukUvWZCj4xT4v1mJgFKU98SDj0zmNA"
         }
     }
 }

@@ -11,7 +11,7 @@
         { header: 'Data', dataIndex: 'data', format: 'date', width: 110 },
         { header: 'Itens', dataIndex: 'itens', align: 'right', width: 80 },
         { header: 'Total', dataIndex: 'total', format: 'money', align: 'right', width: 130 },
-        { header: 'Status', dataIndex: 'status', width: 120, renderer: v => ctx.Erp.statusTag(v) },
+        { header: 'Status', dataIndex: 'status', filtrar: true, width: 120, renderer: v => ctx.Erp.statusTag(v) },
         { header: 'Observação', dataIndex: 'obs', width: 220 }
       ],
       padrao: { status: 'aberto', itens: 1, data: new Date().toISOString().slice(0, 10) },

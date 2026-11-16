@@ -6,6 +6,16 @@
 
   /* ===================== grid ===================== */
   grid.push(
+    { title: 'HTML: filtro por valores no cabeçalho (funil) — marque os status/UFs que quer ver', html: `
+<p class="r4-muted">Clique no funil de uma coluna: a lista mostra os valores que existem nela, com a quantidade. Marque um ou mais (OU na mesma coluna, E entre colunas); nenhum marcado = tudo. As quantidades já descontam a busca e os outros filtros. Alt+↓ no cabeçalho abre pelo teclado.</p>
+<r4-grid src="${url('clientes')}" page-size="10" page-size-selector filter column-filters></r4-grid>` },
+    { title: 'JS: setColumnFilter(), getColumnFilters(), evento filterchange e options fixas', fn(el, out) {
+      const g = R4.grid(el, [], { src: url('clientes'), pageSize: 8, columnFilters: true, filter: true, columns: ['nome', 'cidade', { header: 'Status', dataIndex: 'status', options: ['ativo', 'inativo', 'pendente'] }, 'uf'] });
+      g.on('filterchange', (_, f) => out(JSON.stringify(f)));
+      const bar = document.createElement('div'); bar.className = 'r4-row'; el.prepend(bar);
+      R4.button(bar, 'Só pendentes', () => g.setColumnFilter('status', ['pendente']));
+      R4.button(bar, 'Limpar filtros', () => g.clearColumnFilters());
+    } },
     { title: 'HTML: busca com destaque + linhas por página (10, 30, 50, 100, Todos)', html: `
 <p class="r4-muted">Digite "r" no filtro: as células que casaram (nome <em>e</em> cidade, por exemplo) ficam com fundo diferente. Troque as linhas por página no rodapé.</p>
 <r4-grid src="${url('clientes')}" page-size="10" page-size-selector filter exportable></r4-grid>` },
@@ -151,6 +161,39 @@
           if (f) out(R4.files.parseCSV(await R4.files.readText(f), { types: true }).slice(0, 5));
         } catch (e) { out('Erro: ' + e.message); }
       });
+    } },
+    { title: 'interpret / toGrid: o arquivo se explica (sem esquema) — JSON, CSV, lista de arrays ou o seu arquivo', fn(el, out) {
+      const AMOSTRAS = {
+        'JSON: objeto com lista': { pagina: 1, total: 3, dados: { itens: [
+          { id: 1, cliente: 'Ana Souza', status: 'pago', valor_total: '1.234,56', criado_em: '15/03/2026', endereco: { cidade: 'Recife', uf: 'PE' }, ativo: 'sim' },
+          { id: 2, cliente: 'Bruno Lima', status: 'aberto', valor_total: '99,90', criado_em: '01/12/2025', endereco: { cidade: 'Natal', uf: 'RN' }, ativo: 'não' },
+          { id: 3, cliente: 'Carla Dias', status: 'pago', valor_total: '4.500,00', criado_em: '20/10/2026', endereco: { cidade: 'Recife', uf: 'PE' }, ativo: 'sim' }] } },
+        'CSV com ponto e vírgula': 'produto;preco;estoque;atualizado\nMouse;89,90;12;2026-11-01\nTeclado;349,00;3;2026-11-05\nMonitor;899,00;0;2026-10-28\n',
+        'Lista de arrays': [['nome', 'nota', 'aprovado'], ['Ana', 9.5, true], ['Bruno', 6, false], ['Carla', 8.25, true]],
+        'Objeto de objetos': { ana: { idade: 30, cidade: 'Recife' }, bruno: { idade: 25, cidade: 'Natal' } }
+      };
+      const barra = document.createElement('div'), meta = document.createElement('pre'), alvo = document.createElement('div');
+      barra.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
+      meta.style.cssText = 'font-size:12px;white-space:pre-wrap;margin:8px 0';
+      el.append(barra, meta, alvo);
+      let atual = null;
+      const mostrar = async (entrada, opts) => {
+        if (atual) { try { atual.grid.destroy(); } catch (e) { /* ok */ } alvo.replaceChildren(); }
+        try {
+          atual = await R4.files.toGrid(alvo, entrada, Object.assign({ pageSize: 10 }, opts));
+          const m = atual.meta;
+          meta.textContent = 'forma: ' + m.shape + (m.path ? ' · lista em "' + m.path + '"' : '') + ' · ' + m.total + ' linhas · tipos: ' + JSON.stringify(m.tipos) + (m.warnings.length ? ' · avisos: ' + m.warnings.join(' ') : '');
+          out({ colunas: atual.columns.map(c => c.dataIndex + ' (' + c.type + ')'), primeiraLinha: atual.grid.getData()[0] });
+        } catch (e) { meta.textContent = 'Erro: ' + e.message; }
+      };
+      Object.keys(AMOSTRAS).forEach(k => R4.button(barra, k, () => mostrar(AMOSTRAS[k])));
+      R4.button(barra, 'Escolher meu arquivo (.json .csv .xlsx)', async () => {
+        try {
+          const [f] = await R4.files.pick({ accept: '.json,.csv,.tsv,.txt,.xlsx', maxSize: 5 * 1024 * 1024 });
+          if (f) await mostrar(f);
+        } catch (e) { meta.textContent = 'Erro: ' + e.message; }
+      });
+      mostrar(AMOSTRAS['JSON: objeto com lista']);
     } }
   ];
 

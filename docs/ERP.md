@@ -66,6 +66,20 @@ Campos:
 Primeira chamada lenta (conta o total); o servidor guarda o total por consulta em cache.
 `GET /erp/api/transacoes/resumo` → `{ total, valorTotal, porStatus: [...], porUf: [...] }` (para gráficos).
 
+### Filtro por valores nas colunas (`filtro[...]`)
+
+As listagens (`clientes`, `produtos`, `pedidos`, `transacoes`) aceitam `filtro[<coluna>][]=<valor>` (repetido): OU dentro da coluna, E entre colunas,
+somado à busca `q` e à ordenação. Colunas desconhecidas são ignoradas e os valores sempre vão como parâmetro (nunca concatenados no SQL).
+`GET /erp/api/{recurso}/valores?col=status[&q=texto]` devolve `{ retorno: [{ valor, qtd }] }` (valores distintos com contagem, até 1.000; booleanos viram `sim`/`não`),
+que alimenta o funil do cabeçalho do grid (`columnFilters` / `filterValues` + `optionsUrl`). Em `transacoes` valem `cliente, cidade, uf, produto, categoria, status`
+(contagens em cache por 1 h).
+
+### Importação: dois modos (`/erp#/arquivos`)
+
+1. **Automático:** `R4.files.interpretFile(file)` descobre sozinho a forma do arquivo (JSON de qualquer formato, CSV/TSV, NDJSON, XLSX), as colunas, os tipos e as linhas; a tabela nasce com
+   busca, ordenação, filtro por valores, "Todos" e exportação. Nada é enviado ao servidor.
+2. **Esquema fixo:** o arquivo precisa ter as colunas de cliente; é validado linha a linha no servidor (`POST /erp/api/clientes/importar`).
+
 ### Importação (demonstração de arquivos)
 
 `POST /erp/api/clientes/importar` — corpo `{ linhas: [ {nome, email, cidade, uf, tipo, ...}, ... ] }` (até 500), já lidas no navegador pelo `filedrop`

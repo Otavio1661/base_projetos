@@ -19,14 +19,14 @@
       src: '/erp/api/transacoes', pageSizes: '10,30,50,100,all', height: 520, renderTo: holder, selectable: '',
       columns: [
         { header: '#', dataIndex: 'id', width: 90, align: 'right' },
-        { header: 'Cliente', dataIndex: 'cliente', width: 200 },
-        { header: 'Cidade', dataIndex: 'cidade', width: 150 },
-        { header: 'UF', dataIndex: 'uf', width: 60 },
-        { header: 'Produto', dataIndex: 'produto', width: 200 },
-        { header: 'Categoria', dataIndex: 'categoria', width: 130 },
+        { header: 'Cliente', dataIndex: 'cliente', filtrar: true, width: 200 },
+        { header: 'Cidade', dataIndex: 'cidade', filtrar: true, width: 150 },
+        { header: 'UF', dataIndex: 'uf', filtrar: true, width: 60 },
+        { header: 'Produto', dataIndex: 'produto', filtrar: true, width: 200 },
+        { header: 'Categoria', dataIndex: 'categoria', filtrar: true, width: 130 },
         { header: 'Valor', dataIndex: 'valor', format: 'money', align: 'right', width: 120 },
         { header: 'Data', dataIndex: 'data', format: 'date', width: 110 },
-        { header: 'Status', dataIndex: 'status', width: 120, renderer: v => Erp.statusTag(v) }
+        { header: 'Status', dataIndex: 'status', filtrar: true, width: 120, renderer: v => Erp.statusTag(v) }
       ]
     }));
     vivos.push(grid);

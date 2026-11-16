@@ -1,12 +1,12 @@
 /* O ?v= dos imports força CDN e navegador a baixar de novo os parts/*.css (sem ele ficam em cache por 7 dias).
    Troque o valor (todos) sempre que mudar um arquivo em parts/. O pacote minificado (dist/) não precisa disso. */
-@import url('parts/tabs.css?v=20261116a');
-@import url('parts/icons.css?v=20261116a');
-@import url('parts/form.css?v=20261116a');
-@import url('parts/files.css?v=20261116a');
-@import url('parts/ui.css?v=20261116a');
-@import url('parts/chart.css?v=20261116a');
-@import url('parts/theme.css?v=20261116a');
+@import url('parts/tabs.css?v=20261117a');
+@import url('parts/icons.css?v=20261117a');
+@import url('parts/form.css?v=20261117a');
+@import url('parts/files.css?v=20261117a');
+@import url('parts/ui.css?v=20261117a');
+@import url('parts/chart.css?v=20261117a');
+@import url('parts/theme.css?v=20261117a');
 /* ============================================
  * libr4.css — R4 dev
  * Tema padrão dos componentes. Tudo passa por variáveis --r4-*,
@@ -103,6 +103,25 @@
 .r4-empty{text-align:center;color:var(--r4-mut);padding:20px!important}
 .r4-pager{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px;padding:8px;border-top:1px solid var(--r4-line);color:var(--r4-mut)}
 .r4-pager-nav{display:inline-flex;align-items:center;gap:8px}
+/* filtro por valores da coluna (funil no cabeçalho + popover) */
+.r4-th-filter{display:inline-flex;align-items:center;gap:2px;margin-left:6px;padding:1px 3px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--r4-mut);font:inherit;font-size:11px;line-height:1;cursor:pointer;vertical-align:middle;opacity:.75}
+.r4-th-filter:hover,.r4-th-filter:focus-visible,.r4-th-filter[aria-expanded="true"]{opacity:1;color:var(--r4-acc);background:var(--r4-hover);outline:0}
+.r4-th-filter:focus-visible{box-shadow:0 0 0 2px var(--r4-acc)}
+.r4-th-filter.r4-on{opacity:1;color:var(--r4-acc-txt);background:var(--r4-acc);border-color:var(--r4-acc)}
+.r4-th-filter .r4-fn{font-weight:700}
+.r4-th-filter .r4-fn:empty{display:none}
+.r4-cf{width:280px;gap:6px;padding:8px}
+.r4-cf-title{font-weight:600;font-size:12px;color:var(--r4-mut);text-transform:uppercase;letter-spacing:.03em}
+.r4-cf-search{width:100%}
+.r4-cf-tools{display:flex;gap:6px;flex-wrap:wrap}
+.r4-cf-btn{padding:3px 8px;font-size:12px}
+.r4-cf-list{display:flex;flex-direction:column;max-height:260px;overflow:auto;border:1px solid var(--r4-line);border-radius:var(--r4-radius)}
+.r4-cf-item{padding:4px 8px;gap:8px}
+.r4-cf-val{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r4-cf-n{color:var(--r4-mut);font-variant-numeric:tabular-nums;font-size:12px}
+.r4-cf-msg{padding:8px;color:var(--r4-mut);font-size:12px}
+.r4-cf-err{color:var(--r4-err)}
+.r4-cf-foot{font-size:12px;color:var(--r4-mut)}
 .r4-row-wait td{color:transparent;position:relative}
 .r4-row-wait td::after{content:'';position:absolute;left:8px;right:8px;top:50%;height:10px;margin-top:-5px;background:var(--r4-line);opacity:.55;border-radius:2px}
 .r4-vr-info{font-variant-numeric:tabular-nums}

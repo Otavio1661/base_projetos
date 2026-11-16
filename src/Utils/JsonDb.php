@@ -142,24 +142,67 @@ final class JsonDb
      * Página de resultados: ['total' => N, 'retorno' => [...]].
      * $opts: page (1..), size (0 = todas, até $teto), sort (coluna da allowlist $colunas), dir (asc|desc), q (busca em $buscaEm).
      */
-    public static function listar(string $tabela, array $opts, array $colunas, array $buscaEm, int $teto = 5000): array
+    /** Texto comparável de um valor de coluna (bool vira 'sim'/'não', vazio vira ''). */
+    public static function texto($v): string
+    {
+        return is_bool($v) ? ($v ? 'sim' : 'não') : ($v === null ? '' : (string) $v);
+    }
+
+    /** Aplica filtros por valores: ['status' => ['pago','aberto']] — OU dentro da coluna, E entre colunas. */
+    public static function filtrar(array $linhas, array $filtros): array
+    {
+        if (!$filtros) {
+            return $linhas;
+        }
+        return array_values(array_filter($linhas, static function ($r) use ($filtros) {
+            foreach ($filtros as $col => $vals) {
+                if (!in_array(self::texto($r[$col] ?? null), $vals, true)) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+    }
+
+    /** Valores distintos de uma coluna com contagem (já considerando busca e os OUTROS filtros): [['valor'=>..., 'qtd'=>N], ...] por qtd desc. */
+    public static function valores(string $tabela, string $col, array $buscaEm, string $q, array $filtros, int $limite = 1000): array
     {
         $linhas = self::todos($tabela);
-        $q = mb_strtolower(trim((string) ($opts['q'] ?? '')), 'UTF-8');
-        if ($q !== '') {
-            $linhas = array_values(array_filter($linhas, static function ($r) use ($q, $buscaEm) {
-                foreach ($buscaEm as $c) {
-                    $v = $r[$c] ?? '';
-                    if (is_bool($v)) {
-                        $v = $v ? 'sim' : 'não';
-                    }
-                    if (str_contains(mb_strtolower((string) $v, 'UTF-8'), $q)) {
-                        return true;
-                    }
-                }
-                return false;
-            }));
+        unset($filtros[$col]);
+        $linhas = self::filtrar(self::buscar($linhas, $q, $buscaEm), $filtros);
+        $cont = [];
+        foreach ($linhas as $r) {
+            $v = self::texto($r[$col] ?? null);
+            $cont[$v] = ($cont[$v] ?? 0) + 1;
         }
+        arsort($cont);
+        $out = [];
+        foreach (array_slice($cont, 0, $limite, true) as $v => $n) {
+            $out[] = ['valor' => (string) $v, 'qtd' => $n];
+        }
+        return $out;
+    }
+
+    public static function buscar(array $linhas, string $q, array $buscaEm): array
+    {
+        $q = mb_strtolower(trim($q), 'UTF-8');
+        if ($q === '') {
+            return $linhas;
+        }
+        return array_values(array_filter($linhas, static function ($r) use ($q, $buscaEm) {
+            foreach ($buscaEm as $c) {
+                if (str_contains(mb_strtolower(self::texto($r[$c] ?? ''), 'UTF-8'), $q)) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+    }
+
+    public static function listar(string $tabela, array $opts, array $colunas, array $buscaEm, int $teto = 5000): array
+    {
+        $linhas = self::filtrar(self::todos($tabela), is_array($opts['filtro'] ?? null) ? $opts['filtro'] : []);
+        $linhas = self::buscar($linhas, (string) ($opts['q'] ?? ''), $buscaEm);
         $sort = (string) ($opts['sort'] ?? '');
         if ($sort !== '' && in_array($sort, $colunas, true)) {
             $dir = strtolower((string) ($opts['dir'] ?? 'asc')) === 'desc' ? -1 : 1;

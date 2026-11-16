@@ -636,7 +636,10 @@
         exportTitle: 'Exportar os registros filtrados', retry: 'Tentar de novo', resize: 'Arraste para redimensionar',
         selectAll: 'Selecionar todos os registros filtrados', edit: 'Editar {col}', unsort: 'Limpar ordenação',
         print: 'Imprimir', printing: 'Impressão', total: 'Total', noList: 'Resposta sem lista de registros.',
-        badJson: 'A resposta não é JSON válido.', count: { um: '{total} registro', outros: '{total} registros' }
+        badJson: 'A resposta não é JSON válido.', count: { um: '{total} registro', outros: '{total} registros' },
+        cfBtn: 'Filtrar valores', cfTitle: 'Filtrar valores de {col}', cfAll: 'Selecionar todos', cfClear: 'Limpar', cfEmpty: '(vazio)',
+        cfCount: '{n} de {m} selecionados', cfSearch: 'Buscar valor...', cfMany: 'Muitos valores ({n}): use a busca acima.', cfFail: 'Falha ao carregar valores',
+        cfSortCount: 'Por quantidade', cfSortAlpha: 'A–Z'
       },
       form: {
         required: 'Campo obrigatório.', requiredCheck: 'Marque esta opção para continuar.', requiredChoice: 'Selecione uma opção.',
@@ -660,7 +663,9 @@
         readFail: 'Não foi possível ler "{name}".', dup: '"{name}" já está na lista.', maxFiles: { um: 'Selecione no máximo {n} arquivo.', outros: 'Selecione no máximo {n} arquivos.' },
         badJson: 'JSON inválido.', types: 'Tipos: {types}', max: 'Máx. {size}', maxEach: 'Máx. {size} por arquivo',
         blocked: '"{name}": tipo de arquivo bloqueado por segurança (executável/script).', double: '"{name}": extensão dupla suspeita (ex.: .php.jpg).',
-        mismatch: '"{name}": o conteúdo não corresponde à extensão .{ext} (parece {kind}).', uploadFail: 'falha no envio.'
+        mismatch: '"{name}": o conteúdo não corresponde à extensão .{ext} (parece {kind}).', uploadFail: 'falha no envio.',
+        warnRows: 'Arquivo truncado em {n} linhas.', warnCols: 'Colunas limitadas a {n}.', warnText: 'Arquivo truncado em {n}.', warnCell: 'Textos longos foram cortados em {n} caracteres.',
+        warnKey: 'Chaves ignoradas por segurança: {keys}.', warnPath: 'Caminho "{path}" não encontrado; usando a estrutura inteira.', textTooBig: 'Texto grande demais (máximo {n}).'
       },
       sanitize: {
         warn: 'Atenção: o texto parece conter {kinds}. Ele será enviado como texto comum e o servidor valida de novo.',
@@ -696,7 +701,10 @@
         exportTitle: 'Export the filtered records', retry: 'Try again', resize: 'Drag to resize',
         selectAll: 'Select all filtered records', edit: 'Edit {col}', unsort: 'Clear sorting',
         print: 'Print', printing: 'Printing', total: 'Total', noList: 'Response has no list of records.',
-        badJson: 'The response is not valid JSON.', count: { one: '{total} record', other: '{total} records' }
+        badJson: 'The response is not valid JSON.', count: { one: '{total} record', other: '{total} records' },
+        cfBtn: 'Filter values', cfTitle: 'Filter values of {col}', cfAll: 'Select all', cfClear: 'Clear', cfEmpty: '(empty)',
+        cfCount: '{n} of {m} selected', cfSearch: 'Search value...', cfMany: 'Many values ({n}): use the search above.', cfFail: 'Could not load values',
+        cfSortCount: 'By count', cfSortAlpha: 'A–Z'
       },
       form: {
         required: 'Required field.', requiredCheck: 'Check this option to continue.', requiredChoice: 'Select an option.',
@@ -720,7 +728,9 @@
         readFail: 'Could not read "{name}".', dup: '"{name}" is already in the list.', maxFiles: { one: 'Select at most {n} file.', other: 'Select at most {n} files.' },
         badJson: 'Invalid JSON.', types: 'Types: {types}', max: 'Max. {size}', maxEach: 'Max. {size} per file',
         blocked: '"{name}": file type blocked for security (executable/script).', double: '"{name}": suspicious double extension (e.g. .php.jpg).',
-        mismatch: '"{name}": the content does not match the .{ext} extension (looks like {kind}).', uploadFail: 'upload failed.'
+        mismatch: '"{name}": the content does not match the .{ext} extension (looks like {kind}).', uploadFail: 'upload failed.',
+        warnRows: 'File truncated at {n} rows.', warnCols: 'Columns limited to {n}.', warnText: 'File truncated at {n}.', warnCell: 'Long texts were cut at {n} characters.',
+        warnKey: 'Keys ignored for security: {keys}.', warnPath: 'Path "{path}" not found; using the whole structure.', textTooBig: 'Text too large (maximum {n}).'
       },
       sanitize: {
         warn: 'Heads up: the text looks like it contains {kinds}. It will be sent as plain text and the server validates it again.',

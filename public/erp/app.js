@@ -39,11 +39,16 @@
   };
 
   /* Opções comuns de grid remoto (paginação, ordenação, busca e destaque no servidor). */
-  Erp.gridOpts = (extra) => Object.assign({
-    xtype: 'grid', remote: true, pageSize: 10, pageSizeSelector: true, pageSizes: '10,30,50,100,all', filter: true,
-    exportable: true, columnMenu: true, resizable: true, striped: true,
-    listeners: { loaderror: (g, e) => { if (e && /HTTP 401/.test(e.message || '')) location.href = '/erp/login'; } }
-  }, extra);
+  Erp.gridOpts = (extra) => {
+    const o = Object.assign({
+      xtype: 'grid', remote: true, pageSize: 10, pageSizeSelector: true, pageSizes: '10,30,50,100,all', filter: true,
+      exportable: true, columnMenu: true, resizable: true, striped: true,
+      listeners: { loaderror: (g, e) => { if (e && /HTTP 401/.test(e.message || '')) location.href = '/erp/login'; } }
+    }, extra);
+    // coluna com `filtrar: true` ganha o funil de valores (marcar "pago", "aberto"...): os valores e as contagens vêm de <src>/valores
+    (o.columns || []).forEach(c => { if (c.filtrar) { c.filterValues = true; c.optionsUrl = o.src + '/valores'; } });
+    return o;
+  };
 
   /* ---------- CRUD genérico (clientes, produtos, pedidos) ---------- */
   Erp.crud = function (o) {

@@ -344,5 +344,179 @@
       assert.eq(fd.msgEl.querySelector('b'), null);
       await assert.rejects(fd.upload('javascript:alert(1)'), /recusado/);
     });
+
+    /* ======== interpret: o arquivo "se explica" (esquema automático) ======== */
+    const I = (x, o) => F().interpret(x, o);
+    const tipos = r => Object.fromEntries(r.columns.map(c => [c.dataIndex, c.type]));
+
+    test('interpret: array de objetos → colunas legíveis, tipos (pt-BR e ISO), alinhamento e formatos', () => {
+      const r = I([
+        { nome_cliente: 'Ana', valorTotal: '1.234,56', quantidade: '3', criado_em: '15/03/2026', ativo: 'sim', cpf: '01234567890' },
+        { nome_cliente: 'Bruno', valorTotal: '99,90', quantidade: '10', criado_em: '01/12/2025', ativo: 'não', cpf: '98765432100' }]);
+      assert.eq(r.meta.shape, 'array-de-objetos');
+      assert.deepEq(r.columns.map(c => c.header), ['Nome Cliente', 'Valor Total', 'Quantidade', 'Criado Em', 'Ativo', 'Cpf']);
+      assert.deepEq(tipos(r), { nome_cliente: 'text', valorTotal: 'money', quantidade: 'integer', criado_em: 'date', ativo: 'boolean', cpf: 'text' });
+      assert.eq(r.rows[0].valorTotal, 1234.56, 'vírgula decimal e ponto de milhar');
+      assert.eq(r.rows[0].quantidade, 3);
+      assert.eq(r.rows[0].criado_em, '2026-03-15', 'dd/mm/aaaa vira ISO (ordena certo)');
+      assert.eq(r.rows[1].ativo, false);
+      assert.eq(r.rows[0].cpf, '01234567890', 'CPF/zeros à esquerda continuam texto');
+      const c = Object.fromEntries(r.columns.map(x => [x.dataIndex, x]));
+      assert.eq(c.valorTotal.align, 'right'); assert.eq(c.valorTotal.format, 'money'); assert.eq(c.criado_em.format, 'date'); assert.eq(c.ativo.format, 'bool'); assert.eq(c.ativo.align, 'center');
+      assert.ok(c.nome_cliente.width >= 70 && c.nome_cliente.width <= 320, 'largura limitada');
+      assert.eq(r.meta.total, 2);
+    });
+
+    test('interpret: números em vários estilos; só vira número se TODOS os valores couberem', () => {
+      assert.deepEq(I([{ a: '1.234,5' }, { a: '2,25' }]).rows.map(r => r.a), [1234.5, 2.25], 'pt-BR');
+      assert.deepEq(I([{ a: '1,234.5' }, { a: '2.25' }]).rows.map(r => r.a), [1234.5, 2.25], 'en');
+      assert.deepEq(I([{ a: '1.234.567' }, { a: '2.000' }]).rows.map(r => r.a), [1234567, 2000], 'só milhar');
+      assert.eq(tipos(I([{ a: '10' }, { a: 'dez' }])).a, 'text', 'um valor não numérico mantém texto');
+      assert.eq(I([{ a: '10' }, { a: 'dez' }]).rows[0].a, '10');
+      assert.eq(tipos(I([{ a: '007' }, { a: '008' }])).a, 'text', 'zeros à esquerda');
+      assert.eq(tipos(I([{ a: 1 }, { a: 2.5 }, { a: null }])).a, 'number');
+      assert.eq(tipos(I([{ a: 'R$ 10,50' }, { a: 'R$ 3,00' }])).a, 'money', 'prefixo R$');
+      assert.eq(I([{ a: 'R$ 10,50' }]).rows[0].a, 10.5);
+    });
+
+    test('interpret: datas ISO, dd/mm/aaaa, mês/dia quando só isso faz sentido, e data com hora', () => {
+      assert.eq(tipos(I([{ d: '2026-11-16' }, { d: '2026-01-02' }])).d, 'date');
+      assert.eq(tipos(I([{ d: '2026-11-16T10:30:00Z' }])).d, 'datetime');
+      assert.eq(I([{ d: '16/11/2026 08:05' }]).rows[0].d, '2026-11-16 08:05:00');
+      assert.eq(I([{ d: '03/25/2026' }, { d: '01/02/2026' }]).rows.map(r => r.d).join(), '2026-03-25,2026-01-02', 'mm/dd/aaaa quando um valor tem "mês" 25');
+      assert.eq(tipos(I([{ d: '2026-13-45' }])).d, 'text', 'data impossível');
+    });
+
+    test('interpret: objeto com listas escolhe a maior, lista candidatas e aceita path', () => {
+      const j = { total: 3, pagina: { itens: [{ id: 1 }, { id: 2 }, { id: 3 }] }, tags: [{ t: 'a' }] };
+      const r = I(j);
+      assert.eq(r.meta.shape, 'objeto-com-lista'); assert.eq(r.meta.path, 'pagina.itens'); assert.eq(r.rows.length, 3);
+      assert.deepEq(r.meta.candidates.map(c => c.path).sort(), ['pagina.itens', 'tags']);
+      const r2 = I(j, { path: 'tags' });
+      assert.eq(r2.rows.length, 1); assert.eq(r2.rows[0].t, 'a'); assert.eq(r2.meta.path, 'tags');
+      const r3 = I(j, { path: 'nao.existe' });
+      assert.ok(r3.meta.warnings.some(w => w.includes('nao.existe')), 'aviso de path');
+    });
+
+    test('interpret: objeto de objetos, objeto simples, chave/valor, primitivos, vazio e primitivo solto', () => {
+      const o = I({ ana: { idade: 30, cidade: 'Recife' }, bruno: { idade: 25, cidade: 'Natal' } });
+      assert.eq(o.meta.shape, 'objeto-de-objetos'); assert.deepEq(o.columns.map(c => c.dataIndex), ['chave', 'idade', 'cidade']); assert.eq(o.rows[1].chave, 'bruno');
+      const u = I({ nome: 'Ana', idade: 30, endereco: { cidade: 'Recife', geo: { lat: 1.5 } }, tags: ['a', 'b'], itens: [{ x: 1 }] });
+      assert.eq(u.meta.shape, 'objeto-com-lista', 'lista de objetos dentro vence');
+      const s = I({ nome: 'Ana', idade: 30, endereco: { cidade: 'Recife', geo: { lat: 1.5 } }, tags: ['a', 'b'] });
+      assert.eq(s.meta.shape, 'objeto'); assert.eq(s.rows.length, 1);
+      assert.eq(s.rows[0]['endereco.cidade'], 'Recife', 'achatado com chave pontuada');
+      assert.eq(s.rows[0]['endereco.geo.lat'], 1.5);
+      assert.eq(s.rows[0].tags, 'a, b', 'lista de primitivos juntada');
+      assert.eq(s.columns.find(c => c.dataIndex === 'endereco.cidade').header, 'Endereco Cidade');
+      const kv = I({ a: 1, b: 2 }, { keyValue: true });
+      assert.eq(kv.meta.shape, 'chave-valor'); assert.deepEq(kv.rows, [{ chave: 'a', valor: 1 }, { chave: 'b', valor: 2 }]);
+      assert.deepEq(I([1, 'dois', 3]).rows.map(r => r.valor), [1, 'dois', 3]); assert.eq(I([1, 2]).meta.shape, 'array-de-primitivos');
+      assert.eq(I([]).rows.length, 0); assert.eq(I([]).meta.shape, 'vazio');
+      assert.eq(I(42).rows[0].valor, 42);
+    });
+
+    test('interpret: lista de arrays (cabeçalho automático ou forçado) e linhas com colunas a mais', () => {
+      const a = I([['nome', 'idade'], ['Ana', 30], ['Bruno', 25]]);
+      assert.eq(a.meta.shape, 'array-de-arrays'); assert.eq(a.meta.header, true); assert.deepEq(a.columns.map(c => c.dataIndex), ['nome', 'idade']); assert.eq(a.rows.length, 2);
+      const b = I([[1, 2], [3, 4]]);
+      assert.eq(b.meta.header, false); assert.deepEq(b.columns.map(c => c.dataIndex), ['coluna_1', 'coluna_2']); assert.eq(b.rows.length, 2);
+      assert.eq(I([['a', 'b'], ['c', 'd']], { header: false }).rows.length, 2, 'header:false força dados');
+      assert.eq(I([[1, 2], [3, 4]], { header: true }).rows.length, 1, 'header:true força cabeçalho');
+      const c = I([['x'], ['1', '2']]);
+      assert.deepEq(c.columns.map(x => x.dataIndex), ['x', 'coluna_2'], 'coluna além do cabeçalho ganha nome');
+    });
+
+    test('interpret: JSON e NDJSON em texto, JSON inválido e BOM', () => {
+      assert.eq(I('[{"a":1},{"a":2}]').rows.length, 2);
+      assert.eq(I('﻿{"itens":[{"a":1}]}').rows.length, 1, 'BOM');
+      const n = I('{"a":1,"b":"x"}\n{"a":2,"b":"y"}\n');
+      assert.eq(n.meta.shape, 'ndjson'); assert.eq(n.rows.length, 2); assert.eq(n.meta.formato, 'ndjson');
+      let erro = '';
+      try { I('{"a":'); } catch (e) { erro = e.message; }
+      assert.match(erro, /JSON inválido/);
+      assert.eq(I('   ').rows.length, 0, 'texto vazio');
+    });
+
+    test('interpret: CSV com vírgula, ponto e vírgula, tab e aspas; tipos inferidos', () => {
+      const v = I('id,nome,obs\n1,"Silva, Ana","diz ""oi"""\n2,Bruno,x\n');
+      assert.eq(v.meta.shape, 'csv'); assert.eq(v.rows.length, 2); assert.eq(v.rows[0].nome, 'Silva, Ana'); assert.eq(v.rows[0].obs, 'diz "oi"'); assert.eq(tipos(v).id, 'integer');
+      const pv = I('nome;valor;data\nAna;1.234,50;31/01/2026\nBia;10,00;01/02/2026\n');
+      assert.deepEq(tipos(pv), { nome: 'text', valor: 'money', data: 'date' }); assert.eq(pv.rows[0].valor, 1234.5); assert.eq(pv.rows[1].data, '2026-02-01');
+      const tb = I('a\tb\n1\t2\n3\t4');
+      assert.deepEq(tb.columns.map(c => c.dataIndex), ['a', 'b']); assert.eq(tb.rows[1].b, 4);
+      const rep = I('x,x,\n1,2,3');
+      assert.deepEq(rep.columns.map(c => c.dataIndex), ['x', 'x_2', 'coluna_3'], 'colunas repetidas/vazias ganham nome único');
+    });
+
+    test('interpret: XLSX (Promise) com abas, tipos e datas; e a mesma planilha pelo File', async () => {
+      const linhas = [{ nome: 'Ana', valor: 10.5, data: '2026-03-15', ativo: true }, { nome: 'Bia', valor: 20, data: '2026-04-01', ativo: false }];
+      const bytes = F().toXLSX(linhas, { sheetName: 'Vendas', bytes: true });
+      const p = I(bytes);
+      assert.ok(p && typeof p.then === 'function', 'binário devolve Promise');
+      const r = await p;
+      assert.eq(r.meta.shape, 'planilha'); assert.deepEq(r.meta.sheets, ['Vendas']); assert.eq(r.rows.length, 2);
+      assert.eq(tipos(r).nome, 'text'); assert.eq(tipos(r).data, 'date'); assert.eq(r.rows[0].valor, 10.5);
+      const r2 = await F().interpretFile(arq(bytes, 'v.xlsx'));
+      assert.eq(r2.rows.length, 2, 'File');
+      const r3 = await I(bytes, { sheet: 'Vendas' });
+      assert.eq(r3.rows.length, 2, 'aba por nome');
+      const t = await I(enc('a;b\n1;2\n'));
+      assert.eq(t.rows.length, 1, 'Uint8Array de texto também');
+    });
+
+    test('interpret: segurança — chaves de protótipo ignoradas, só primitivos, valores longos cortados, sem poluir Object', () => {
+      const r = I('[{"__proto__":{"pwn":1},"constructor":"x","prototype":2,"ok":1,"fn":null}]');
+      assert.deepEq(r.columns.map(c => c.dataIndex), ['ok', 'fn']);
+      assert.eq(({}).pwn, undefined); assert.eq(Object.prototype.pwn, undefined);
+      assert.ok(r.meta.warnings.some(w => /__proto__/.test(w)), 'avisa das chaves ignoradas');
+      const h = I([['__proto__', 'ok'], ['1', '2']]);
+      assert.deepEq(h.columns.map(c => c.dataIndex), ['ok'], 'cabeçalho perigoso descartado');
+      const longo = I([{ t: 'x'.repeat(6000) }]);
+      assert.eq(longo.rows[0].t.length, 5000); assert.ok(longo.meta.warnings.some(w => w.includes('5.000')));
+      const m = I([{ a: { b: [1, { c: 2 }] }, d: () => 1, e: NaN, f: 10n }]);
+      Object.values(m.rows[0]).forEach(v => assert.ok(v === null || ['string', 'number', 'boolean'].includes(typeof v), 'só primitivos: ' + typeof v));
+      assert.eq(m.rows[0].e, null); assert.ok(m.rows[0].f === 10 || m.rows[0].f === '10', 'bigint vira número/texto');
+    });
+
+    test('interpret: limites de linhas e colunas avisam (meta.truncated); JSON gigante é recusado', () => {
+      const muitas = Array.from({ length: 200005 }, (_, i) => ({ i }));
+      const r = I(muitas);
+      assert.eq(r.rows.length, 200000); assert.eq(r.meta.truncated, true); assert.ok(r.meta.warnings.some(w => w.includes('200.000')));
+      const largo = {}; for (let i = 0; i < 230; i++) largo['c' + i] = i;
+      const c = I([largo]);
+      assert.eq(c.columns.length, 200); assert.eq(c.meta.truncated, true);
+      let erro = '';
+      try { I('[' + ('{"a":"' + 'x'.repeat(100) + '"},').repeat(60000) + '{}]'); } catch (e) { erro = e.message; }
+      assert.match(erro, /grande demais/);
+    });
+
+    test('interpret + grid: colunas descobertas funcionam no grid (formatos, filtro) e R4.files.toGrid cria a tabela sozinho', async t => {
+      const r = I('[{"produto":"Mouse","preco":"89,90","estoque":"12","ativo":"sim"},{"produto":"Teclado","preco":"349,00","estoque":"3","ativo":"não"},{"produto":"Monitor","preco":"899,00","estoque":"0","ativo":"sim"}]');
+      const g = t.create({ xtype: 'grid', data: r.rows, columns: r.columns, pageSize: 10 });
+      await t.waitFor(() => g.tbody.querySelectorAll('tr').length >= 3, 1500, 'linhas');
+      const cel = (i, j) => g.tbody.querySelectorAll('tr')[i].cells[j].textContent;
+      assert.eq(g.thead.querySelectorAll('th')[1].textContent.trim().startsWith('Preco'), true, 'cabeçalho legível');
+      assert.contains(cel(0, 1), '89,90', 'valor em reais (money)');
+      assert.eq(cel(0, 3), '✔', 'booleano formatado');
+      g.setFilter('tec');
+      await t.waitFor(() => g._view.length === 1, 1500, 'filtrou');
+      const alvo = t.box.appendChild(document.createElement('div'));
+      const x = await F().toGrid(alvo, '{"dados":{"itens":[{"a":1,"b":"x"},{"a":2,"b":"y"}]}}', { pageSize: 5 });
+      t.cleanup(() => x.grid.destroy());
+      assert.eq(x.meta.path, 'dados.itens'); assert.eq(x.grid.getData().length, 2); assert.deepEq(x.grid.columns.map(c => c.header), ['A', 'B']);
+    });
+
+    test('interpret: o resultado do filedrop (parse csv) entra direto', async t => {
+      const dados = [];
+      const fd = t.create({ xtype: 'filedrop', accept: '.csv,.json', multiple: true, parse: 'csv', listeners: { data: (c, d) => dados.push(d) } });
+      const inp = fd.el.querySelector('input[type=file]');
+      assert.ok(inp, 'input do filedrop');
+      const dt = new DataTransfer(); dt.items.add(arq('nome;valor\nAna;1,5\nBia;2,5\n', 'a.csv'));
+      inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+      await t.waitFor(() => dados.length === 1, 2000, 'csv lido');
+      const r = I(dados[0]);
+      assert.eq(r.rows.length, 2); assert.eq(r.meta.shape, 'array-de-objetos');
+    });
   });
 })();

@@ -277,6 +277,13 @@
     Object.keys(p).forEach(k => { if (p[k] != null && p[k] !== '') u.searchParams.set(k, p[k]); });
     return u.origin === location.origin ? u.pathname + u.search : u.href;
   };
+  /** Acrescenta filtro[coluna][]=valor (um por valor marcado) à URL — PHP lê como $_GET['filtro']['coluna'] = [...]. */
+  const withFilters = (src, f) => {
+    const ks = Object.keys(f || {}); if (!ks.length) return src;
+    const u = new URL(src, location.href);
+    ks.forEach(k => f[k].forEach(v => u.searchParams.append('filtro[' + k + '][]', v)));
+    return u.origin === location.origin ? u.pathname + u.search : u.href;
+  };
   // {campo} no r4-click de uma ação vira o valor da linha (sem ';' para não encadear ações)
   const fillTpl = (tpl, row) => String(tpl).replace(/\{(\w+)\}/g, (_, k) => String(row[k] ?? '').replace(/[;\r\n]/g, ' '));
 
@@ -285,11 +292,12 @@
       virtual: false, virtualThreshold: 1000, rowHeight: 36, height: 0, selectable: '', idProperty: 'id', remote: false,
       resizable: false, columnMenu: false, exportable: false, exportName: 'dados', summaryLabel: '',
       loadingText: '', errorText: '',   // '' = texto padrão no idioma atual (R4.i18n)
-      highlight: true, pageSizeSelector: false, pageSizes: [] },
+      highlight: true, pageSizeSelector: false, pageSizes: [], columnFilters: false },
     build() {
       const root = el('div', { class: 'r4-grid' });
       this.sortKey = null; this.sortDir = 1; this.page = 0; this.q = '';
       this.sorters = []; this._sel = new Map(); this._act = { r: 0, c: 0 }; this._win = [0, 0];
+      this._cf = {}; this._cfT = null; this._cfCache = {}; this._cfP = null;
       this._ver = 0; this._pv = 0; this._pool = []; this._view = []; this._rows = []; this._base = 0; this._count = 0; this._total = 0; this._seq = 0;
       const bar = el('div', { class: 'r4-grid-bar' });
       if (this.filter) {
@@ -354,8 +362,9 @@
         if (this.remote) {
           const s = this._sorters()[0];
           const p = { page: this.page + 1, size: this._size(), sort: s ? s.key : null, dir: s ? (s.dir > 0 ? 'asc' : 'desc') : null, q: this.q || null };
-          if (/^get$/i.test(this.method)) url = withQuery(this.src, Object.assign({}, this.params, p));
-          else data = Object.assign({}, this.params, p);
+          const fl = this._cfActive();
+          if (/^get$/i.test(this.method)) url = withFilters(withQuery(this.src, Object.assign({}, this.params, p)), fl);
+          else data = Object.assign({}, this.params, p, Object.keys(fl).length ? { filtro: fl } : null);
         }
         const r = await this._request(url, data);
         if (seq !== this._seq || this._dead) return this;
@@ -381,11 +390,12 @@
      * Requisição JSON verificando o status HTTP (R4.http.request não expõe res.ok).
      * Mesmo formato do R4.http: corpo criptografado com R4.crypto quando encrypt=true.
      */
-    async _request(url, data) {
+    async _request(url, data, metodo) {
+      const mth = metodo || this.method;
       url = R4.http.check(url);   // recusa javascript:/data:, avisa (ou bloqueia, com strictOrigins) outra origem
-      const get = /^get$/i.test(this.method);
-      const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data, { metodo: this.method, caminho: url }) : data);
-      const res = await fetch(url, { method: this.method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
+      const get = /^get$/i.test(mth);
+      const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data, { metodo: mth, caminho: url }) : data);
+      const res = await fetch(url, { method: mth, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
       let r = null, bad = false;
       try { r = await res.json(); } catch (e) { bad = true; }
       if (!res.ok) {
@@ -492,6 +502,7 @@
       const s = this._sorters();
       if (s.length) rows = this._sorted(s);
       if (this.q) { const txt = this._texts(), q = this.q; rows = rows.filter(r => txt(r).includes(q)); }
+      const pr = this._cfPred(); if (pr) rows = rows.filter(pr);   // filtro por valores das colunas
       this._view = rows;
     },
 
@@ -580,6 +591,7 @@
             th.append(el('span', { class: 'r4-sort', 'aria-hidden': 'true' }, [R4.icon(s[i].dir > 0 ? 'caret-up' : 'caret-down'), s.length > 1 ? String(i + 1) : '']));
           }
         }
+        if (this._cfOn(c)) th.append(this._cfBtn(c));
         if (this.resizable && c.resizable !== false) th.append(el('span', { class: 'r4-col-resize', title: T('r4.grid.resize', 0, 'Arraste para redimensionar'), 'aria-hidden': 'true' }));
         tr.append(th);
       });
@@ -750,7 +762,8 @@
       const s = this._sorters()[0];
       const p = { page: ci + 1, size: VCH, sort: s ? s.key : null, dir: s ? (s.dir > 0 ? 'asc' : 'desc') : null, q: this.q || null };
       let url = this.src, data = this.params;
-      if (/^get$/i.test(this.method)) url = withQuery(this.src, Object.assign({}, this.params, p)); else data = Object.assign({}, this.params, p);
+      const fl = this._cfActive();
+      if (/^get$/i.test(this.method)) url = withFilters(withQuery(this.src, Object.assign({}, this.params, p)), fl); else data = Object.assign({}, this.params, p, Object.keys(fl).length ? { filtro: fl } : null);
       const r = await this._request(url, data);
       const rows = Array.isArray(r) ? r : r && (r.retorno || r.data || r.rows);
       if (!Array.isArray(rows)) throw new Error((r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message)) || T('r4.grid.noList', 0, 'Resposta sem lista de registros.'));
@@ -969,6 +982,10 @@
     _onKey(ev) {
       const t = ev.target;
       if (this._editor || t.closest('.r4-cell-editor')) return;
+      if (t.classList.contains('r4-th-filter')) {   // botão do funil: Enter/Espaço/↓ abrem o filtro
+        if (['Enter', ' ', 'Spacebar', 'ArrowDown'].includes(ev.key)) { ev.preventDefault(); ev.stopPropagation(); this._cfToggle(this._cols[t.closest('th').cellIndex - this._off], t); }
+        return;
+      }
       if (t.classList.contains('r4-grid-act')) {   // dentro da célula de ações: ←/→ entre botões, Esc volta à célula
         const sib = ev.key === 'ArrowRight' ? t.nextElementSibling : ev.key === 'ArrowLeft' ? t.previousElementSibling : null;
         if (sib) { ev.preventDefault(); sib.focus(); }
@@ -983,7 +1000,9 @@
       if (cell !== this._cellAt(r, c)) { r = cell.parentNode.parentNode === this.thead ? -1 : cell.parentNode._ri; c = cell.cellIndex; }
       const col = this._cols[c - this._off];
       switch (ev.key) {
-        case 'ArrowDown': r = Math.min(n - 1, r + 1); break;
+        case 'ArrowDown':
+          if (ev.altKey && r < 0 && col && this._cfOn(col)) { ev.preventDefault(); const fb = cell.querySelector('.r4-th-filter'); fb && this._cfToggle(col, fb); return; }   // Alt+↓ no cabeçalho abre o filtro
+          r = Math.min(n - 1, r + 1); break;
         case 'ArrowUp': r = Math.max(-1, r - 1); break;
         case 'ArrowRight':
           if (ev.altKey && r < 0 && col) return ev.preventDefault(), this._resizeBy(col, 16);
@@ -1025,6 +1044,8 @@
       if (cell.parentNode.parentNode === this.thead) {
         if (t.classList.contains('r4-check-all')) return this._toggleAll(t.checked);
         if (t.closest('.r4-col-resize') || Date.now() - (this._resizedAt || 0) < 350) return;
+        const fb = t.closest('.r4-th-filter');
+        if (fb) { this._cfToggle(this._cols[cell.cellIndex - this._off], fb); return; }   // o funil NÃO ordena
         this._setAct(-1, cell.cellIndex, true);
         const c = this._cols[cell.cellIndex - this._off];
         if (c && c.dataIndex != null && c.sortable !== false && !c.actions) this.sort(c.dataIndex, undefined, ev.shiftKey);
@@ -1214,6 +1235,224 @@
       if (refocus) this._menuBtn.focus();
     },
 
+    /* ---------- filtro por valores da coluna (estilo Excel / legenda de gráfico) ---------- */
+    /** A coluna tem filtro? columnFilters liga em todas; coluna.filterValues=true só nela; filterable/filterValues=false desliga. */
+    _cfOn(c) { return !!(c && c.dataIndex != null && !c.actions && c.filterable !== false && (c.filterValues === true || (this.columnFilters && c.filterValues !== false))); },
+    _cfBtn(c) {
+      const k = String(c.dataIndex), n = (this._cf[k] || []).length, name = c.header ?? c.dataIndex;
+      const b = el('button', { type: 'button', class: 'r4-th-filter' + (n ? ' r4-on' : ''), tabindex: '-1', 'data-cf': k, 'aria-haspopup': 'dialog', 'aria-expanded': String(!!(this._cfP && this._cfP.key === k)),
+        'aria-label': T('r4.grid.cfTitle', { col: name }, 'Filtrar valores de ' + name), title: T('r4.grid.cfBtn', 0, 'Filtrar valores') }, [R4.icon('filter'), el('span', { class: 'r4-fn', text: n ? String(n) : '' })]);
+      return b;
+    },
+    _cfBadges() {
+      this.thead.querySelectorAll('.r4-th-filter').forEach(b => {
+        const n = (this._cf[b.getAttribute('data-cf')] || []).length;
+        b.classList.toggle('r4-on', n > 0); b.lastChild.textContent = n ? String(n) : '';
+      });
+    },
+    /** Filtros ativos: { coluna: [valores] } (só colunas com pelo menos um valor marcado). */
+    _cfActive() { const o = {}; for (const k in this._cf) if (this._cf[k].length) o[k] = this._cf[k].slice(); return o; },
+    getColumnFilters() { return this._cfActive(); },
+    /** setColumnFilter('status', ['pago','aberto']) — lista vazia remove o filtro da coluna. Volta à página 1 e recarrega (remoto). */
+    setColumnFilter(key, values) {
+      const v = [...new Set([].concat(values ?? []).map(x => x == null ? '' : String(x)))];
+      if (v.length) this._cf[String(key)] = v; else delete this._cf[String(key)];
+      return this._cfApply();
+    },
+    clearColumnFilters() { this._cf = {}; return this._cfApply(); },
+    _cfApply() {
+      this._cfT = null; this.page = 0;
+      if (this._cfP && this._cfP.el) this._cfFoot();
+      this._cfBadges();
+      this.fire('filterchange', this, this._cfActive());
+      if (this.remote) { if (this.src) this.load(); else this._update(false); }
+      else { if (this.scroller) this.scroller.scrollTop = 0; this._update(false); }
+      return this;
+    },
+    /** Texto exibido da célula (renderer/format quando existir), guardado por versão dos dados. */
+    _cfText(c, row) {
+      let ca = this._cfT;
+      if (!ca || ca.ver !== this._ver) ca = this._cfT = { ver: this._ver, m: {} };
+      const k = c.dataIndex, m = ca.m[k] || (ca.m[k] = new Map());
+      let t = m.get(row);
+      if (t === undefined) {
+        const v = row == null ? undefined : row[k];
+        let r = null;
+        if (c.renderer && c.html !== true) { try { r = c.renderer(v, row); } catch (e) { r = null; } }
+        if (r != null && (typeof r === 'string' || typeof r === 'number' || typeof r === 'boolean')) t = String(r).trim();
+        else if (r != null && r.nodeType) t = (r.textContent || '').trim();
+        else t = fmtVal(c, v).trim();
+        m.set(row, t);
+      }
+      return t;
+    },
+    /** Predicado das linhas: E entre colunas, OU entre os valores da coluna. `skip` ignora uma coluna (contagens do popover). */
+    _cfPred(skip) {
+      const act = this._cfActive(), ks = Object.keys(act).filter(k => k !== skip);
+      if (!ks.length) return null;
+      const tests = ks.map(k => {
+        const c = this.columns.find(x => x && String(x.dataIndex) === k), set = new Set(act[k]);
+        return c ? row => { const raw = row == null ? undefined : row[k]; return set.has(this._cfText(c, row)) || set.has(raw == null ? '' : String(raw)); } : () => true;
+      });
+      return row => { for (let i = 0; i < tests.length; i++) if (!tests[i](row)) return false; return true; };
+    },
+    _cfNorm(o) {
+      if (o && typeof o === 'object') { const v = o.value ?? o.valor ?? '', l = o.label ?? o.texto ?? o.text; return { value: String(v), label: l != null ? String(l) : String(v), count: o.count ?? o.qtd ?? null }; }
+      const v = o == null ? '' : String(o); return { value: v, label: v, count: null };
+    },
+    /** Valores do popover. Local: distintos da coluna sobre o que sobra da busca e dos OUTROS filtros. Remoto: optionsUrl; sem ela, os valores já carregados. */
+    async _cfItems(c) {
+      const key = String(c.dataIndex);
+      let items, many = false;
+      const contar = rows => {
+        const tx = new Map(), rw = new Map();
+        for (const r of rows) { const t = this._cfText(c, r), v = r == null || r[key] == null ? '' : String(r[key]); tx.set(t, (tx.get(t) || 0) + 1); if (v !== t) rw.set(v, (rw.get(v) || 0) + 1); }
+        return { tx, rw };
+      };
+      if (this.remote && c.optionsUrl) {
+        const ca = this._cfCache[key];
+        if (ca && ca.q === this.q) return ca;
+        const r = await this._request(withQuery(c.optionsUrl, { col: key, q: this.q || null }), null, 'GET');
+        const rows = Array.isArray(r) ? r : r && (r.retorno || r.data || r.rows);
+        if (!Array.isArray(rows)) throw new Error((r && (typeof r.retorno === 'string' ? r.retorno : r.mensagem || r.message)) || T('r4.grid.noList', 0, 'Resposta sem lista de registros.'));
+        items = rows.map(o => (o && typeof o === 'object' ? this._cfNorm({ value: o.valor ?? o.value ?? '', label: o.label ?? o.texto, count: o.qtd ?? o.count }) : this._cfNorm(o)));
+        return (this._cfCache[key] = { q: this.q, items, many: false });
+      }
+      if (Array.isArray(c.options)) {
+        items = c.options.map(o => this._cfNorm(o));
+        if (!this.remote && items.some(i => i.count == null)) {
+          let rows = this.data; if (this.q) { const txt = this._texts(), q = this.q; rows = rows.filter(r => txt(r).includes(q)); }
+          const pr = this._cfPred(key); if (pr) rows = rows.filter(pr);
+          const { tx, rw } = contar(rows);
+          items.forEach(i => { if (i.count == null) i.count = tx.get(i.value) ?? rw.get(i.value) ?? 0; });
+        }
+        return { items, many: false };
+      }
+      let rows = this.remote ? (this._vr() ? (this._wrows || []).filter(Boolean) : this.data) : this.data;
+      if (!this.remote) {
+        if (this.q) { const txt = this._texts(), q = this.q; rows = rows.filter(r => txt(r).includes(q)); }
+        const pr = this._cfPred(key); if (pr) rows = rows.filter(pr);
+      }
+      const { tx } = contar(rows);
+      items = [...tx].map(([v, n]) => ({ value: v, label: v, count: n }));
+      many = items.length > 1000;
+      return { items, many };
+    },
+    _cfToggle(c, btn) {
+      const same = this._cfP && this._cfP.btn === btn;
+      this._cfClose();
+      if (!same && c) this._cfOpen(c, btn);
+    },
+    _cfOpen(c, btn) {
+      this._closeMenu(); this._cfT = null;
+      const key = String(c.dataIndex), name = c.header ?? c.dataIndex;
+      const sel = new Set(this._cf[key] || []);
+      const search = el('input', { type: 'search', class: 'r4-input r4-cf-search', 'aria-label': T('r4.grid.cfSearch', 0, 'Buscar valor...') });
+      search.placeholder = T('r4.grid.cfSearch', 0, 'Buscar valor...');
+      const bAll = el('button', { type: 'button', class: 'r4-btn r4-cf-btn', 'data-k': 'all', text: T('r4.grid.cfAll', 0, 'Selecionar todos') });
+      const bClr = el('button', { type: 'button', class: 'r4-btn r4-cf-btn', 'data-k': 'clear', text: T('r4.grid.cfClear', 0, 'Limpar') });
+      const bOrd = el('button', { type: 'button', class: 'r4-btn r4-cf-btn', 'data-k': 'ord' });
+      const list = el('div', { class: 'r4-cf-list', role: 'group', 'aria-label': T('r4.grid.cfTitle', { col: name }, 'Filtrar valores de ' + name) });
+      const foot = el('div', { class: 'r4-cf-foot', 'aria-live': 'polite' });
+      const m = el('div', { class: 'r4-grid-menu r4-cmp r4-cf', role: 'dialog', 'aria-label': T('r4.grid.cfTitle', { col: name }, 'Filtrar valores de ' + name) },
+        [el('div', { class: 'r4-cf-title', text: String(name) }), search, el('div', { class: 'r4-cf-tools' }, [bAll, bClr, bOrd]), list, foot]);
+      const p = this._cfP = { c, key, btn, el: m, sel, search, list, foot, bOrd, items: [], many: false, order: 'count', loading: true, error: null, t: null };
+      const apply = () => { clearTimeout(p.t); p.t = setTimeout(() => { p.t = null; this._cfCommit(); }, 150); };
+      p.apply = apply;
+      m.addEventListener('change', ev => {
+        const cb = ev.target; if (cb.type !== 'checkbox' || cb._v === undefined) return;
+        cb.checked ? sel.add(cb._v) : sel.delete(cb._v);
+        this._cfFoot(); apply();
+      });
+      m.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-k]'); if (!b) return;
+        const k = b.getAttribute('data-k');
+        if (k === 'all') this._cfVisible(p).forEach(i => sel.add(i.value));
+        else if (k === 'clear') sel.clear();
+        else if (k === 'ord') p.order = p.order === 'count' ? 'alpha' : 'count';
+        this._cfList(); apply();
+      });
+      search.addEventListener('input', () => this._cfList());
+      m.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); this._cfClose(true); return; }
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          const f = [...m.querySelectorAll('input,button')].filter(x => !x.disabled), i = f.indexOf(document.activeElement);
+          if (document.activeElement === search && ev.key === 'ArrowUp') return;
+          ev.preventDefault(); const n = f[Math.max(0, Math.min(f.length - 1, i + (ev.key === 'ArrowDown' ? 1 : -1)))]; n && n.focus();
+        }
+      });
+      m.addEventListener('focusout', ev => { if (ev.relatedTarget && !m.contains(ev.relatedTarget) && ev.relatedTarget !== btn) this._cfClose(); });
+      document.body.append(m);
+      btn.setAttribute('aria-expanded', 'true');
+      p.out = ev => { if (!m.contains(ev.target) && !btn.contains(ev.target)) this._cfClose(); };
+      p.rs = () => this._cfClose();
+      document.addEventListener('mousedown', p.out, true);
+      window.addEventListener('resize', p.rs);
+      this.scroller.addEventListener('scroll', p.rs, { passive: true });
+      this._cfList(); this._cfPlace();
+      search.focus();
+      this._cfItems(c).then(r => {
+        if (this._cfP !== p) return;
+        p.items = r.items; p.many = r.many; p.loading = false; this._cfList(); this._cfPlace();
+      }, e => { if (this._cfP !== p) return; p.loading = false; p.error = e; this._cfList(); });
+    },
+    _cfVisible(p) {
+      const q = p.search.value.trim().toLowerCase();
+      let l = p.items;
+      if (p.many && !q) return [];
+      if (q) l = l.filter(i => i.label.toLowerCase().includes(q) || i.value.toLowerCase().includes(q));
+      l = l.slice().sort(p.order === 'alpha' ? (a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }) : (a, b) => (b.count || 0) - (a.count || 0) || a.label.localeCompare(b.label, undefined, { numeric: true }));
+      return l.slice(0, p.many ? 200 : 1000);
+    },
+    _cfList() {
+      const p = this._cfP; if (!p) return;
+      p.bOrd.textContent = p.order === 'count' ? T('r4.grid.cfSortCount', 0, 'Por quantidade') : T('r4.grid.cfSortAlpha', 0, 'A–Z');
+      const f = document.createDocumentFragment();
+      if (p.loading) f.append(el('div', { class: 'r4-cf-msg', text: T('r4.loading', 0, 'Carregando...') }));
+      else if (p.error) f.append(el('div', { class: 'r4-cf-msg r4-cf-err', role: 'alert', text: T('r4.grid.cfFail', 0, 'Falha ao carregar valores') + (p.error.message ? ' (' + p.error.message + ')' : '') }));
+      else {
+        if (p.many && !p.search.value.trim()) f.append(el('div', { class: 'r4-cf-msg', text: T('r4.grid.cfMany', { n: R4.util.number(p.items.length, 0) }, 'Muitos valores (' + R4.util.number(p.items.length, 0) + '): use a busca acima.') }));
+        this._cfVisible(p).forEach(i => {
+          const cb = el('input', { type: 'checkbox' }); cb._v = i.value; cb.checked = p.sel.has(i.value);
+          f.append(el('label', { class: 'r4-grid-mi r4-cf-item' }, [cb, el('span', { class: 'r4-cf-val', text: i.value === '' && i.label === '' ? T('r4.grid.cfEmpty', 0, '(vazio)') : i.label }), i.count != null ? el('span', { class: 'r4-cf-n', text: R4.util.number(i.count, 0) }) : null]));
+        });
+        if (!f.childNodes.length) f.append(el('div', { class: 'r4-cf-msg', text: T('r4.empty', 0, 'Nenhum registro.') }));
+      }
+      p.list.replaceChildren(f);
+      this._cfFoot();
+    },
+    _cfFoot() {
+      const p = this._cfP; if (!p) return;
+      const n = p.sel.size, mm = p.items.length;
+      p.foot.textContent = T('r4.grid.cfCount', { n, m: mm }, n + ' de ' + mm + ' selecionados');
+    },
+    _cfPlace() {
+      const p = this._cfP; if (!p) return;
+      const r = p.btn.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight, m = p.el;
+      m.style.maxHeight = Math.min(vh - 16, Math.round(vh * 0.7)) + 'px';
+      const w = m.offsetWidth, h = m.offsetHeight;
+      let top = r.bottom + 4; if (top + h > vh - 8) top = Math.max(8, r.top - h - 4);
+      m.style.left = Math.max(8, Math.min(r.left, vw - w - 8)) + 'px'; m.style.top = Math.round(top) + 'px';
+    },
+    /** Grava a seleção do popover no estado do grid e refiltra (nenhum marcado = sem filtro). */
+    _cfCommit() {
+      const p = this._cfP; if (!p) return;
+      const v = [...p.sel];
+      if (v.length) this._cf[p.key] = v; else delete this._cf[p.key];
+      this._cfApply();
+    },
+    _cfClose(refocus) {
+      const p = this._cfP; if (!p) return;
+      this._cfP = null;
+      if (p.t) { clearTimeout(p.t); this._cfP = p; this._cfCommit(); this._cfP = null; }
+      document.removeEventListener('mousedown', p.out, true);
+      window.removeEventListener('resize', p.rs);
+      this.scroller && this.scroller.removeEventListener('scroll', p.rs);
+      p.el.remove();
+      p.btn.setAttribute('aria-expanded', 'false');
+      if (refocus && p.btn.isConnected) p.btn.focus();
+    },
+
     /* ---------- exportar / imprimir (usa R4.files, carregado depois deste arquivo) ---------- */
     _files() { if (!R4.files) throw new Error('R4.files não carregado: inclua libr4/files.js'); return R4.files; },
     _exportCols() {
@@ -1273,7 +1512,7 @@
       this._raf && cancelAnimationFrame(this._raf);
       this._ro && this._ro.disconnect();
       this._drag && this._drag();
-      this._closeMenu();
+      this._closeMenu(); this._cfClose();
       this._printFrame && this._printFrame.remove();
     }
   }, {
@@ -1304,6 +1543,9 @@
       { name: 'src / method / encrypt / params', type: 'string / string / boolean / object', default: "'' / 'GET' / false / null", desc: 'Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra "carregando"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo.' },
       { name: 'remote', type: 'boolean', default: 'false', desc: 'Paginação, ordenação e filtro no servidor: envia page (1…), size, sort, dir (asc|desc), q e lê {total, retorno}. Multi-coluna envia só o critério principal.' },
       { name: 'resizable / columnMenu', type: 'boolean', default: 'false', desc: 'Arrastar a borda do cabeçalho (ou Alt+←/→ no cabeçalho) muda a largura; menu "Colunas" mostra/oculta colunas.' },
+      { name: 'columnFilters', type: 'boolean', default: 'false', desc: 'Funil em cada cabeçalho: abre uma lista dos valores da coluna (com a quantidade de cada um) para marcar quais aparecem — como a legenda de um gráfico. Nenhum marcado = sem filtro; valores da mesma coluna somam (OU) e colunas diferentes se combinam (E). Local: valores distintos da própria coluna sobre o que sobra da busca e dos outros filtros (até 1000; acima disso só pela busca do popover). Remoto: envia filtro[coluna][]=valor (um por valor) e busca os valores em coluna.optionsUrl. Atalho: Alt+↓ no cabeçalho. Atributo: column-filters.' },
+      { name: 'coluna.filterValues / filterable / options / optionsUrl', type: 'boolean / boolean / Array / string', desc: 'filterValues: true liga o funil só nesta coluna (false desliga mesmo com columnFilters); filterable: false também desliga. options: lista fixa de valores (["pago","aberto"] ou [{value,label,count}]). optionsUrl (remoto): GET optionsUrl?col=<campo>[&q=<busca>] → {retorno:[{valor, qtd}]}, com cache por coluna enquanto a busca não muda. Em <r4-col>: filter-values, filterable, filter-options (JSON ou lista com vírgula), options-url.' },
+      { name: 'getColumnFilters() / setColumnFilter(campo, valores) / clearColumnFilters()', type: 'método', desc: 'Lê { campo: [valores] }, define (lista vazia remove) e limpa os filtros por valores; volta à página 1 e recarrega no modo remoto. Evento filterchange(grid, filtros).' },
       { name: 'exportable / exportName', type: "boolean / string", default: "false / 'dados'", desc: 'Botão "Exportar" (CSV, Excel, JSON, imprimir) com as linhas filtradas/ordenadas e colunas visíveis.' },
       { name: 'summaryLabel / loadingText / errorText', type: 'string', default: "'' / '' / ''", desc: 'Textos do rodapé e dos estados. Vazio = texto padrão no idioma atual (Total / Carregando... / Falha ao carregar.).' },
       { name: 'loadData(array) / getData() / getView()', type: 'método', desc: 'Substitui os dados / dados atuais (com edições) / linhas filtradas e ordenadas.' },
@@ -1316,11 +1558,11 @@
       { name: 'Teclado', type: 'role="grid"', desc: 'Setas movem a célula; Home/End início/fim da linha; Ctrl+Home/End primeira/última linha; PageUp/PageDown; Espaço seleciona; Enter edita/ativa (no cabeçalho ordena, Shift+Enter soma critério); F2 edita; Esc cancela edição.' },
       { name: 'HTML', type: '<r4-grid> / <r4-col>', desc: '<r4-grid selectable="multi" virtual remote exportable column-menu resizable src="..."> e <r4-col field header width min-width align format sortable hidden resizable editable options summary actions>.' }
     ],
-    events: ['rowclick', 'rowdblclick', 'load', 'loaderror', 'pagesizechange', 'selectionchange', 'sortchange', 'beforecellchange', 'cellchange', 'columnresize', 'columnchange', 'action', 'export']
+    events: ['rowclick', 'rowdblclick', 'load', 'loaderror', 'pagesizechange', 'selectionchange', 'sortchange', 'beforecellchange', 'cellchange', 'columnresize', 'columnchange', 'filterchange', 'action', 'export']
   });
   /** Lê as <r4-col> de um <r4-grid> (usado pelo gancho R4.declare('grid') registrado em files.js). */
   Grid.colsFromHost = function (host) {
-    const KNOWN = new Set(['field', 'header', 'width', 'min-width', 'align', 'sortable', 'format', 'hidden', 'resizable', 'editable', 'options', 'summary', 'actions', 'class', 'style', 'id']);
+    const KNOWN = new Set(['field', 'header', 'width', 'min-width', 'align', 'sortable', 'format', 'hidden', 'resizable', 'editable', 'options', 'summary', 'actions', 'class', 'style', 'id', 'filter-values', 'filterable', 'filter-options', 'options-url']);
     const json = (v, d) => { try { return JSON.parse(v); } catch (e) { return d; } };
     return [...host.children].filter(k => k.localName === 'r4-col').map(c => {
       const g = n => c.getAttribute(n), has = n => c.hasAttribute(n), on = n => has(n) && g(n) !== 'false';
@@ -1339,6 +1581,10 @@
         const v = g('options').trim(), opts = /^\[/.test(v) ? json(v, []) : v.split(',').map(s => s.trim()).filter(Boolean);
         cfg.editable = Object.assign(typeof cfg.editable === 'object' && cfg.editable ? cfg.editable : {}, { options: opts });
       }
+      if (has('filter-values')) cfg.filterValues = on('filter-values');
+      if (has('filterable')) cfg.filterable = on('filterable');
+      if (has('options-url')) cfg.optionsUrl = g('options-url');
+      if (has('filter-options')) { const v = g('filter-options').trim(); cfg.options = /^\[/.test(v) ? json(v, []) : v.split(',').map(x => x.trim()).filter(Boolean); }
       if (g('summary')) cfg.summary = g('summary');
       if (has('actions')) cfg.actions = json(g('actions'), []);
       for (const a of c.attributes) if (!KNOWN.has(a.name) && !/^(data-|aria-)/.test(a.name)) R4.warn && R4.warn('<r4-col>: atributo desconhecido "' + a.name + '"');
@@ -1482,7 +1728,7 @@
     cfg: { data: [{ id: 1, nome: 'Ana', uf: 'SP', valor: 1200 }, { id: 2, nome: 'Bruno', uf: 'RJ', valor: 830.5 }, { id: 3, nome: 'Carla', uf: 'SP', valor: 2210 }, { id: 4, nome: 'Davi', uf: 'MG', valor: 95 }],
       columns: [{ header: 'Nome', dataIndex: 'nome', editable: true }, { header: 'UF', dataIndex: 'uf', width: 80, editable: { options: ['SP', 'RJ', 'MG'] } },
         { header: 'Valor', dataIndex: 'valor', format: 'money', align: 'right', editable: 'number', summary: 'sum' }] },
-    controls: { selectable: ['', 'single', 'multi'], pageSize: 0, filter: true, striped: true, resizable: false, columnMenu: false, exportable: false, virtual: false, summaryLabel: '', emptyText: '' } });
+    controls: { selectable: ['', 'single', 'multi'], pageSize: 0, filter: true, columnFilters: false, striped: true, resizable: false, columnMenu: false, exportable: false, virtual: false, summaryLabel: '', emptyText: '' } });
   PG('treepanel', { html: '<r4-treepanel{attrs} style="height:180px">\n  <r4-node text="Frutas"><r4-node id="pg-a" text="Maçã"></r4-node><r4-node id="pg-b" text="Banana"></r4-node></r4-node>\n</r4-treepanel>',
     cfg: { nodes: [{ text: 'Frutas', children: [{ id: 'a', text: 'Maçã' }, { id: 'b', text: 'Banana' }] }] },
     controls: { filterable: true, placeholder: '' } });
