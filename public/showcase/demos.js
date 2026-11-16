@@ -69,7 +69,8 @@ window.R4Demos = {
           { header: 'Nome', dataIndex: 'nome' },
           { header: 'Preço', dataIndex: 'preco', align: 'right', renderer: v => R4.util.money(v) },
           { header: 'Estoque', dataIndex: 'estoque', align: 'right',
-            renderer: v => v < 20 ? '<b style="color:var(--r4-err)">' + v + '</b>' : v }
+            // string vira texto; para HTML use R4.html (cada ${} é escapado)
+            renderer: v => v < 20 ? R4.html`<b style="color:var(--r4-err)">${v}</b>` : v }
         ],
         listeners: { rowclick: (g, r) => out(r) } });
     } }

@@ -107,6 +107,8 @@
     'Violeta': { primary: '#7048e8', radius: 10 }
   };
 
+  // só presets próprios (nunca "__proto__", "constructor"... herdados de Object.prototype)
+  const hasPreset = n => typeof n === 'string' && Object.prototype.hasOwnProperty.call(presets, n) && presets[n] && typeof presets[n] === 'object';
   const defaults = () => ({ mode: 'light', primary: DEFAULT_PRIMARY, radius: 6, density: 'normal', font: '', preset: 'R4 Azul' });
   let state = defaults();
   let started = false;     // só mexe no DOM depois do primeiro set()/restauração
@@ -236,7 +238,7 @@
       const hit = Object.keys(presets).find(n => presets[n].primary === next.primary && presets[n].radius === next.radius);
       next.preset = hit || null;
     }
-    if (typeof cfg.preset === 'string' && presets[cfg.preset]) next.preset = cfg.preset;
+    if (typeof cfg.preset === 'string' && hasPreset(cfg.preset)) next.preset = cfg.preset;
     if (!changed && started) return api;
     state = next; started = true;
     watchSystem(); applyDom();
@@ -248,7 +250,7 @@
   }
 
   function preset(name) {
-    const p = presets[name];
+    const p = hasPreset(name) ? presets[name] : null;
     if (!p) { warn('R4.theme.preset: "' + name + '" não existe. Disponíveis: ' + Object.keys(presets).join(', ')); return api; }
     return set(Object.assign({}, p, { preset: name }), { reason: 'preset' });
   }
@@ -606,7 +608,7 @@
     group: 'Núcleo', title: 'R4.i18n / R4.t',
     description: 'Internacionalização: R4.t("chave", {params}) com interpolação {nome} e plural via Intl.PluralRules; dicionários pt-BR e en já trazem TODAS as strings fixas da lib sob r4.*; fallback para pt-BR; formatos de número, moeda e data por locale; atributo lang no <html>. No HTML: <r4-t key="r4.empty"></r4-t> ou r4-i18n="chave" em qualquer elemento (atualizam sozinhos ao trocar o idioma).',
     props: [
-      { name: "R4.t('chave', {params})", type: 'string', desc: "Interpola {nome}. Plural: mensagem {um:'{n} item', outros:'{n} itens'} escolhida pelo parâmetro n (ou count). Chave ausente → fallback pt-BR → a própria chave (com aviso)." },
+      { name: "R4.t('chave', {params})", type: 'string', desc: "Interpola {nome}. Plural: mensagem {um:'{n} item', outros:'{n} itens'} escolhida pelo parâmetro n (ou count). Chave ausente → fallback pt-BR → a própria chave (com aviso). Devolve TEXTO (params não são escapados): <r4-t>/r4-i18n usam textContent; se você concatenar em HTML, escape com R4.util.esc." },
       { name: "i18n.set('pt-BR' | 'en')", type: 'R4.i18n', desc: 'Troca o idioma: atualiza <html lang>, salva no localStorage, retraduz <r4-t>/r4-i18n e dispara onChange.' },
       { name: 'i18n.add(locale, mensagens)', type: 'R4.i18n', desc: "Adiciona/mescla mensagens (aceita objetos aninhados: {r4:{ok:'OK'}} → 'r4.ok')." },
       { name: 'i18n.locale', type: 'string', desc: 'Idioma atual (somente leitura). i18n.locales lista os disponíveis.' },

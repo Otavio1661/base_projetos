@@ -8,10 +8,17 @@ use Core\Controller as ctrl;
 /**
  * Endpoints de TESTE da vitrine (dados em public/showcase/vitrineData).
  * Só respondem com APP_DEBUG=true; em produção devolvem 404.
+ *
+ * Endurecimento (mesmo sendo só de teste, servem de modelo para APIs reais):
+ *  - cabeçalhos: nosniff, Cache-Control: no-store, CSP "default-src 'none'" (resposta é só JSON);
+ *  - corpo limitado a 1 MB (413), pacote cifrado {x,y,z} conferido antes de descriptografar (400);
+ *  - parâmetros GET só como texto (q[]=... não vira "Array" nem aviso PHP), com limites de tamanho;
+ *  - ordenação só por campo existente e escalar; JSON com < > & ' " escapados (JSON_HEX_*).
  */
 class VitrineApiController extends ctrl
 {
     private const DIR = __DIR__ . '/../../public/showcase/vitrineData/';
+    private const MAX_BODY = 1048576;   // 1 MB
 
     public function __construct()
     {
@@ -19,6 +26,43 @@ class VitrineApiController extends ctrl
             http_response_code(404);
             exit;
         }
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store, max-age=0');
+        header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
+        header('Referrer-Policy: no-referrer');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $tamanho = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $bruto = file_get_contents('php://input', false, null, 0, self::MAX_BODY + 1);
+            if ($tamanho > self::MAX_BODY || strlen((string)$bruto) > self::MAX_BODY) {
+                $this->json(['status' => 413, 'retorno' => 'Corpo da requisição grande demais (máx. 1 MB)'], 413);
+            }
+            $json = json_decode((string)$bruto, true);
+            if (is_array($json) && (isset($json['x']) || isset($json['y']) || isset($json['z'])) && !$this->pacoteValido($json)) {
+                $this->json(['status' => 400, 'retorno' => 'Pacote de criptografia inválido'], 400);
+            }
+        }
+    }
+
+    /** JSON com escape de < > & ' " (nada vira HTML mesmo se alguém servir isto como text/html). */
+    protected function json($data, $statusCode = 200)
+    {
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /** {x,y,z}: strings base64; salt de 16 bytes, IV de 12 bytes, dados com pelo menos a tag GCM (16). */
+    private function pacoteValido(array $p): bool
+    {
+        foreach (['x', 'y', 'z'] as $k) {
+            if (!isset($p[$k]) || !is_string($p[$k]) || strlen($p[$k]) > self::MAX_BODY) return false;
+        }
+        $x = base64_decode($p['x'], true);
+        $y = base64_decode($p['y'], true);
+        $z = base64_decode($p['z'], true);
+        return $x !== false && $y !== false && $z !== false && strlen($y) === 16 && strlen($z) === 12 && strlen($x) >= 16;
     }
 
     private function dados(string $nome): array
@@ -26,6 +70,13 @@ class VitrineApiController extends ctrl
         $arq = self::DIR . $nome . '.json';
         $json = is_file($arq) ? file_get_contents($arq) : '[]';
         return json_decode($json, true) ?: [];
+    }
+
+    /** Parâmetro GET como texto (array/ausente → ''), cortado em $max caracteres. */
+    private function texto(string $k, int $max = 100): string
+    {
+        $v = $_GET[$k] ?? '';
+        return is_string($v) ? mb_substr(trim($v), 0, $max) : '';
     }
 
     private function inteiro(string $k, int $padrao, int $min, int $max): int
@@ -49,20 +100,22 @@ class VitrineApiController extends ctrl
     public function clientes()
     {
         $rows = $this->dados('clientes');
-        $q = mb_strtolower(trim((string)($_GET['q'] ?? '')));
-        $status = (string)($_GET['status'] ?? '');
+        $q = mb_strtolower($this->texto('q'));
+        $status = $this->texto('status', 30);
 
         if ($q !== '' || $status !== '') {
             $rows = array_values(array_filter($rows, function ($r) use ($q, $status) {
-                if ($status !== '' && $r['status'] !== $status) return false;
-                return $q === '' || str_contains(mb_strtolower($r['nome'] . ' ' . $r['email'] . ' ' . $r['cidade']), $q);
+                if ($status !== '' && ($r['status'] ?? '') !== $status) return false;
+                $alvo = ($r['nome'] ?? '') . ' ' . ($r['email'] ?? '') . ' ' . ($r['cidade'] ?? '');
+                return $q === '' || str_contains(mb_strtolower((string)$alvo), $q);
             }));
         }
 
-        $sort = (string)($_GET['sort'] ?? '');
-        if ($sort !== '' && isset($rows[0][$sort])) {
-            $dir = ($_GET['dir'] ?? 'asc') === 'desc' ? -1 : 1;
-            usort($rows, fn($a, $b) => $dir * ($a[$sort] <=> $b[$sort]));
+        // só ordena por campo que existe e é escalar (nada de sort=__proto__ / sort[]=...)
+        $sort = $this->texto('sort', 40);
+        if ($sort !== '' && isset($rows[0]) && array_key_exists($sort, $rows[0]) && (is_scalar($rows[0][$sort]) || $rows[0][$sort] === null)) {
+            $dir = $this->texto('dir', 4) === 'desc' ? -1 : 1;
+            usort($rows, fn($a, $b) => $dir * (($a[$sort] ?? null) <=> ($b[$sort] ?? null)));
         }
 
         $total = count($rows);
@@ -93,11 +146,12 @@ class VitrineApiController extends ctrl
     public function cadastro()
     {
         $d = ctrl::getPost() ?? [];
+        $txt = fn($v) => is_string($v) ? trim($v) : '';
         $erros = [];
-        $nome = trim((string)($d['nome'] ?? ''));
-        $email = trim((string)($d['email'] ?? ''));
-        if ($nome === '' || mb_strlen($nome) < 3) $erros['nome'] = 'Informe o nome (mín. 3 letras).';
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $erros['email'] = 'E-mail inválido.';
+        $nome = $txt($d['nome'] ?? '');
+        $email = $txt($d['email'] ?? '');
+        if ($nome === '' || mb_strlen($nome) < 3 || mb_strlen($nome) > 120) $erros['nome'] = 'Informe o nome (de 3 a 120 letras).';
+        if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) $erros['email'] = 'E-mail inválido.';
         if ($erros) {
             $this->json(['status' => 422, 'retorno' => 'Dados inválidos', 'erros' => $erros], 422);
         }

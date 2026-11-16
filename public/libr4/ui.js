@@ -901,7 +901,9 @@
       try {
         const r = await fetchJson(this.src);
         if (this._dead) return this;
-        this.setItems(r); this.fire('load', this, this.items);
+        // dado de servidor nunca vira HTML: o campo html de cada evento é descartado (vale text/descricao)
+        this.setItems(rowsOf(r).map(it => (plain(it) && 'html' in it ? Object.assign({}, it, { html: undefined }) : it)));
+        this.fire('load', this, this.items);
       } catch (e) { !this._dead && this.fire('loaderror', this, e); }
       return this;
     },
@@ -910,8 +912,8 @@
     title: 'timeline', group: 'Interface',
     description: 'Linha do tempo vertical de eventos com data, ícone e cor. Aceita o formato de eventos.json (titulo, descricao, data).',
     props: [
-      { name: 'items', type: 'Array<{title|titulo, text|descricao, date|data, icon, variant, html}>', default: '[]', desc: 'Eventos. Em HTML: <r4-item title date icon variant>texto</r4-item>.' },
-      { name: 'src', type: 'string', default: "''", desc: 'URL JSON com os eventos.' },
+      { name: 'items', type: 'Array<{title|titulo, text|descricao, date|data, icon, variant, html}>', default: '[]', desc: 'Eventos. Em HTML: <r4-item title date icon variant>texto</r4-item>. html é HTML CONFIÁVEL (não use com dado de fora; prefira text).' },
+      { name: 'src', type: 'string', default: "''", desc: 'URL JSON com os eventos. Por segurança o campo html dos eventos vindos de src é ignorado (tudo vira texto).' },
       { name: 'order', type: "''|'asc'|'desc'", default: "''", desc: 'Ordena por data (vazio mantém a ordem recebida).' },
       { name: 'limit', type: 'number', default: '0', desc: 'Mostra só os N primeiros (0 = todos).' },
       { name: 'setItems(lista) / add(item) / reload()', type: 'método', desc: 'Atualizam a lista.' }
@@ -1227,8 +1229,8 @@
     return NT.wraps[pos];
   }
   function notify(arg, type) {
-    const o = plain(arg) ? Object.assign({}, arg) : { text: String(arg == null ? '' : arg) };
-    if (typeof type === 'string') o.type = type; else if (plain(type)) Object.assign(o, type);
+    const o = plain(arg) ? U.assign({}, arg) : { text: String(arg == null ? '' : arg) };   // U.assign ignora __proto__
+    if (typeof type === 'string') o.type = type; else if (plain(type)) U.assign(o, type);
     const v = variantOf(o.type || 'info'), cfg = NT.cfg;
     const pos = NPOS.includes(o.position) ? o.position : (NPOS.includes(cfg.position) ? cfg.position : 'top-right');
     const duration = o.duration != null ? num(o.duration, cfg.duration) : cfg.duration;

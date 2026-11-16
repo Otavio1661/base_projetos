@@ -172,7 +172,11 @@
   }
 
   /* ================= arquivos do usuário ================= */
-  const safeName = n => String(n ?? '').replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, '_').replace(/^[.\s]+/, '').slice(0, 150) || 'arquivo';
+  // nome de arquivo: sem caminho/controle e sem caracteres bidi invisíveis (ex.: U+202E faria "fdp.exe" parecer "exe.pdf")
+  // (faixas montadas por código para não deixar caracteres invisíveis no fonte: U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF)
+  const INVIS = [[0x200b, 0x200f], [0x202a, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]].map(([a, b]) => String.fromCharCode(a) + '-' + String.fromCharCode(b)).join('');
+  const BAD_NAME = new RegExp('[\\x00-\\x1f\\x7f-\\x9f<>:"/\\\\|?*' + INVIS + ']+', 'g');
+  const safeName = n => String(n ?? '').replace(BAD_NAME, '_').replace(/^[.\s_]+/, '').slice(0, 150) || 'arquivo';
   /** Baixa conteúdo (texto, bytes ou Blob) sem navegar: <a download> + URL temporária revogada em seguida. */
   function download(content, name, mime) {
     const blob = content instanceof Blob && !mime ? content
@@ -469,7 +473,8 @@
    * Lê a 1ª planilha (ou a indicada). Requer DOMParser e, para partes compactadas, DecompressionStream('deflate-raw').
    */
   async function parseXLSX(buf, opts) {
-    const o = Object.assign({ header: true, sheet: 0, maxSize: 50 * MB, maxUncompressed: 200 * MB, maxEntries: 2000, maxRows: 200000 }, opts);
+    const o = Object.assign({ header: true, sheet: 0, maxSize: 50 * MB, maxUncompressed: 200 * MB, maxEntries: 2000, maxRows: 200000, maxCells: 10000000 }, opts);
+    let cells = 0;   // células alocadas (inclui as vazias até a última coluna usada de cada linha)
     const u8 = buf instanceof Uint8Array ? buf : ArrayBuffer.isView(buf) ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) : new Uint8Array(buf);
     if (u8.length > o.maxSize) fail('Arquivo muito grande (' + bytes(u8.length) + '; máximo ' + bytes(o.maxSize) + ').');
     const z = zipIndex(u8, o), dec = new TextDecoder();
@@ -547,6 +552,8 @@
         }
         vals[ci] = val;
       }
+      // "A1 e XFD1" numa linha alocaria 16.384 células: limita o total para não estourar a memória
+      if ((cells += vals.length) > o.maxCells) fail('Planilha com células demais (máximo ' + o.maxCells + '; colunas muito distantes ou linhas demais).');
       for (let j = 0; j < vals.length; j++) if (vals[j] === undefined) vals[j] = null;
       grid[ri] = vals;
     }
@@ -574,7 +581,7 @@
       { name: 'csvSafe(texto)', type: 'string', desc: 'Proteção de fórmula para uma célula.' },
       { name: 'toJSON(linhas, {columns, space:2})', type: 'string', desc: 'JSON só com as colunas pedidas.' },
       { name: 'toXLSX(linhas, {columns, sheetName, dates:true, bytes:false})', type: 'Blob | Uint8Array', desc: 'Planilha .xlsx válida sem bibliotecas: cabeçalho em negrito e congelado, autofiltro, largura das colunas, números, booleanos, datas reais (dd/mm/aaaa) e moeda (format:"money"). Textos vão como texto (nunca fórmula).' },
-      { name: 'parseXLSX(buffer, {header:true, sheet:0, maxSize, maxUncompressed, maxEntries, maxRows})', type: 'Promise<Array>', desc: 'Lê a 1ª planilha (texto, números, booleanos, datas → "AAAA-MM-DD"). Limites contra "zip bomb" (padrão: 50 MB de arquivo, 200 MB descompactados). Requer navegador moderno (DecompressionStream: Chrome/Edge 103+, Firefox 113+, Safari 16.4+).' },
+      { name: 'parseXLSX(buffer, {header:true, sheet:0, maxSize, maxUncompressed, maxEntries, maxRows, maxCells})', type: 'Promise<Array>', desc: 'Lê a 1ª planilha (texto, números, booleanos, datas → "AAAA-MM-DD"). Limites contra "zip bomb" (padrão: 50 MB de arquivo, 200 MB descompactados, 200 mil linhas, 10 milhões de células); XML com DOCTYPE é recusado. Requer navegador moderno (DecompressionStream: Chrome/Edge 103+, Firefox 113+, Safari 16.4+).' },
       { name: 'download(conteúdo|Blob, nome, mime)', type: 'Blob', desc: 'Baixa sem navegar (link temporário + URL revogada). Nome é saneado.' },
       { name: 'pick({accept, multiple, maxSize})', type: 'Promise<File[]>', desc: 'Abre o seletor do sistema e valida extensão/tipo e tamanho; rejeita com mensagens em português (erro.errors).' },
       { name: 'validate(file, {accept, maxSize})', type: 'string|null', desc: 'Mensagem de erro ou null.' },

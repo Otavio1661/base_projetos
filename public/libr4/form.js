@@ -158,14 +158,54 @@
   }
   const numText = (n, d) => (n == null || isNaN(n) ? '' : Number(n).toLocaleString('pt-BR', d >= 0 ? { minimumFractionDigits: d, maximumFractionDigits: d } : { maximumFractionDigits: 10 }));
 
-  /* ---- pattern: string → RegExp (tamanho limitado, sem eval, com cache) ---- */
-  const MAX_PATTERN = 512, reCache = new Map();
+  /* ---- pattern: string → RegExp (tamanho limitado, sem eval, com cache, anti-ReDoS) ---- */
+  const MAX_PATTERN = 512, MAX_TEST = 5000, reCache = new Map();
+  /**
+   * Detecta quantificador repetitivo (*, +, {n,}, {n≥10} ou {n,m≥10}) aplicado a um grupo que já contém
+   * quantificador ilimitado — (a+)+, (\w*x)*, (a+){2,} — o formato clássico de backtracking
+   * catastrófico (ReDoS). Heurística: não pega alternâncias sobrepostas como (a|aa)+.
+   */
+  function nestedQuant(p) {
+    const stack = [];
+    let closed = null;   // flag "tem ilimitado dentro" do grupo que acabou de fechar (null = token anterior não foi ')')
+    for (let i = 0; i < p.length; i++) {
+      const c = p[i];
+      if (c === '\\') { i++; closed = null; continue; }
+      if (c === '[') {   // classe de caracteres: pula até o ] (respeitando escapes)
+        let j = i + 1; if (p[j] === '^') j++; if (p[j] === ']') j++;
+        while (j < p.length && p[j] !== ']') { if (p[j] === '\\') j++; j++; }
+        i = j; closed = null; continue;
+      }
+      if (c === '(') { stack.push(false); closed = null; continue; }
+      if (c === ')') {
+        const inner = stack.length ? stack.pop() : false;
+        if (inner && stack.length) stack[stack.length - 1] = true;
+        closed = inner; continue;
+      }
+      let q = null;   // 'u' = ilimitado, 'r' = repete muito (limitado), 'b' = limitado/opcional
+      if (c === '*' || c === '+') q = 'u';
+      else if (c === '?') q = 'b';
+      else if (c === '{') {
+        const m = /^\{(\d+)(,(\d*))?\}/.exec(p.slice(i));
+        if (m) { q = m[2] ? (m[3] === '' ? 'u' : +m[3] >= 10 ? 'r' : 'b') : +m[1] >= 10 ? 'r' : 'b'; i += m[0].length - 1; }
+      }
+      if (q) {
+        if (closed && (q === 'u' || q === 'r')) return true;
+        if (q === 'u' && stack.length) stack[stack.length - 1] = true;
+        if (p[i + 1] === '?' || p[i + 1] === '+') i++;   // preguiçoso/possessivo
+        closed = null; continue;
+      }
+      closed = null;
+    }
+    return false;
+  }
   function compilePattern(p) {
-    if (p instanceof RegExp) return p;
+    if (p instanceof RegExp) return p;   // RegExp passado por código é responsabilidade de quem escreveu
     p = String(p);
     if (reCache.has(p)) return reCache.get(p);
     let re = null;
     if (p.length > MAX_PATTERN) R4.warn('pattern ignorado: maior que ' + MAX_PATTERN + ' caracteres');
+    else if (nestedQuant(p)) R4.warn('pattern ignorado: quantificador aninhado (ex.: (a+)+) pode travar a página (ReDoS) — reescreva sem repetir um grupo que já repete: ' + p.slice(0, 60));
     else {
       try { re = new RegExp('^(?:' + p + ')$', 'u'); }
       catch (e) { try { re = new RegExp('^(?:' + p + ')$'); } catch (e2) { R4.warn('pattern inválido ignorado: ' + e2.message); } }
@@ -325,7 +365,11 @@
         if (this.minLength > 0 && len < this.minLength) return fmt(this._msg('minLength'), { n: this.minLength });
         if (this.maxLength > 0 && len > this.maxLength) return fmt(this._msg('maxLength'), { n: this.maxLength });
         if (this.email && !emailValid(v)) return this._msg('email');
-        if (this.pattern) { const re = compilePattern(this.pattern); if (re && !re.test(v)) return this.patternText || this._msg('pattern'); }
+        if (this.pattern) {
+          // valor gigante nem chega à regex (limita o custo de qualquer pattern)
+          if (String(v).length > MAX_TEST) return this.patternText || this._msg('pattern');
+          const re = compilePattern(this.pattern); if (re && !re.test(v)) return this.patternText || this._msg('pattern');
+        }
       }
       const t = this._typeCheck ? this._typeCheck(v) : true;
       if (t !== true) return t;
@@ -410,7 +454,7 @@
   const textDocs = [
     { name: 'placeholder', type: 'string', default: "''", desc: 'Dica dentro do campo.' },
     { name: 'minLength / maxLength', type: 'number', default: '0', desc: 'Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação.' },
-    { name: 'pattern / patternText', type: 'string', default: "''", desc: 'Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar.' },
+    { name: 'pattern / patternText', type: 'string', default: "''", desc: 'Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor.' },
     { name: 'email', type: 'boolean', default: 'false', desc: 'Exige e-mail válido.' },
     { name: 'match', type: 'string', default: "''", desc: 'Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha).' },
     { name: 'autocomplete', type: 'string', default: "''", desc: 'Atributo autocomplete do navegador.' }
@@ -1314,6 +1358,7 @@
   /** fetch próprio: distingue 2xx de 4xx/5xx sem perder o corpo JSON */
   async function send(url, { method = 'POST', data = null, encrypt = false, headers = null } = {}) {
     method = String(method || 'POST').toUpperCase();
+    url = R4.http.check(url);   // recusa javascript:/data:; outra origem → aviso (ou erro com R4.config.strictOrigins)
     let body;
     if (method === 'GET' || method === 'HEAD') {
       const q = new URLSearchParams();
@@ -1511,6 +1556,7 @@
         res = await send(this.action, { method: this.method, data: values, encrypt: bool(this.encrypt), headers: this.headers });
       } catch (e) {
         res = { ok: false, status: 0, data: null, error: e };
+        R4.warn('form: envio falhou — ' + (e && e.message));
       } finally {
         if (!this._destroyed) this._setBusy(false);
       }

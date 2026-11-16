@@ -74,7 +74,7 @@
     title: 'panel', description: 'Contêiner básico com título, barra de ferramentas, corpo (html ou items) e recolhimento.',
     props: [
       { name: 'title', type: 'string', default: "''", desc: 'Texto do cabeçalho.' },
-      { name: 'html', type: 'string', default: "''", desc: 'HTML do corpo.' },
+      { name: 'html', type: 'string', default: "''", desc: 'HTML do corpo — HTML CONFIÁVEL (não é escapado). Dado de fora: monte com R4.html`...${dado}...` ou R4.util.esc.' },
       { name: 'items', type: 'Array<cfg>', default: '[]', desc: 'Componentes filhos (xtype padrão: panel).' },
       { name: 'tbar', type: 'Array<cfg>', default: 'null', desc: 'Itens da toolbar superior.' },
       { name: 'collapsible / collapsed', type: 'boolean', default: 'false', desc: 'Permite recolher clicando no cabeçalho.' },
@@ -241,8 +241,9 @@
    *    existe no DOM; espaçadores em <tbody> próprios mantêm a altura total da rolagem;
    *  - ordenação estável com chaves pré-extraídas e cache (versão dos dados + critérios);
    *  - texto de busca por linha calculado uma vez por versão dos dados.
-   * Segurança: sem renderer o valor vai por textContent. renderer(valor, linha) devolve HTML e
-   * NÃO é escapado — quem escreve o renderer deve usar R4.util.esc nos dados.
+   * Segurança: sem renderer o valor vai por textContent. renderer(valor, linha) que devolve string
+   * também vira TEXTO; para HTML devolva R4.html`<b>${v}</b>` (escapa os dados) ou um Node.
+   * html:true na coluna mantém o modo antigo (string = HTML confiável, sem escape).
    */
   const COLL = new Intl.Collator('pt-BR', { numeric: true });
   const BUF = 8;   // linhas extras acima/abaixo da janela virtual
@@ -362,9 +363,10 @@
      * Mesmo formato do R4.http: corpo criptografado com R4.crypto quando encrypt=true.
      */
     async _request(url, data) {
+      url = R4.http.check(url);   // recusa javascript:/data:, avisa (ou bloqueia, com strictOrigins) outra origem
       const get = /^get$/i.test(this.method);
       const body = data == null || get ? undefined : JSON.stringify(this.encrypt ? await R4.crypto.encrypt(data) : data);
-      const res = await fetch(url, { method: this.method, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
+      const res = await fetch(url, { method: this.method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
       let r = null, bad = false;
       try { r = await res.json(); } catch (e) { bad = true; }
       if (!res.ok) {
@@ -572,8 +574,13 @@
         const c = cols[j], td = tr.cells[j + off];
         if (c.actions) { td.replaceChildren(...this._actionBtns(c, row)); continue; }
         const v = c.dataIndex != null && row != null ? row[c.dataIndex] : undefined;
-        if (c.renderer) td.innerHTML = c.renderer(v, row) ?? '';   // HTML de quem escreveu o renderer (não escapado)
-        else td.textContent = fmtVal(c, v);
+        if (c.renderer) {
+          // seguro por padrão: string/número viram TEXTO; HTML só se vier de R4.html/R4.raw (ou Node).
+          // html:true na coluna = modo antigo (a string do renderer é HTML confiável, sem escape).
+          const r = c.renderer(v, row);
+          if (c.html === true && typeof r === 'string') td.innerHTML = r;
+          else R4.util.setContent(td, r);
+        } else td.textContent = fmtVal(c, v);
       }
     },
     _actionBtns(c, row) {
@@ -1048,7 +1055,8 @@
     /** Imprime as linhas filtradas/ordenadas (colunas visíveis) por um iframe oculto — a página não navega. */
     print(title) {
       this._printFrame && this._printFrame.remove();
-      const f = el('iframe', { class: 'r4-print-frame', title: 'Impressão', 'aria-hidden': 'true', tabindex: '-1' });
+      // sandbox sem allow-scripts: mesmo que algo escapasse do esc(), nada executa no iframe de impressão
+      const f = el('iframe', { class: 'r4-print-frame', title: 'Impressão', 'aria-hidden': 'true', tabindex: '-1', sandbox: 'allow-same-origin allow-modals' });
       f.addEventListener('load', () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.error('[R4] grid.print:', e); } }, { once: true });
       f.srcdoc = this._printHtml(title);
       document.body.append(f);
@@ -1070,12 +1078,13 @@
     }
   }, {
     title: 'grid', group: 'Componentes',
-    description: 'Tabela de dados: ordenação multi-coluna (Shift+clique), filtro, paginação local ou no servidor (remote), virtualização para dezenas de milhares de linhas, seleção simples/múltipla com teclado, edição na célula, rodapé de totais, colunas redimensionáveis/ocultáveis, coluna de ações e exportação CSV/XLSX/JSON/impressão. Sem renderer o valor vai por textContent (seguro); renderer devolve HTML e NÃO é escapado — use R4.util.esc nos dados.',
+    description: 'Tabela de dados: ordenação multi-coluna (Shift+clique), filtro, paginação local ou no servidor (remote), virtualização para dezenas de milhares de linhas, seleção simples/múltipla com teclado, edição na célula, rodapé de totais, colunas redimensionáveis/ocultáveis, coluna de ações e exportação CSV/XLSX/JSON/impressão. Seguro por padrão: valores e strings devolvidas pelo renderer vão como texto; HTML só com R4.html`...${v}...` (escapa os dados) ou R4.raw.',
     props: [
       { name: 'columns', type: 'Array<string | coluna>', default: '[]', desc: 'Colunas. Vazio = automáticas a partir das chaves do primeiro registro.' },
       { name: 'coluna.header / dataIndex', type: 'string', desc: 'Título e campo do registro.' },
       { name: 'coluna.format', type: "'money'|'number'|'date'|'bytes'|'bool'|'upper'", desc: 'Formata o valor (R4.formats) — também no rodapé e na impressão. Exportação CSV/XLSX/JSON leva o valor bruto (XLSX aplica o formato de célula).' },
-      { name: 'coluna.renderer', type: 'function(valor, linha) → HTML', desc: 'HTML livre na célula. NÃO é escapado: escape os dados com R4.util.esc. Sem renderer o texto vai por textContent.' },
+      { name: 'coluna.renderer', type: 'function(valor, linha) → texto | R4.html | Node', desc: 'Conteúdo da célula. String/número viram TEXTO (seguro). Para HTML devolva R4.html`<b>${valor}</b>` (cada ${} é escapado) ou um elemento DOM.' },
+      { name: 'coluna.html', type: 'boolean', default: 'false', desc: 'Modo antigo: true faz a string do renderer ser HTML CONFIÁVEL, sem escape (só use se o renderer escapar tudo com R4.util.esc).' },
       { name: 'coluna.align / width / minWidth', type: "'left'|'center'|'right' / number / number", desc: 'Alinhamento e larguras em px.' },
       { name: 'coluna.sortable / hidden / resizable', type: 'boolean', desc: 'sortable:false não ordena; hidden começa oculta (volta pelo menu de colunas); resizable:false impede arrastar.' },
       { name: 'coluna.editable', type: "true | 'number' | 'date' | 'text' | {options:[...], type}", desc: 'Edição na célula: duplo clique, Enter ou F2 abre; Enter/Tab/sair confirma; Esc cancela. options aceita valores ou {value,text}/{valor,texto}.' },
@@ -1169,7 +1178,7 @@
   }, {
     title: 'window', description: 'Janela modal com título, corpo, botões no rodapé. Fecha com Esc, clique fora ou ×.',
     props: [
-      { name: 'title / html / items', type: 'mixed', desc: 'Conteúdo da janela.' },
+      { name: 'title / html / items', type: 'mixed', desc: 'Conteúdo da janela. title é texto; html é HTML CONFIÁVEL (escape dados com R4.util.esc ou use R4.html). Para mensagem com dado de fora use R4.msg.alert (escapa).' },
       { name: 'buttons', type: 'Array<{text,handler,variant,close}>', default: '[]', desc: 'Botões do rodapé; fecham a janela, exceto close:false.' },
       { name: 'width', type: 'number', default: '420', desc: 'Largura em px.' },
       { name: 'closeAction', type: "'destroy'|'hide'", default: "'destroy'", desc: 'hide mantém a janela para reabrir com show().' },

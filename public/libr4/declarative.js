@@ -13,7 +13,6 @@
  */
 (function (R4) {
   'use strict';
-  const { esc } = R4.util;
   document.documentElement.classList.add('r4-js');
 
   /* ---------- formatos para colunas: <r4-col format="money"> ---------- */
@@ -78,7 +77,7 @@
       align: c.getAttribute('align') || undefined, sortable: c.getAttribute('sortable') !== 'false' };
     if (c.hasAttribute('width')) cfg.width = +c.getAttribute('width');
     const f = c.getAttribute('format');
-    if (f) cfg.renderer = v => esc((R4.formats[f] || String)(v));
+    if (f) cfg.format = f;   // o grid formata e põe como texto (textContent)
     return cfg;
   };
   const nodeCfg = n => ({
@@ -103,6 +102,7 @@
       else if (/^(r4-|data-|aria-)/.test(a.name)) dom[a.name] = a.value;
       else {
         const k = camel(a.name);
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') { R4.warn('<' + host.localName + '>: atributo "' + a.name + '" ignorado'); continue; }
         if (!(k in defs) && !ALLOWED_ATTRS.has(k)) {
           const sg = suggest(k, Object.keys(defs));
           R4.warn('<' + host.localName + '>: atributo desconhecido "' + a.name + '"' + (sg ? ' — quis dizer "' + kebab(sg) + '"?' : ''));
@@ -164,12 +164,18 @@
     (styleEl ||= document.head.appendChild(R4.util.el('style', { id: 'r4-tags' }))).textContent = css;
   }
 
-  /** Ativa todas as tags <r4-*> e atributos r4-* dentro de `root`. */
+  /**
+   * Ativa todas as tags <r4-*> e atributos r4-* dentro de `root`.
+   * Nada dentro de um elemento com o atributo r4-ignore é montado nem executa r4-click: use-o em
+   * volta de conteúdo vindo de usuários/servidor (comentários, HTML de CMS) para que tags e
+   * atributos r4-* que venham nesse conteúdo fiquem inertes.
+   */
+  const ignored = n => !!(n.closest && n.closest('[r4-ignore]'));
   R4.scan = function (root = document) {
     const tags = Object.keys(R4.registry).filter(k => !R4.registry[k].meta.hidden).map(k => 'r4-' + k).join(',');
     ensureStyle(tags);
     checkTags(root);
-    [...root.querySelectorAll(tags)].forEach(h => { if (h.isConnected && !h.hasAttribute('r4-ready')) mount(h); });
+    [...root.querySelectorAll(tags)].forEach(h => { if (h.isConnected && !h.hasAttribute('r4-ready') && !ignored(h)) mount(h); });
     observeAnim(root);
   };
 
@@ -192,7 +198,12 @@
       R4.toast('Copiado!');
     },
     alert: a => R4.msg.alert('Aviso', a),
-    goto: a => { location.href = a; },
+    // só navega para URL relativa, #âncora, http(s), mailto ou tel — javascript:/data:/vbscript: são bloqueados
+    goto: a => {
+      const u = R4.util.safeUrl(a);
+      if (!u || /^blob:/i.test(u.replace(/[\u0000- ]/g, ''))) return R4.warn('goto bloqueado: URL insegura "' + String(a).slice(0, 60) + '"');
+      location.href = u;
+    },
     anim: (a, el) => R4.animate(el, a),
     toast: a => R4.toast(a)
   };
@@ -207,8 +218,8 @@
   };
 
   document.addEventListener('click', ev => {
-    const h = ev.target.closest('[r4-click]');
-    if (!h || h.disabled) return;
+    const h = ev.target.closest && ev.target.closest('[r4-click]');
+    if (!h || h.disabled || ignored(h)) return;
     const run = () => h.getAttribute('r4-click').split(';').forEach(part => {
       const i = part.indexOf(':'), name = (i < 0 ? part : part.slice(0, i)).trim(), arg = i < 0 ? '' : part.slice(i + 1).trim();
       const fn = R4.actions[name];
@@ -262,7 +273,9 @@
       { name: '<r4-window id title width>', type: 'html', desc: 'Nasce oculta; abra com r4-click="modal:#id". Filhos <r4-button> viram o rodapé.' },
       { name: '<r4-viewport>', type: 'html', desc: 'Filhos com region="north|west|center|east|south".' },
       { name: 'id', type: 'atributo', desc: 'Vira o id do componente: R4.get("id") e r4-click="...:#id".' },
-      { name: 'R4.scan(elemento)', type: 'método', desc: 'Ativa tags inseridas manualmente (automático via MutationObserver).' }
+      { name: 'R4.scan(elemento)', type: 'método', desc: 'Ativa tags inseridas manualmente (automático via MutationObserver; R4.config.autoScan = false desliga o automático).' },
+      { name: 'r4-ignore', type: 'atributo', desc: 'Segurança: dentro de um elemento com r4-ignore, tags <r4-*> não são montadas e r4-click não executa. Envolva com ele qualquer HTML vindo de usuários/servidor.' },
+      { name: 'conteúdo e atributo html', type: 'segurança', desc: 'O conteúdo das tags (e o atributo html) vira HTML: é HTML CONFIÁVEL. Dados de fora vão em atributos de texto (title, text, label...) escapados com R4.util.esc.' }
     ]
   });
   R4.module('actions', R4.actions, {
@@ -275,7 +288,8 @@
       { name: 'toggle:#id', type: 'ação', desc: 'Recolhe/expande panel ou mostra/oculta um elemento.' },
       { name: 'copy:texto  |  copy:#id', type: 'ação', desc: 'Copia para a área de transferência.' },
       { name: 'alert:texto  |  toast:texto', type: 'ação', desc: 'Diálogo ou aviso rápido.' },
-      { name: 'goto:url', type: 'ação', desc: 'Navega.' },
+      { name: 'goto:url', type: 'ação', desc: 'Navega. Só aceita URL relativa, #âncora, http(s), mailto e tel: javascript:, data: e vbscript: são bloqueados (aviso no console).' },
+      { name: 'valor vindo de dados', type: 'segurança', desc: 'Ao montar r4-click com dado dinâmico use R4.util.escArg(valor): escapa o HTML e tira ";" (que encadearia outra ação). Na coluna actions do grid, {campo} já é tratado.' },
       { name: 'anim:nome', type: 'ação', desc: 'Anima o próprio elemento (shake, pulse, bounce, flash...).' },
       { name: 'r4-confirm="texto"', type: 'atributo', desc: 'Pede confirmação antes de executar.' }
     ]
@@ -309,7 +323,7 @@
 
   /* ---------- auto ---------- */
   let queued = false;
-  const queue = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; R4.scan(document); }); };
+  const queue = () => { if (queued || R4.config.autoScan === false) return; queued = true; requestAnimationFrame(() => { queued = false; R4.scan(document); }); };
   R4.ready(() => {
     R4.scan(document);
     new MutationObserver(m => { if (m.some(x => x.addedNodes.length)) queue(); }).observe(document.body, { childList: true, subtree: true });

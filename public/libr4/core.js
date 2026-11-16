@@ -25,15 +25,91 @@
   };
   let seq = 0;
 
+  /* ---------- segurança: chaves e URLs ---------- */
+  // chaves que, copiadas de dados externos (JSON, atributos), trocariam protótipos
+  const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+  const safeKey = k => !BAD_KEYS.has(k);
+  const warn = m => console.warn('[R4] ' + m);
+  /**
+   * URL segura para navegar/baixar: relativa, #âncora, ?query, http(s), mailto, tel e blob.
+   * kind 'img' também aceita data:image/(png|jpeg|gif|webp|avif). Qualquer outro esquema
+   * (javascript:, vbscript:, data:text/html, file:...) devolve ''. Espaços/controle dentro do
+   * esquema (ex.: "java\tscript:") são considerados, como o navegador faria.
+   */
+  function safeUrl(u, kind) {
+    u = String(u ?? '').trim();
+    const t = u.replace(/[\u0000- \u007f-\u009f]/g, '');
+    if (!t) return '';
+    if (/^(https?|mailto|tel|blob):/i.test(t)) return u;
+    if (kind === 'img' && /^data:image\/(png|jpe?g|gif|webp|avif)[;,]/i.test(t)) return u;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return '';
+    return u;
+  }
+  const URL_ATTRS = new Set(['href', 'src', 'action', 'formaction', 'xlink:href', 'poster', 'data', 'srcset', 'background', 'ping']);
+  /**
+   * setAttribute com proteção: recusa handlers inline (on*) e URLs perigosas em href/src/action...
+   * Devolve true se gravou.
+   */
+  function safeAttr(e, k, v) {
+    const n = String(k).toLowerCase();
+    if (/^on/.test(n)) { warn('atributo "' + k + '" ignorado (handlers inline não são aceitos; use addEventListener ou r4-click)'); return false; }
+    if (n === 'srcdoc') { warn('atributo srcdoc ignorado'); return false; }
+    if (URL_ATTRS.has(n) && v !== '') {
+      const s = safeUrl(v, n === 'src' || n === 'poster' || n === 'srcset' ? 'img' : '');
+      if (!s) { warn('URL insegura recusada em ' + k + ': ' + String(v).slice(0, 60)); return false; }
+      v = s;
+    }
+    e.setAttribute(k, v === true ? '' : v);
+    return true;
+  }
+
+  /* ---------- HTML confiável: R4.raw / R4.html ---------- */
+  // Só instâncias criadas por R4.raw/R4.html valem como HTML; um JSON de API não consegue forjar isso.
+  class SafeHtml {
+    constructor(h) { this.html = String(h ?? ''); Object.freeze(this); }
+    toString() { return this.html; }
+  }
+  const isRaw = v => v instanceof SafeHtml;
+  const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /** Marca uma string como HTML confiável (escrito por você, nunca dado de fora). */
+  R4.raw = h => (isRaw(h) ? h : new SafeHtml(h));
+  /** Template que ESCAPA cada ${valor} (exceto os já marcados com R4.raw/R4.html; arrays são juntados). */
+  R4.html = (strings, ...vals) => {
+    const one = v => (isRaw(v) ? v.html : escHtml(v));
+    let out = strings[0];
+    vals.forEach((v, i) => { out += (Array.isArray(v) ? v.map(one).join('') : one(v)) + strings[i + 1]; });
+    return new SafeHtml(out);
+  };
+
   /* ---------- util ---------- */
   const util = {
     uid: (p = 'r4') => p + '-' + (++seq),
-    esc: s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+    esc: escHtml,
+    /** Escapa para usar como argumento de r4-click="acao:..." (tira ; e quebras que encadeariam outras ações). */
+    escArg: s => escHtml(String(s ?? '').replace(/[;\r\n]/g, ' ')),
+    safeUrl, safeAttr, isRaw,
+    /** Põe conteúdo num elemento: Node → anexa; R4.raw/R4.html → HTML; qualquer outra coisa → texto. */
+    setContent(e, v) {
+      if (v != null && v.nodeType) e.replaceChildren(v);
+      else if (isRaw(v)) e.innerHTML = v.html;
+      else e.textContent = v == null ? '' : String(v);
+      return e;
+    },
     debounce(fn, ms = 200) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; },
     isObj: v => v !== null && typeof v === 'object' && !Array.isArray(v),
+    /** Mescla recursiva; ignora __proto__/constructor/prototype (dados externos não poluem protótipos). */
     merge(a, b) {
-      for (const k in b) a[k] = util.isObj(b[k]) && util.isObj(a[k]) ? util.merge(a[k], b[k]) : b[k];
+      if (!b || typeof b !== 'object') return a;
+      for (const k of Object.keys(b)) {
+        if (!safeKey(k)) continue;
+        a[k] = util.isObj(b[k]) && util.isObj(a[k]) && Object.prototype.hasOwnProperty.call(a, k) ? util.merge(a[k], b[k]) : b[k];
+      }
       return a;
+    },
+    /** Object.assign que ignora __proto__/constructor/prototype. */
+    assign(t, ...srcs) {
+      srcs.forEach(s => { if (s && typeof s === 'object') for (const k of Object.keys(s)) if (safeKey(k)) t[k] = s[k]; });
+      return t;
     },
     bytes(n) {
       const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
@@ -46,7 +122,11 @@
       const m = typeof v === 'string' && /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(v);
       return (m ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(v)).toLocaleDateString('pt-BR', opts);
     },
-    /** Cria elemento: util.el('div', {class:'x', onclick:fn}, 'texto' | [filhos]) */
+    /**
+     * Cria elemento: util.el('div', {class:'x', onclick:fn}, 'texto' | [filhos])
+     * text → textContent (seguro). html → innerHTML: HTML CONFIÁVEL (nunca dado de fora; use R4.html).
+     * onXxx só aceita função (string vira handler inline e é recusada); href/src/action passam por safeUrl.
+     */
     el(tag, attrs, kids) {
       const e = document.createElement(tag);
       for (const k in (attrs || {})) {
@@ -57,7 +137,7 @@
         else if (k === 'text') e.textContent = v;
         else if (k === 'html') e.innerHTML = v;
         else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
-        else e.setAttribute(k, v === true ? '' : v);
+        else safeAttr(e, k, v);
       }
       [].concat(kids ?? []).forEach(c => c != null && e.append(c.nodeType ? c : document.createTextNode(c)));
       return e;
@@ -90,7 +170,8 @@
       const chain = [];
       for (let p = Object.getPrototypeOf(this); p && p !== Object.prototype; p = Object.getPrototypeOf(p))
         if (Object.prototype.hasOwnProperty.call(p, 'config')) chain.unshift(p.config);
-      Object.assign(this, ...chain.map(c => structuredCloneSafe(c)), cfg);
+      // util.assign ignora __proto__/constructor/prototype vindos de cfg (ex.: JSON de API ou atributos HTML)
+      util.assign(this, ...chain.map(c => structuredCloneSafe(c)), cfg);
       this.id = this.id || util.uid(this.xtype || 'cmp');
       R4.instances[this.id] = this;
       (this.listeners ? Object.entries(this.listeners) : []).forEach(([e, f]) => this.on(e, f));
@@ -103,7 +184,7 @@
       if (!host) throw new Error('R4: renderTo não encontrado: ' + target);
       this.el = this.build();
       this.el.id = this.id;
-      if (this.domAttrs) for (const k in this.domAttrs) this.el.setAttribute(k, this.domAttrs[k]);
+      if (this.domAttrs) for (const k of Object.keys(this.domAttrs)) safeAttr(this.el, k, this.domAttrs[k]);
       this.el.classList.add('r4-cmp');
       if (this.cls) this.el.classList.add(...String(this.cls).split(' '));
       if (this.style) Object.assign(this.el.style, this.style);
@@ -173,10 +254,14 @@
   R4.module('util', util, {
     title: 'R4.util', description: 'Funções utilitárias de uso geral: formatação pt-BR, debounce, merge profundo, criação de elementos DOM.',
     props: [
-      { name: 'el(tag, attrs, kids)', type: 'Element', desc: 'Cria um elemento DOM. attrs aceita class, text, html, style (objeto) e onXxx.' },
-      { name: 'esc(texto)', type: 'string', desc: 'Escapa HTML.' },
+      { name: 'el(tag, attrs, kids)', type: 'Element', desc: 'Cria um elemento DOM. attrs aceita class, text (texto seguro), html (HTML CONFIÁVEL — nunca dado de fora), style (objeto) e onXxx (só função). href/src/action passam por safeUrl; on* em texto é recusado.' },
+      { name: 'esc(texto)', type: 'string', desc: 'Escapa HTML (& < > " \'). Use em TODO dado que for concatenado em HTML.' },
+      { name: 'escArg(texto)', type: 'string', desc: 'Escapa para r4-click="acao:..." (também tira ; e quebras de linha, que encadeariam outras ações).' },
+      { name: 'R4.html`<b>${valor}</b>`  /  R4.raw(html)', type: 'HTML confiável', desc: 'R4.html escapa cada ${valor} e devolve HTML marcado como confiável; R4.raw marca uma string sua como HTML. É o que renderer do grid precisa devolver para gerar HTML (string comum vira texto).' },
+      { name: 'safeUrl(url[, "img"])', type: 'string', desc: 'Devolve a URL se for relativa, #, http(s), mailto, tel ou blob (com "img": também data:image/png|jpeg|gif|webp|avif); senão "". Usado por goto:, href e src.' },
+      { name: 'setContent(el, valor)', type: 'Element', desc: 'Node → anexa; R4.html/R4.raw → HTML; qualquer outro valor → texto.' },
       { name: 'debounce(fn, ms)', type: 'function', desc: 'Atrasa chamadas repetidas.' },
-      { name: 'merge(a, b)', type: 'object', desc: 'Mescla objetos recursivamente.' },
+      { name: 'merge(a, b) / assign(alvo, ...fontes)', type: 'object', desc: 'Mescla recursiva / cópia rasa. Ambas ignoram __proto__, constructor e prototype (dados externos não poluem protótipos).' },
       { name: 'bytes(n)', type: 'string', desc: '2048 → "2.0 KB".' },
       { name: 'number(n, casas)', type: 'string', desc: 'Número no formato pt-BR.' },
       { name: 'money(n)', type: 'string', desc: 'Moeda BRL.' },

@@ -179,6 +179,7 @@ class HomeController extends ctrl
 - O frontend contém a libr4 (`public/libr4/net.js`, `R4.crypto`/`R4.http`) que criptografa payloads com AES-GCM e envia um objeto com chaves `{ x, y, z }`.
 - O backend usa `src/Utils/Decryption.php` para derivar a chave (PBKDF2) e descriptografar os dados.
 - A chave base está definida em `BASE_CRIPTOGRAFIA` no `.env` e é injetada nas views pelo `public/index.php`.
+- **Importante:** por ser injetada na página, a chave fica no navegador de todo visitante. A criptografia protege contra leitura passiva do tráfego/logs e ofusca o corpo, mas **não é segredo contra quem abre a página** e não substitui HTTPS nem validação no servidor. Com a chave vazia, fora de `localhost` a libr4 se recusa a cifrar. Detalhes em [`docs/SEGURANCA.md`](docs/SEGURANCA.md).
 
 --------------------------------------------------------------------------------
 
@@ -188,6 +189,8 @@ class HomeController extends ctrl
 - Em produção, defina `APP_DEBUG=false` no `.env` para suprimir mensagens detalhadas.
 - Evite passar dados sensíveis via `render()` sem validação — `render()` usa `extract()`.
 - Faça backup de `src/routes.php` antes de rodar os scripts de geração/remoção.
+- A vitrine (`/`, `/vitrine`) e a API de teste (`/vitrine/api/*`) só respondem com `APP_DEBUG=true`.
+- Modelo de ameaça, checklist de produção, CSP e a auditoria da libr4: [`docs/SEGURANCA.md`](docs/SEGURANCA.md). Testes: `node tools/testes-seguranca.js` (servidor em `:8087` e jsdom instalado).
 
 --------------------------------------------------------------------------------
 
@@ -227,3 +230,5 @@ Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-co
 **Layout:** use `<r4-div cols="3" gap="3">` (colunas) ou `<r4-div flex justify="between">` (flex) em vez de classes de grid; em telas pequenas as colunas empilham sozinhas. Erros de digitação (`pagesize`, `<r4-buton>`, `r4-click="toats:..."`) geram aviso no console com sugestão. Na vitrine, os componentes têm painel de propriedades ao vivo e botões de copiar.
 
 **Funções prontas:** todo componente também é função — `R4.grid('#tabela', linhas)` (colunas automáticas), `R4.button('#x', 'Salvar', fn)`, `R4.panel('#x', 'Título', html)`, `R4.window('Aviso', html)`, `R4.render('#x', html)`. Veja o grupo "Funções prontas" na vitrine.
+
+**Segurança (resumo — completo em [`docs/SEGURANCA.md`](docs/SEGURANCA.md)):** textos (`title`, `text`, `label`, células do grid, mensagens do servidor...) são sempre escapados. Parâmetros `html`, o conteúdo das tags `<r4-*>` e `R4.render` são **HTML confiável**: dado de fora vai com `R4.html\`<b>${valor}</b>\`` (escapa cada `${}`) ou `R4.util.esc`. No grid, `renderer` que devolve string vira **texto**; para HTML devolva `R4.html\`...\`` (ou use `html: true` na coluna para o modo antigo). `goto:` só navega para URL relativa/http(s)/mailto/tel; `R4.http` recusa `javascript:`/`data:` e avisa sobre outra origem (`R4.config.strictOrigins = true` bloqueia). Envolva HTML de usuário com `r4-ignore` para que tags/ações `r4-*` dentro dele fiquem inertes.

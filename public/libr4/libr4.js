@@ -5,6 +5,8 @@
  */
 (function () {
   var s = document.currentScript.src, base = s.replace(/libr4\.js.*$/, ''), q = (s.match(/\?.*$/) || [''])[0];
+  // vão para um document.write: aspas/< > nunca passam (a query só repete o ?v= do asset)
+  base = base.replace(/["'<>\s]/g, encodeURIComponent); q = q.replace(/[^\w.=&%?-]/g, '');
   ['core', 'net', 'components', 'declarative', 'quick', 'tabs', 'form', 'files', 'ui', 'chart', 'theme'].forEach(function (f) {
     document.write('<script src="' + base + f + '.js' + q + '"><\/script>');
   });

@@ -36,9 +36,19 @@ class Decryption
             }
 
             // Decodificar base64
+            // Os três campos precisam ser texto (evita TypeError com arrays vindos do JSON)
+            if (!is_string($encryptedData['x']) || !is_string($encryptedData['y']) || !is_string($encryptedData['z'])) {
+                throw new \Exception('Dados de criptografia inválidos');
+            }
+
             $encrypted = base64_decode($encryptedData['x']); // data
             $salt = base64_decode($encryptedData['y']);      // salt
             $iv = base64_decode($encryptedData['z']);        // iv
+
+            // GCM: IV de 12 bytes e tag de 16 (tag truncada enfraquece a autenticação)
+            if (strlen($iv) !== 12 || strlen($encrypted) < 17) {
+                throw new \Exception('Pacote de criptografia malformado');
+            }
 
             // Chave base (mesma usada no frontend)
             $baseKey = Config::BASE_CRIPTOGRAFIA;
@@ -67,7 +77,7 @@ class Decryption
             // Retornar dados decodificados
             return json_decode($decrypted, true);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log('Erro na descriptografia: ' . $e->getMessage());
             return null;
         }
@@ -126,7 +136,7 @@ class Decryption
                 'z' => base64_encode($iv)         // iv
             ];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log('Erro na criptografia: ' . $e->getMessage());
             return null;
         }

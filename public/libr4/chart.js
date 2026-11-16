@@ -38,8 +38,13 @@
   const estW = s => String(s).length * 6.2 + 2;                          // largura estimada de texto de 11px
   const cut = (s, max) => { s = String(s); return s.length > max ? s.slice(0, Math.max(1, max - 1)) + '…' : s; };
   const humanize = k => String(k).replace(/[_-]+/g, ' ').replace(/^./, m => m.toUpperCase());
-  /** Aceita só cores simples (sem url(), ;, {}): vira valor de propriedade CSS, nunca HTML. */
-  const cssColor = c => (typeof c === 'string' && c.trim() && c.length < 80 && !/url\(|expression|[;{}\\<>]/i.test(c) ? c.trim() : '');
+  /**
+   * Aceita só cores (allowlist): #hex, nome (red, rebeccapurple), var(--x) e as funções de cor
+   * rgb/hsl/hwb/lab/lch/oklab/oklch/color com números. Qualquer outra coisa (url(), image-set(),
+   * cross-fade(), ';', comentários) é recusada: a cor vai para style="fill:..." / background.
+   */
+  const COLOR_RE = /^(#[0-9a-f]{3,8}|[a-z]{3,24}|var\(--[a-z0-9_-]{1,40}\)|(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([a-z0-9\s.,%+\-/]{1,60}\))$/i;
+  const cssColor = c => (typeof c === 'string' && c.length < 80 && COLOR_RE.test(c.trim()) ? c.trim() : '');
   const ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/;
   const isDate = v => typeof v === 'string' && ISO.test(v) && +v.slice(5, 7) >= 1 && +v.slice(5, 7) <= 12;
 

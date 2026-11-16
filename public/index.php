@@ -4,6 +4,11 @@ require __DIR__ . '/../src/Env.php';
 
 use App\Config;
 
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure' => !empty($_SERVER['HTTPS']),
+]);
 session_start();
 
 // Configurar exibição de erros baseado em APP_DEBUG
@@ -39,7 +44,8 @@ $GLOBALS['asset'] = 'asset';
  */
 function injectCryptoConfig($content)
 {
-    $cryptoScript = '<script>window.BASE_CRIPTOGRAFIA = "' . Config::BASE_CRIPTOGRAFIA . '";</script>';
+    // json_encode com HEX_* impede que a chave feche o <script> ou injete HTML
+    $cryptoScript = '<script>window.BASE_CRIPTOGRAFIA = ' . json_encode((string) Config::BASE_CRIPTOGRAFIA, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';</script>';
     return str_replace('</head>', $cryptoScript . "\n</head>", $content);
 }
 
