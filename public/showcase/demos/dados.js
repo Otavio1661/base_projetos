@@ -10,7 +10,7 @@
 <p class="r4-muted">Clique no funil de uma coluna: a lista mostra os valores que existem nela, com a quantidade. Marque um ou mais (OU na mesma coluna, E entre colunas); nenhum marcado = tudo. As quantidades já descontam a busca e os outros filtros. Alt+↓ no cabeçalho abre pelo teclado.</p>
 <r4-grid src="${url('clientes')}" page-size="10" page-size-selector filter column-filters></r4-grid>` },
     { title: 'JS: setColumnFilter(), getColumnFilters(), evento filterchange e options fixas', fn(el, out) {
-      const g = R4.grid(el, [], { src: url('clientes'), pageSize: 8, columnFilters: true, filter: true, columns: ['nome', 'cidade', { header: 'Status', dataIndex: 'status', options: ['ativo', 'inativo', 'pendente'] }, 'uf'] });
+      const g = R4.grid(el, [], { src: VitrineData.url('clientes'), pageSize: 8, columnFilters: true, filter: true, columns: ['nome', 'cidade', { header: 'Status', dataIndex: 'status', options: ['ativo', 'inativo', 'pendente'] }, 'uf'] });
       g.on('filterchange', (_, f) => out(JSON.stringify(f)));
       const bar = document.createElement('div'); bar.className = 'r4-row'; el.prepend(bar);
       R4.button(bar, 'Só pendentes', () => g.setColumnFilter('status', ['pendente']));
@@ -20,7 +20,7 @@
 <p class="r4-muted">Digite "r" no filtro: as células que casaram (nome <em>e</em> cidade, por exemplo) ficam com fundo diferente. Troque as linhas por página no rodapé.</p>
 <r4-grid src="${url('clientes')}" page-size="10" page-size-selector filter exportable></r4-grid>` },
     { title: 'JS: pageSizes personalizado, evento pagesizechange e setPageSize()', fn(el, out) {
-      const g = R4.grid(el, { src: url('clientes'), pageSize: 5, pageSizeSelector: true, pageSizes: [5, 15, 'all'], highlight: true });
+      const g = R4.grid(el, { src: VitrineData.url('clientes'), pageSize: 5, pageSizeSelector: true, pageSizes: [5, 15, 'all'], highlight: true });
       g.on('pagesizechange', (_g, n) => out('pagesizechange → ' + (n || 'todos')));
       out('Use o seletor ou chame g.setPageSize(15). highlight:false desliga a marcação da busca.');
     } },
