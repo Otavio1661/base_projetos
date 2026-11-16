@@ -23,7 +23,8 @@
 .r4-ts-modes .r4-ts-btn{border-radius:0;margin-left:-1px;gap:6px}
 .r4-ts-modes .r4-ts-btn:first-child{border-radius:var(--r4-radius) 0 0 var(--r4-radius);margin-left:0}
 .r4-ts-modes .r4-ts-btn:last-child{border-radius:0 var(--r4-radius) var(--r4-radius) 0}
-.r4-ts-btn[aria-pressed="true"]{background:var(--r4-acc);border-color:var(--r4-acc);color:var(--r4-acc-txt);position:relative;z-index:1}
+/* a borda do selecionado é a MESMA dos outros (só o fundo muda): com borda na cor de destaque o bloco parecia 1-2 px maior, por contraste, embora medisse igual */
+.r4-ts-btn[aria-pressed="true"]{background:var(--r4-acc);border-color:var(--r4-line);color:var(--r4-acc-txt);position:relative;z-index:1}
 .r4-ts-btn[aria-pressed="true"]:hover:not(:disabled){background:var(--r4-acc);filter:brightness(1.1)}
 .r4-ts-ico{font-size:1.05em;line-height:1}
 .r4-ts-field{display:flex;flex-direction:column;gap:4px}

@@ -634,5 +634,174 @@
       g.destroy();
       g.setFilter('x');
     });
+
+    /* ======== destaque da busca (r4-hit) ======== */
+    const hits = g => linhas(g).map(tr => [...tr.cells].map((td, i) => td.classList.contains('r4-hit') ? i : -1).filter(i => i >= 0));
+    const RC = () => [{ id: 1, nome: 'Rafaela', cidade: 'Recife' }, { id: 2, nome: 'Zeca', cidade: 'Recife' }, { id: 3, nome: 'Tiago', cidade: 'Natal' }];
+
+    test('destaque: buscar "r" marca nome e cidade de Rafaela, só a cidade de Zeca; limpar o filtro tira as marcas', t => {
+      const g = t.create({ xtype: 'grid', data: RC(), columns: ['nome', 'cidade'] });
+      assert.deepEq(hits(g), [[], [], []], 'sem filtro: nada marcado');
+      g.setFilter('r');
+      assert.eq(linhas(g).length, 2, 'Tiago/Natal não casa');
+      assert.deepEq(hits(g), [[0, 1], [1]], 'Rafaela: nome e cidade; Zeca: só a cidade');
+      g.setFilter('REC');
+      assert.deepEq(hits(g), [[1], [1]], 'sem diferença de maiúsculas');
+      g.setFilter('');
+      assert.deepEq(hits(g), [[], [], []], 'filtro limpo: marcas somem');
+    });
+
+    test('destaque: usa o texto exibido (renderer) e o valor bruto; highlight=false desliga; coluna de ações nunca marca', t => {
+      const g = t.create({ xtype: 'grid', data: [{ id: 1, nome: 'Ana', cod: 'x1' }, { id: 2, nome: 'Bia', cod: 'x2' }],
+        columns: [{ dataIndex: 'nome', renderer: v => v.toUpperCase() }, { dataIndex: 'cod', renderer: () => '—' }, { actions: [{ text: 'Ana' }] }] });
+      g.setFilter('ana');
+      assert.eq(linhas(g).length, 1);
+      assert.deepEq(hits(g), [[0]], 'texto exibido (ANA) casa; o botão "Ana" da coluna de ações não marca');
+      g.setFilter('x1');
+      assert.deepEq(hits(g), [[1]], 'o renderer mostra "—", mas o valor bruto (x1) casou');
+      const h = t.create({ xtype: 'grid', data: RC(), columns: ['nome', 'cidade'], highlight: false });
+      h.setFilter('r');
+      assert.deepEq(hits(h), [[], []], 'highlight:false: filtra mas não marca');
+    });
+
+    test('destaque: padrão true e atributo HTML highlight="false"', t => {
+      assert.eq(t.create({ xtype: 'grid', data: RC(), columns: ['nome'] }).highlight, true);
+      t.html('<r4-grid id="g-hl-off" highlight="false"></r4-grid>');
+      assert.eq(R4.get('g-hl-off').highlight, false);
+    });
+
+    test('destaque: virtualizado reaproveita <tr> — marca some quando a célula deixa de casar e vale depois de rolar', async t => {
+      const dados = Array.from({ length: 3000 }, (_, i) => ({ id: i + 1, nome: 'Linha ' + (i + 1), cidade: i % 2 ? 'Natal' : 'Recife' }));
+      const g = t.create({ xtype: 'grid', data: dados, columns: ['id', 'nome', 'cidade'], virtual: true, height: 300 });
+      g.setFilter('recife');
+      let termo = 'recife';
+      const ok = () => linhas(g).every(tr => [...tr.cells].every(td => td.classList.contains('r4-hit') === td.textContent.toLowerCase().includes(termo)));
+      assert.ok(linhas(g).length > 3 && ok(), 'marcas coerentes na primeira janela');
+      assert.ok(hits(g).every(h => h.length === 1 && h[0] === 2), 'só a coluna cidade');
+      g.scroller.scrollTop = 20000;
+      await t.waitFor(() => +col(g, 0)[0] > 100 && ok(), 3000, 'depois de rolar');
+      termo = '7'; g.setFilter('7');
+      await t.waitFor(() => linhas(g).length > 0 && ok(), 3000, 'filtro novo reaproveitando linhas');
+      assert.ok(linhas(g).some(tr => tr.querySelector('.r4-hit')), 'há marcas');
+      g.setFilter('');
+      assert.eq(g.el.querySelectorAll('.r4-hit').length, 0, 'tudo limpo');
+    });
+
+    test('destaque: modo remoto marca no cliente o que o servidor devolveu', async t => {
+      t.mockFetch({ '/api/g-hit': () => ({ body: { status: 200, total: 2, retorno: [{ id: 1, nome: 'Rafaela', cidade: 'Recife' }, { id: 2, nome: 'Zeca', cidade: 'Recife' }] } }) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-hit', remote: true, pageSize: 10, columns: ['nome', 'cidade'] });
+      await t.waitFor(() => linhas(g).length === 2, 2000, 'carregou');
+      g.q = 'r'; g._update(false);
+      assert.deepEq(hits(g), [[0, 1], [1]]);
+    });
+
+    /* ======== seletor de linhas por página ======== */
+    const MUITOS = n => Array.from({ length: n }, (_, i) => ({ id: i + 1, nome: 'Item ' + (i + 1) }));
+    const sel = g => g.pager.querySelector('select');
+
+    test('seletor: desligado por padrão (grids antigos não mudam); ligado mostra select acessível com 10, 30, 50, 100 e Todos', t => {
+      const g0 = t.create({ xtype: 'grid', data: MUITOS(25), pageSize: 10 });
+      assert.eq(g0.pager.querySelector('select'), null, 'sem pageSizeSelector: nada novo');
+      const g = t.create({ xtype: 'grid', data: MUITOS(120), pageSize: 10, pageSizeSelector: true });
+      const s = sel(g);
+      assert.ok(s, 'select existe');
+      assert.deepEq([...s.options].map(o => o.textContent), ['10', '30', '50', '100', 'Todos']);
+      assert.eq(s.value, '10');
+      const lb = g.pager.querySelector('label');
+      assert.eq(lb.getAttribute('for'), s.id, 'label ligado ao campo');
+      assert.eq(lb.textContent, 'Linhas por página');
+      assert.contains(g.pager, '1 / 12', 'paginação continua ao lado');
+      assert.eq(g.pager.querySelectorAll('button').length, 2, 'anterior/próxima intactos');
+    });
+
+    test('seletor: trocar o tamanho recalcula as páginas, mantém o registro do topo e dispara pagesizechange; Todos = sem paginação', t => {
+      const g = t.create({ xtype: 'grid', data: MUITOS(120), pageSize: 10, pageSizeSelector: true });
+      const evs = []; g.on('pagesizechange', (_g, n) => evs.push(n));
+      g.setPage(3);   // registros 31..40
+      const s = sel(g);
+      s.value = '30'; s.dispatchEvent(new Event('change', { bubbles: true }));
+      assert.eq(g.getPageSize(), 30);
+      assert.eq(linhas(g).length, 30);
+      assert.eq(col(g, 1)[0], 'Item 31', 'o registro que estava no topo continua visível');
+      assert.contains(g.pager, '2 / 4');
+      g.setPageSize(100);
+      assert.eq(linhas(g).length, 100);
+      assert.contains(g.pager, '1 / 2');
+      sel(g).value = 'all'; sel(g).dispatchEvent(new Event('change', { bubbles: true }));
+      assert.eq(g.getPageSize(), 0);
+      assert.eq(linhas(g).length, 120, 'todas as linhas');
+      assert.eq(g.pager.hidden, false, 'o seletor continua para voltar');
+      assert.eq(g.pager.querySelectorAll('button').length, 0, 'sem navegação em Todos');
+      assert.eq(sel(g).value, 'all');
+      g.setFilter('Item 11');
+      assert.eq(g.getPageSize(), 0, 'filtrar mantém o tamanho');
+      g.setPageSize(10);
+      assert.deepEq(evs, [30, 100, 0, 10]);
+      assert.eq(sel(g).value, '10');
+    });
+
+    test('seletor: o foco do select sobrevive à troca (o rodapé não recria o campo)', t => {
+      const g = t.create({ xtype: 'grid', data: MUITOS(60), pageSize: 10, pageSizeSelector: true });
+      const s = sel(g); s.focus();
+      s.value = '30'; s.dispatchEvent(new Event('change', { bubbles: true }));
+      assert.ok(sel(g) === s, 'mesmo elemento');
+      assert.eq(document.activeElement, s, 'foco mantido');
+    });
+
+    test('seletor: tamanho inicial fora da lista entra nela; pageSizes personalizado (array e texto "10,30,all")', t => {
+      const g = t.create({ xtype: 'grid', data: MUITOS(40), pageSize: 15, pageSizeSelector: true, pageSizes: [5, 15, 25] });
+      assert.deepEq([...sel(g).options].map(o => o.value), ['5', '15', '25']);
+      const h = t.create({ xtype: 'grid', data: MUITOS(40), pageSize: 20, pageSizeSelector: true, pageSizes: '10,30,all' });
+      assert.deepEq([...sel(h).options].map(o => o.value), ['10', '20', '30', 'all'], '20 (pageSize) foi acrescentado');
+      assert.eq(sel(h).value, '20');
+    });
+
+    test('seletor: tags HTML (page-size-selector page-sizes="10,30,all") e i18n (en)', t => {
+      t.html('<r4-grid id="g-ps-tag" page-size="10" page-size-selector page-sizes="10,30,all"></r4-grid>');
+      const g = R4.get('g-ps-tag');
+      assert.ok(g, 'montou');
+      g.loadData(MUITOS(45));
+      assert.deepEq([...sel(g).options].map(o => o.value), ['10', '30', 'all']);
+      assert.eq(linhas(g).length, 10);
+      const anterior = R4.i18n.locale;
+      t.cleanup(() => R4.i18n.set(anterior));
+      R4.i18n.set('en');
+      assert.eq(g.pager.querySelector('label').textContent, 'Rows per page');
+      assert.eq([...sel(g).options].at(-1).textContent, 'All');
+    });
+
+    test('seletor: modo remoto envia o size novo, recarrega e não oferece Todos por padrão', async t => {
+      const todos = MUITOS(95);
+      const m = t.mockFetch({ '/api/g-ps': req => {
+        const p = req.url.searchParams, page = +p.get('page'), size = +p.get('size');
+        return { body: { status: 200, total: 95, retorno: todos.slice((page - 1) * size, page * size) } };
+      } });
+      const g = t.create({ xtype: 'grid', src: '/api/g-ps', remote: true, pageSize: 10, pageSizeSelector: true, columns: ['id', 'nome'] });
+      await t.waitFor(() => linhas(g).length === 10, 2000, 'primeira página');
+      assert.deepEq([...sel(g).options].map(o => o.value), ['10', '30', '50', '100'], 'remoto: sem Todos');
+      g.setPage(2);   // 21..30
+      await t.waitFor(() => col(g, 0)[0] === '21', 2000, 'página 3');
+      sel(g).value = '50'; sel(g).dispatchEvent(new Event('change', { bubbles: true }));
+      await t.waitFor(() => linhas(g).length === 50, 2000, 'com 50');
+      const q = m.calls.at(-1).url.searchParams;
+      assert.eq(q.get('size'), '50');
+      assert.eq(q.get('page'), '1', 'o registro 21 está na página 1 de 50');
+      assert.contains(g.pager, '1 / 2');
+      const x = t.create({ xtype: 'grid', src: '/api/g-ps', remote: true, pageSize: 10, pageSizeSelector: true, pageSizes: [10, 0], columns: ['id'] });
+      await t.waitFor(() => linhas(x).length === 10, 2000, 'x');
+      x.setPageSize(0);
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('size') === '0', 2000, 'Todos enviado ao servidor (ele decide o limite)');
+    });
+
+    test('seletor: ordenar, filtrar e exportar mantêm o tamanho escolhido', t => {
+      const g = t.create({ xtype: 'grid', data: MUITOS(200), pageSize: 10, pageSizeSelector: true, exportable: true });
+      g.setPageSize(50);
+      g.sort('nome', 'desc');
+      assert.eq(g.getPageSize(), 50);
+      g.setFilter('Item 1');
+      assert.eq(g.getPageSize(), 50);
+      assert.ok(linhas(g).length <= 50);
+      assert.eq(sel(g).value, '50');
+    });
   });
 })();

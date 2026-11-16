@@ -34,7 +34,12 @@
     if (typeof d === 'boolean') return v === '' || v === 'true' || v === '1';
     if (typeof d === 'number') { const n = Number(v); return isNaN(n) ? d : n; }
     if (typeof d === 'string') return v;
-    if (d && typeof d === 'object') { try { return JSON.parse(v); } catch (e) { return d; } }
+    if (d && typeof d === 'object') {
+      try { return JSON.parse(v); } catch (e) {
+        // lista simples sem JSON (ex.: page-sizes="10,30,all"): o componente interpreta o texto
+        return Array.isArray(d) && /^[\w\s,]+$/.test(v) ? v : d;
+      }
+    }
     return v === '' || v === 'true' ? true : v === 'false' ? false : v;   // sem padrão conhecido
   }
   /* ---------- avisos úteis no console (erros de digitação) ---------- */

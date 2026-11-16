@@ -127,7 +127,8 @@ Exemplo de configuração presente no `composer.json`:
 
 ```json
 "scripts": {
-		"migration": "php core/Migration/Migration.php",
+		"make:migration": "php core/Migration/MakeMigration.php",
+		"migrate": "php core/Migration/RunMigration.php",
 		"controller": "php core/Generator/MakeController.php",
 		"model": "php core/Generator/MakeModel.php",
 		"middleware": "php core/Generator/MakeMiddleware.php",

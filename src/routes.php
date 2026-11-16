@@ -74,5 +74,33 @@ $router->post('/vitrine/api/prompt', 'VitrineApiController@prompt');
 $router->get('/vitrine/api/busca', 'VitrineApiController@busca');
 $router->get('/vitrine/api/sql-seguro', 'VitrineApiController@sqlSeguro');
 
+// ----------------------------------------------------------------------------------------------
+// Mini ERP de demonstração (/erp): dados fictícios em JSON + SQLite. Ver docs/ERP.md
+// Públicas: página de login e as rotas de login/cadastro. O resto exige sessão (middleware ErpAuth).
+// ----------------------------------------------------------------------------------------------
+$router->get('/erp/login', 'ErpController@login');
+$router->post('/erp/api/login', 'ErpAuthController@login');
+$router->post('/erp/api/cadastro', 'ErpAuthController@cadastro');
+$router->get('/erp/api/avatar/ver', 'ErpAuthController@avatarVer');   // imagem de perfil (só <img>, content-type fixo)
+
+$router->group('/erp', 'ErpAuth@handle', function ($r) {
+    $r->get('', 'ErpController@app');
+    $r->get('/api/eu', 'ErpAuthController@eu');
+    $r->post('/api/logout', 'ErpAuthController@logout');
+    $r->post('/api/perfil', 'ErpAuthController@perfil');
+    $r->post('/api/avatar', 'ErpAuthController@avatar');
+    $r->get('/api/dashboard', 'ErpController@dashboard');
+    foreach (['clientes' => 'ErpClientesController', 'produtos' => 'ErpProdutosController', 'pedidos' => 'ErpPedidosController'] as $rec => $ctl) {
+        $r->get("/api/$rec", "$ctl@listar");
+        $r->get("/api/$rec/obter", "$ctl@obter");
+        $r->get("/api/$rec/opcoes", "$ctl@opcoes");
+        $r->post("/api/$rec/salvar", "$ctl@salvar");
+        $r->post("/api/$rec/excluir", "$ctl@excluir");
+    }
+    $r->post('/api/clientes/importar', 'ErpClientesController@importar');
+    $r->get('/api/transacoes', 'ErpTransacoesController@listar');
+    $r->get('/api/transacoes/resumo', 'ErpTransacoesController@resumo');
+});
+
 
 return $router;

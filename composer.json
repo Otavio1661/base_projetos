@@ -23,13 +23,15 @@
         "process-timeout": 0
     },
     "scripts": {
-        "migration": "php core/Migration/Migration.php",
-        "run migration": "php core/Migration/RunMigration.php",
+        "make:migration": "php core/Migration/MakeMigration.php",
+        "migrate": "php core/Migration/RunMigration.php",
         "controller": "php core/Generator/MakeController.php",
         "model": "php core/Generator/MakeModel.php",
         "middleware": "php core/Generator/MakeMiddleware.php",
         "mvc": "php core/Generator/MakeMVC.php",
         "excluir mvc": "php core/Generator/DeleteMVC.php",
+        "seed:erp": "php tools/erp-seed.php",
+        "seed:erp-transacoes": "php tools/erp-seed-transacoes.php",
         "dev": "php -S localhost:8000 -t public"
     }
 }

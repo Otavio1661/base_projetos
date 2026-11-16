@@ -1,10 +1,12 @@
-@import url('parts/tabs.css');
-@import url('parts/icons.css');
-@import url('parts/form.css');
-@import url('parts/files.css');
-@import url('parts/ui.css');
-@import url('parts/chart.css');
-@import url('parts/theme.css');
+/* O ?v= dos imports força CDN e navegador a baixar de novo os parts/*.css (sem ele ficam em cache por 7 dias).
+   Troque o valor (todos) sempre que mudar um arquivo em parts/. O pacote minificado (dist/) não precisa disso. */
+@import url('parts/tabs.css?v=20261116a');
+@import url('parts/icons.css?v=20261116a');
+@import url('parts/form.css?v=20261116a');
+@import url('parts/files.css?v=20261116a');
+@import url('parts/ui.css?v=20261116a');
+@import url('parts/chart.css?v=20261116a');
+@import url('parts/theme.css?v=20261116a');
 /* ============================================
  * libr4.css — R4 dev
  * Tema padrão dos componentes. Tudo passa por variáveis --r4-*,
@@ -13,11 +15,13 @@
 :root{
   --r4-bg:#eef1f6;--r4-panel:#fff;--r4-line:#d3d9e6;--r4-txt:#1f2a44;--r4-mut:#6b7794;
   --r4-acc:#3b5bdb;--r4-acc-txt:#fff;--r4-head:#e4e9f4;--r4-head-txt:#1f2a44;--r4-hover:#edf1fb;--r4-sel:#dbe4ff;
+  --r4-hit:#ffe58a;--r4-hit-txt:#1f2a44;
   --r4-ok:#2f9e44;--r4-err:#e03131;--r4-radius:6px;--r4-font:system-ui,"Segoe UI",Roboto,sans-serif;--r4-mono:Consolas,"Courier New",monospace;
 }
 .r4-dark{
   --r4-bg:#0f1220;--r4-panel:#171a2e;--r4-line:#2a2f4d;--r4-txt:#e7e9f5;--r4-mut:#8c92b5;
   --r4-acc:#8e7bff;--r4-head:#1f2340;--r4-head-txt:#e7e9f5;--r4-hover:#1f2340;--r4-sel:#2b3060;--r4-ok:#4ade80;--r4-err:#f87171;
+  --r4-hit:#5c4a0a;--r4-hit-txt:#fff4c9;
 }
 .r4-cmp,.r4-cmp *{box-sizing:border-box}
 .r4-cmp{font:14px/1.5 var(--r4-font);color:var(--r4-txt)}
@@ -97,7 +101,11 @@
 .r4-table tbody tr:hover{background:var(--r4-hover)}
 .r4-table tr.r4-selected{background:var(--r4-sel)}
 .r4-empty{text-align:center;color:var(--r4-mut);padding:20px!important}
-.r4-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:8px;border-top:1px solid var(--r4-line);color:var(--r4-mut)}
+.r4-pager{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px;padding:8px;border-top:1px solid var(--r4-line);color:var(--r4-mut)}
+.r4-pager-nav{display:inline-flex;align-items:center;gap:8px}
+.r4-pager-size{display:inline-flex;align-items:center;gap:6px}
+.r4-pager-size-select{width:auto;min-width:4.5em;padding:3px 6px}
+.r4-table td.r4-hit{background:var(--r4-hit);color:var(--r4-hit-txt)}
 
 /* window */
 .r4-mask{position:fixed;inset:0;z-index:1000;background:rgba(10,14,30,.5);display:flex;align-items:center;justify-content:center;padding:16px}

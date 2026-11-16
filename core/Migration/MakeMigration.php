@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Cria o ARQUIVO de uma migration em src/Migration/<Nome>Migration.php (só gera; não executa nada).
+ * Uso: composer make:migration Nome      (ou: php core/Migration/MakeMigration.php Nome)
+ * Para EXECUTAR as migrations pendentes use: composer migrate  (core/Migration/RunMigration.php).
+ */
+
 // Verifica se o nome da migration foi passado como argumento
 if ($argc < 2) {
     echo "Erro: Nome da migration não foi fornecido.\n";
@@ -62,6 +68,7 @@ class {$className}
                 \$db->rollBack();
             }
             error_log("Migration failed: " . \$e->getMessage());
+            throw \$e;   // o runner (composer migrate) precisa saber que falhou, para não marcar como executada
         }
     }
 }

@@ -631,6 +631,7 @@
         range: '{from}–{to} de {total}', none: 'Nenhum registro'
       },
       grid: {
+        pageSize: 'Linhas por página', all: 'Todos',
         filterLabel: 'Filtrar registros', cols: 'Colunas', colsTitle: 'Mostrar ou ocultar colunas', export: 'Exportar',
         exportTitle: 'Exportar os registros filtrados', retry: 'Tentar de novo', resize: 'Arraste para redimensionar',
         selectAll: 'Selecionar todos os registros filtrados', edit: 'Editar {col}', unsort: 'Limpar ordenação',
@@ -690,6 +691,7 @@
         range: '{from}–{to} of {total}', none: 'No records'
       },
       grid: {
+        pageSize: 'Rows per page', all: 'All',
         filterLabel: 'Filter records', cols: 'Columns', colsTitle: 'Show or hide columns', export: 'Export',
         exportTitle: 'Export the filtered records', retry: 'Try again', resize: 'Drag to resize',
         selectAll: 'Select all filtered records', edit: 'Edit {col}', unsort: 'Clear sorting',

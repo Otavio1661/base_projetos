@@ -6,6 +6,14 @@
 
   /* ===================== grid ===================== */
   grid.push(
+    { title: 'HTML: busca com destaque + linhas por página (10, 30, 50, 100, Todos)', html: `
+<p class="r4-muted">Digite "r" no filtro: as células que casaram (nome <em>e</em> cidade, por exemplo) ficam com fundo diferente. Troque as linhas por página no rodapé.</p>
+<r4-grid src="${url('clientes')}" page-size="10" page-size-selector filter exportable></r4-grid>` },
+    { title: 'JS: pageSizes personalizado, evento pagesizechange e setPageSize()', fn(el, out) {
+      const g = R4.grid(el, { src: url('clientes'), pageSize: 5, pageSizeSelector: true, pageSizes: [5, 15, 'all'], highlight: true });
+      g.on('pagesizechange', (_g, n) => out('pagesizechange → ' + (n || 'todos')));
+      out('Use o seletor ou chame g.setPageSize(15). highlight:false desliga a marcação da busca.');
+    } },
     { title: 'HTML: 5.000 linhas (grande.json) — virtualização automática, colunas e exportação', html: `
 <r4-grid src="${url('grande')}" height="320" exportable export-name="grande" column-menu resizable selectable="multi">
   <r4-col field="id" header="#" width="80" align="right"></r4-col>

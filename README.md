@@ -96,8 +96,8 @@ O `composer.json` já expõe scripts para tarefas comuns. Exemplos:
 
 ```json
 "scripts": {
-    "migration": "php core/Migration/Migration.php",
-    "run migration": "php core/Migration/RunMigration.php",
+    "make:migration": "php core/Migration/MakeMigration.php",
+    "migrate": "php core/Migration/RunMigration.php",
     "controller": "php core/Generator/MakeController.php",
     "model": "php core/Generator/MakeModel.php",
     "middleware": "php core/Generator/MakeMiddleware.php",
@@ -109,6 +109,8 @@ O `composer.json` já expõe scripts para tarefas comuns. Exemplos:
 Exemplos de execução:
 
 ```bash
+composer make:migration CriaClientes   # CRIA src/Migration/CriaClientesMigration.php (só gera o arquivo)
+composer migrate                       # EXECUTA as migrations pendentes (registra em `migrations`); --status só lista
 composer controller NomeDoController
 composer model NomeDoModel
 composer middleware NomeDoMiddleware
@@ -231,7 +233,7 @@ php -S localhost:8000 -t public
 
 <r4-panel title="Clientes" collapsible>
   <r4-tbar><r4-button variant="primary" r4-click="modal:#novo">Novo</r4-button></r4-tbar>
-  <r4-grid src="/api/clientes" page-size="10" filter>
+  <r4-grid src="/api/clientes" page-size="10" page-size-selector filter>
     <r4-col field="nome" header="Nome"></r4-col>
     <r4-col field="valor" header="Valor" format="money" align="right"></r4-col>
   </r4-grid>
@@ -240,6 +242,8 @@ php -S localhost:8000 -t public
 ```
 
 Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-confirm`, `r4-anim`, `r4-hover` e as classes `r4-*` funcionam em qualquer elemento. Detalhes e exemplos ao vivo na vitrine, grupo "HTML declarativo". Ações próprias: `R4.action('nome', (arg, el, ev) => {})`.
+
+**Tabela (grid):** com `filter`, cada célula que contém o termo buscado ganha fundo de cor própria (`.r4-hit`, variáveis `--r4-hit` e `--r4-hit-txt`; `highlight="false"` desliga) — assim se vê em qual coluna a linha casou. `page-size-selector` mostra "Linhas por página" no rodapé (padrão 10, 30, 50, 100 e Todos; personalize com `page-sizes="10,30,all"`); no modo `remote` o padrão não inclui "Todos" e, se você o incluir, o servidor decide o limite. API: `setPageSize(n)`, `getPageSize()`, evento `pagesizechange`.
 
 **Layout:** use `<r4-div cols="3" gap="3">` (colunas) ou `<r4-div flex justify="between">` (flex) em vez de classes de grid; em telas pequenas as colunas empilham sozinhas. Erros de digitação (`pagesize`, `<r4-buton>`, `r4-click="toats:..."`) geram aviso no console com sugestão. Na vitrine, os componentes têm painel de propriedades ao vivo e botões de copiar.
 
@@ -250,6 +254,21 @@ Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-co
 **Idiomas (i18n):** todos os textos fixos da lib (grid, formulários, diálogos, paginação, gráficos, aria-labels) vêm de `R4.t('r4.chave')`. `R4.i18n.set('en')` troca o idioma (salvo no `localStorage`) e o que já está na tela se atualiza; componentes novos nascem no idioma atual. Disponíveis: `pt-BR` e `en`; a vitrine tem o seletor "PT | EN" na barra superior. **Adicionar um idioma:** `R4.i18n.add('es', { r4: { empty: 'Sin registros.', ok: 'Aceptar' /* ... */ } }); R4.i18n.set('es');` — chaves ausentes usam pt-BR (lista completa nos blocos `add('pt-BR')`/`add('en')` do fim de `public/libr4/theme.js`). Para a vitrine, copie o bloco `en` de `public/showcase/i18n.js` (chaves `vt.*`). Textos próprios: `R4.i18n.add('pt-BR', { app: { ola: 'Olá, {nome}!' } })` e `R4.t('app.ola', { nome })` (o resultado é texto: escape ao montar HTML).
 
 **Segurança (resumo — completo em [`docs/SEGURANCA.md`](docs/SEGURANCA.md)):** textos (`title`, `text`, `label`, células do grid, mensagens do servidor...) são sempre escapados. Parâmetros `html`, o conteúdo das tags `<r4-*>` e `R4.render` são **HTML confiável**: dado de fora vai com `R4.html\`<b>${valor}</b>\`` (escapa cada `${}`) ou `R4.util.esc`. No grid, `renderer` que devolve string vira **texto**; para HTML devolva `R4.html\`...\`` (ou use `html: true` na coluna para o modo antigo). `goto:` só navega para URL relativa/http(s)/mailto/tel; `R4.http` recusa `javascript:`/`data:` e avisa sobre outra origem (`R4.config.strictOrigins = true` bloqueia). Envolva HTML de usuário com `r4-ignore` para que tags/ações `r4-*` dentro dele fiquem inertes.
+
+## Mini ERP de demonstração (`/erp`)
+
+Um sistema completo e **fictício** que usa a libr4 no front e o framework no back: login e cadastro (sessão do `Core\Security\Session`, POST cifrado,
+CSRF, limite de tentativas), CRUD de clientes/produtos/pedidos sobre um **mini banco em JSON** (`storage/data/*.json`), dashboard com gráficos,
+importação de CSV/XLSX, upload de avatar e uma **tabela de 2 milhões de linhas** (SQLite somente leitura, paginação/ordenação/busca no servidor).
+Tudo fica **fora de `public/libr4/`**: quem clonar só a lib não leva nenhum dado. Detalhes e contrato da API: [`docs/ERP.md`](docs/ERP.md).
+
+```bash
+composer seed:erp                # usuários, clientes, produtos e pedidos (JSON, determinístico)
+composer seed:erp-transacoes     # 2.000.000 de transações em storage/data/transacoes.sqlite (~25 s, ~600 MB)
+# conta de teste: demo@r4dev.com.br / Demo@1234
+```
+
+O `storage/` não vai para o Git: gere os dados em cada ambiente com os comandos acima.
 
 ## Testes
 

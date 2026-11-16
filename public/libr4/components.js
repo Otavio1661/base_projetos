@@ -282,7 +282,8 @@
     config: { columns: [], data: [], pageSize: 0, filter: true, emptyText: '', striped: true, src: '', method: 'GET', encrypt: false, params: null,
       virtual: false, virtualThreshold: 1000, rowHeight: 36, height: 0, selectable: '', idProperty: 'id', remote: false,
       resizable: false, columnMenu: false, exportable: false, exportName: 'dados', summaryLabel: '',
-      loadingText: '', errorText: '' },   // '' = texto padrão no idioma atual (R4.i18n)
+      loadingText: '', errorText: '',   // '' = texto padrão no idioma atual (R4.i18n)
+      highlight: true, pageSizeSelector: false, pageSizes: [] },
     build() {
       const root = el('div', { class: 'r4-grid' });
       this.sortKey = null; this.sortDir = 1; this.page = 0; this.q = '';
@@ -321,6 +322,8 @@
       this.scroller = el('div', { class: 'r4-grid-scroll' }, [this.table]);
       this.mask = el('div', { class: 'r4-grid-mask', hidden: true }, [el('span', { class: 'r4-grid-spin', 'aria-hidden': 'true' }), this.loadingText ? el('span', { text: this.loadingText }) : tx(el('span'), 'r4.loading', 'Carregando...')]);
       this.pager = el('div', { class: 'r4-pager' });
+      this._pNav = el('span', { class: 'r4-pager-nav' });   // navegação (refeita a cada render); o seletor de tamanho fica FORA, para não perder o foco
+      this.pager.append(this._pNav);
       root.append(this.scroller, this.mask, this.pager);
       root.style.setProperty('--r4-rh', this.rowHeight + 'px');
       // delegação: um listener por tipo de evento para a tabela inteira
@@ -498,7 +501,7 @@
       this._mode = this.selectable === 'multi' ? 'multi' : this.selectable ? 'single' : '';
       this._multi = this._mode === 'multi'; this._off = this._multi ? 1 : 0;
       this._cols = this.columns.filter(c => !c.hidden);
-      this._v = !!(this.virtual || (!this.pageSize && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
+      this._v = !!(this.virtual || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
       this.el.classList.toggle('r4-grid-v', this._v);
       this.table.classList.toggle('r4-fixed', this._v || !!this._fixed);
       const h = this._v || this.height ? (this.height || 420) + 'px' : '';
@@ -513,7 +516,46 @@
       return this;
     },
     _update(head = true) { this._compute(); head && this._buildHead(); this._render(); },
-    _size() { return this.pageSize || (this.remote ? 25 : 0); },
+    _size() { return this._todos ? 0 : this.pageSize || (this.remote ? 25 : 0); },
+    /** Tamanhos oferecidos: pageSizes (array ou texto "10,30,all"; 0/all/todos = todas). Padrão 10, 30, 50, 100 e Todas (no modo remoto sem Todas). O tamanho atual sempre entra na lista. */
+    _sizes() {
+      let l = this.pageSizes;
+      if (typeof l === 'string') l = l.split(',');
+      const out = [];
+      (Array.isArray(l) ? l : []).forEach(v => {
+        const s = String(v).trim().toLowerCase(), n = s === 'all' || s === 'todos' || s === 'todas' ? 0 : Math.floor(Number(s));
+        if (Number.isFinite(n) && n >= 0 && n <= 100000 && !out.includes(n)) out.push(n);
+      });
+      if (!out.length) { out.push(10, 30, 50, 100); if (!this.remote) out.push(0); }
+      const cur = this._size();
+      if (!out.includes(cur) && !(cur === 0 && this.remote && !out.includes(0))) out.push(cur);
+      return out.sort((a, b) => (a || Infinity) - (b || Infinity));
+    },
+    /** Tamanho da página atual (0 = todas). */
+    getPageSize() { return this._size(); },
+    /** setPageSize(30) | setPageSize(0) (todas). Mantém visível o registro do topo, dispara pagesizechange e, no modo remoto, recarrega. */
+    setPageSize(n) {
+      n = Math.max(0, Math.floor(Number(n)) || 0);
+      const old = this._size(), top = this.page * (old || 0);
+      if (n === old) return this;
+      this._todos = n === 0; this.pageSize = n;
+      this.page = n ? Math.floor(top / n) : 0;
+      this._act.r = Math.min(this._act.r, 0);
+      if (this.scroller) this.scroller.scrollTop = 0;
+      if (this.el) this._reflags();
+      this.fire('pagesizechange', this, n);
+      if (this.remote) this.load(); else this._render();
+      return this;
+    },
+    /** Reavalia a virtualização depois de mudar o tamanho da página (sem refazer cabeçalho). */
+    _reflags() {
+      this._v = !!(this.virtual || (!this._size() && !this.remote && this.virtualThreshold > 0 && this.data.length > this.virtualThreshold));
+      this.el.classList.toggle('r4-grid-v', this._v);
+      this.table.classList.toggle('r4-fixed', this._v || !!this._fixed);
+      const h = this._v || this.height ? (this.height || 420) + 'px' : '';
+      this.scroller.style.height = h; this.scroller.style.maxHeight = h ? 'none' : '';
+      this._pool.forEach(tr => tr.remove()); this._pool = []; this._pv++;
+    },
     _buildHead() {
       const tr = el('tr', { 'aria-rowindex': 1 }), s = this._sorters();
       if (this._multi) {
@@ -643,6 +685,7 @@
         const ri = a + i, row = rows[ri];
         if (tr._row !== row || tr._pv !== this._pv) this._fill(tr, row);
         this._state(tr, row, ri);
+        this._mark(tr);
       }
       this._syncTab(false);
     },
@@ -668,15 +711,54 @@
       this.tfoot.replaceChildren(tr);
     },
     _renderPager() {
-      const size = this._size(), total = this._count, show = !!size || this._v;
+      const size = this._size(), total = this._count, show = !!size || this._v || this.pageSizeSelector;
       this.pager.hidden = !show;
       if (!show) return;
-      if (!size) { this.pager.replaceChildren(el('span', { text: T('r4.grid.count', { n: total, total: R4.util.number(total, 0) }, R4.util.number(total, 0) + ' registros') })); return; }
+      this._renderSizeSel();
+      if (!size) { this._pNav.replaceChildren(el('span', { text: T('r4.grid.count', { n: total, total: R4.util.number(total, 0) }, R4.util.number(total, 0) + ' registros') })); return; }
       const pages = Math.max(1, Math.ceil(total / size));
-      this.pager.replaceChildren(
+      this._pNav.replaceChildren(
         el('button', { type: 'button', class: 'r4-btn', disabled: this.page === 0, 'aria-label': T('r4.pager.prev', 0, 'Página anterior'), onclick: () => this.setPage(this.page - 1) }, [R4.icon('chevron-left')]),
         el('span', { text: ' ' + T('r4.pager.info', { page: this.page + 1, pages, n: total }, `${this.page + 1} / ${pages}  ·  ${total} registros`) + ' ' }),
         el('button', { type: 'button', class: 'r4-btn', disabled: this.page >= pages - 1, 'aria-label': T('r4.pager.next', 0, 'Próxima página'), onclick: () => this.setPage(this.page + 1) }, [R4.icon('chevron-right')]));
+    },
+    /** <select> "Linhas por página": criado uma vez (fica fora de _pNav para manter o foco); aqui só atualiza opções e valor. */
+    _renderSizeSel() {
+      if (!this.pageSizeSelector) { if (this._pSel) { this._pSel.remove(); this._pSel = null; } return; }
+      if (!this._pSel) {
+        const id = 'r4-ps-' + R4.util.uid();
+        this._psSelect = el('select', { class: 'r4-input r4-pager-size-select', id });
+        this._psSelect.addEventListener('change', () => this.setPageSize(this._psSelect.value === 'all' ? 0 : +this._psSelect.value));
+        this._psLabel = el('label', { for: id });
+        this._pSel = el('span', { class: 'r4-pager-size' }, [this._psLabel, this._psSelect]);
+        this.pager.append(this._pSel);
+        this._psSig = '';
+      }
+      const sizes = this._sizes(), cur = this._size(), sig = sizes.join(',') + '|' + (R4.i18n && R4.i18n.locale || '');
+      this._psLabel.textContent = T('r4.grid.pageSize', 0, 'Linhas por página');
+      if (this._psSig !== sig) {
+        this._psSig = sig;
+        this._psSelect.replaceChildren(...sizes.map(n => el('option', { value: n ? String(n) : 'all', text: n ? String(n) : T('r4.grid.all', 0, 'Todos') })));
+      }
+      this._psSelect.value = cur ? String(cur) : 'all';
+    },
+    /** Destaque da busca: cada célula de dados que contém o termo (texto exibido ou valor bruto) ganha .r4-hit. Só as linhas desenhadas (nunca varre todos os dados). */
+    _mark(tr) {
+      const q = this.highlight !== false ? this.q : '';
+      if (!q && !tr._hit) return;
+      const cols = this._cols, off = this._off, row = tr._row; let any = false;
+      for (let j = 0; j < cols.length; j++) {
+        const c = cols[j], td = tr.cells[j + off];
+        if (!td) continue;
+        let hit = false;
+        if (q && !c.actions) {
+          hit = td.textContent.toLowerCase().includes(q);
+          if (!hit && c.dataIndex != null && row != null) { const v = row[c.dataIndex]; hit = v != null && typeof v !== 'object' && String(v).toLowerCase().includes(q); }
+        }
+        if (td.classList.contains('r4-hit') !== hit) td.classList.toggle('r4-hit', hit);
+        if (hit) any = true;
+      }
+      tr._hit = any;
     },
     setPage(p) {
       const size = this._size(); if (!size) return this;
@@ -1110,6 +1192,9 @@
       { name: 'data', type: 'Array<object>', default: '[]', desc: 'Registros.' },
       { name: 'pageSize', type: 'number', default: '0', desc: 'Linhas por página (0 = sem paginação; no modo remoto o padrão é 25).' },
       { name: 'filter', type: 'boolean', default: 'true', desc: 'Barra de filtro (busca em todas as colunas, com atraso de digitação).' },
+      { name: 'highlight', type: 'boolean', default: 'true', desc: 'Com filtro ativo, marca (classe r4-hit, cor --r4-hit) cada CÉLULA que contém o termo — mostra em qual coluna a linha casou. highlight="false" desliga.' },
+      { name: 'pageSizeSelector', type: 'boolean', default: 'false', desc: 'Mostra o seletor "Linhas por página" no rodapé (page-size-selector). Funciona local e remoto.' },
+      { name: 'pageSizes', type: 'Array<number|"all">', default: '[] (10, 30, 50, 100, Todos)', desc: 'Opções do seletor; 0 ou "all" = Todos (page-sizes="10,30,50,100,all"). No modo remoto o padrão NÃO inclui Todos: só aparece se estiver aqui e o servidor decide o limite. O tamanho atual (pageSize) entra na lista se faltar.' },
       { name: 'striped / emptyText / height', type: "boolean / string / number", default: "true / '' / 0", desc: 'Listras, texto de vazio (vazio = "Nenhum registro." no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420).' },
       { name: 'virtual', type: 'boolean', default: 'false', desc: 'Renderiza só as linhas visíveis (altura fixa rowHeight). Liga sozinho sem paginação acima de virtualThreshold linhas.' },
       { name: 'virtualThreshold / rowHeight', type: 'number / number', default: '1000 / 36', desc: 'Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual.' },
@@ -1130,7 +1215,7 @@
       { name: 'Teclado', type: 'role="grid"', desc: 'Setas movem a célula; Home/End início/fim da linha; Ctrl+Home/End primeira/última linha; PageUp/PageDown; Espaço seleciona; Enter edita/ativa (no cabeçalho ordena, Shift+Enter soma critério); F2 edita; Esc cancela edição.' },
       { name: 'HTML', type: '<r4-grid> / <r4-col>', desc: '<r4-grid selectable="multi" virtual remote exportable column-menu resizable src="..."> e <r4-col field header width min-width align format sortable hidden resizable editable options summary actions>.' }
     ],
-    events: ['rowclick', 'rowdblclick', 'load', 'loaderror', 'selectionchange', 'sortchange', 'beforecellchange', 'cellchange', 'columnresize', 'columnchange', 'action', 'export']
+    events: ['rowclick', 'rowdblclick', 'load', 'loaderror', 'pagesizechange', 'selectionchange', 'sortchange', 'beforecellchange', 'cellchange', 'columnresize', 'columnchange', 'action', 'export']
   });
   /** Lê as <r4-col> de um <r4-grid> (usado pelo gancho R4.declare('grid') registrado em files.js). */
   Grid.colsFromHost = function (host) {

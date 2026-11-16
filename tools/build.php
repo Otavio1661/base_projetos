@@ -330,6 +330,7 @@ final class R4Build
             '/@import\s+(?:url\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)|[\'"]([^\'"]+)[\'"])\s*;?/',
             function ($m) use ($dir, $root, $seen) {
                 $u = $m[1] !== '' ? $m[1] : $m[2];
+                $u = (string)preg_replace('/[?#].*$/', '', $u);   // parts/x.css?v=... (cache-busting) -> arquivo
                 $p = realpath("$dir/$u");
                 if ($p === false) throw new RuntimeException("CSS: @import nao encontrado: $u");
                 if (strncmp($p, $root, strlen($root)) !== 0 || isset($seen[$p])) return '';
