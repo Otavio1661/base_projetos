@@ -191,6 +191,12 @@ class HomeController extends ctrl
 - Faça backup de `src/routes.php` antes de rodar os scripts de geração/remoção.
 - A vitrine (`/`, `/vitrine`) e a API de teste (`/vitrine/api/*`) só respondem com `APP_DEBUG=true`.
 - Modelo de ameaça, checklist de produção, CSP e a auditoria da libr4: [`docs/SEGURANCA.md`](docs/SEGURANCA.md). Testes: `node tools/testes-seguranca.js` (servidor em `:8087` e jsdom instalado).
+- **Injeção (SQL, arquivo, prompt) — a proteção é no SERVIDOR** (qualquer um chama a API sem passar pelo navegador):
+  - SQL: sempre `prepare` + `bind` (o `Core\Database` já usa `EMULATE_PREPARES=false` e `utf8mb4`); coluna/tabela dinâmica só por allowlist (`Database::ident()`); nunca "escapar aspas".
+  - Entrada: `$d = ctrl::validate(['nome' => ['type' => 'string', 'required' => true, 'maxLength' => 120], 'email' => ['type' => 'email']]);` (`Core\Security\Input`: esquema, recusa campos não declarados, limpa NUL/controles/bidi; responde 422 sozinho).
+  - Arquivos: `Core\Security\Upload::save('arquivo', ['permitidos' => ['png', 'pdf'], 'maxBytes' => 2 << 20])` (allowlist + MIME real + assinatura + nome aleatório em `storage/`, fora do `public/`).
+  - IA: `Core\Security\Prompt::montar($instrucao, $textoDoUsuario)` (bloco delimitado com id aleatório + guarda no system). Filtro não elimina injeção de prompt: dê ao modelo o mínimo de ferramentas e valide/escape a SAÍDA dele.
+  - No navegador, `R4.sanitize` e as opções `sanitize`/`guard` dos campos limpam e AVISAM (defesa em profundidade/UX). Detalhes e exemplos: seção 13 de [`docs/SEGURANCA.md`](docs/SEGURANCA.md) e o item `sanitize` da vitrine.
 
 --------------------------------------------------------------------------------
 
@@ -236,3 +242,21 @@ Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-co
 **Idiomas (i18n):** todos os textos fixos da lib (grid, formulários, diálogos, paginação, gráficos, aria-labels) vêm de `R4.t('r4.chave')`. `R4.i18n.set('en')` troca o idioma (salvo no `localStorage`) e o que já está na tela se atualiza; componentes novos nascem no idioma atual. Disponíveis: `pt-BR` e `en`; a vitrine tem o seletor "PT | EN" na barra superior. **Adicionar um idioma:** `R4.i18n.add('es', { r4: { empty: 'Sin registros.', ok: 'Aceptar' /* ... */ } }); R4.i18n.set('es');` — chaves ausentes usam pt-BR (lista completa nos blocos `add('pt-BR')`/`add('en')` do fim de `public/libr4/theme.js`). Para a vitrine, copie o bloco `en` de `public/showcase/i18n.js` (chaves `vt.*`). Textos próprios: `R4.i18n.add('pt-BR', { app: { ola: 'Olá, {nome}!' } })` e `R4.t('app.ola', { nome })` (o resultado é texto: escape ao montar HTML).
 
 **Segurança (resumo — completo em [`docs/SEGURANCA.md`](docs/SEGURANCA.md)):** textos (`title`, `text`, `label`, células do grid, mensagens do servidor...) são sempre escapados. Parâmetros `html`, o conteúdo das tags `<r4-*>` e `R4.render` são **HTML confiável**: dado de fora vai com `R4.html\`<b>${valor}</b>\`` (escapa cada `${}`) ou `R4.util.esc`. No grid, `renderer` que devolve string vira **texto**; para HTML devolva `R4.html\`...\`` (ou use `html: true` na coluna para o modo antigo). `goto:` só navega para URL relativa/http(s)/mailto/tel; `R4.http` recusa `javascript:`/`data:` e avisa sobre outra origem (`R4.config.strictOrigins = true` bloqueia). Envolva HTML de usuário com `r4-ignore` para que tags/ações `r4-*` dentro dele fiquem inertes.
+
+
+## Pacote minificado da libr4 (produção)
+
+Um JS e um CSS únicos (sem `document.write`, sem `@import`), gerados de `public/libr4/*` por uma ferramenta própria em PHP, sem dependências (`tools/build.php`, com minificador conservador: tira comentários e espaços; não renomeia nada, não reordena e não altera a sintaxe):
+
+```
+php tools/build.php      # gera public/libr4/dist/ (determinístico, sem datas)
+```
+
+```html
+<link rel="stylesheet" href="/libr4/dist/libr4.min.css">
+<script src="/libr4/dist/libr4.min.js"></script>
+```
+
+A lista de módulos vem de `public/libr4/libr4.js` (o build falha com mensagem clara se um módulo listado não existir); rode o build de novo sempre que alterar a lib. Saída: `libr4.min.js`, `libr4.min.css` e `manifest.json` (`bytes`, `gzip` e `sha384` de cada arquivo). Para SRI, use o `sha384` do manifest: `integrity="sha384-..." crossorigin="anonymous"` nas duas tags. Sirva com gzip/brotli ligado (o `docker/nginx/default.conf` já tem `gzip on`). Na vitrine (APP_DEBUG=true), `/vitrine?min=1` carrega o pacote minificado.
+
+A lib não depende de Node em nenhum momento; o Node só é usado em `tools/` para testes de desenvolvimento.

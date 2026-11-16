@@ -20,6 +20,9 @@
   const MB = 1024 * 1024;
   const fail = msg => { throw new Error(msg); };
   const bytes = n => R4.util.bytes(n);
+  const bool = v => v === true || v === 'true' || v === '' || v === '1' || v === 1;
+  /** Nome para mostrar/enviar: R4.sanitize.filename (sem caminho, bidi, controles; só a última extensão). */
+  const shownName = n => (R4.sanitize ? R4.sanitize.filename(n) : String(n ?? ''));
 
   /* ================= colunas ================= */
   // aceita ['campo', {key|dataIndex|field, header, format, width}]; vazio = chaves dos primeiros registros
@@ -198,8 +201,9 @@
   function validate(file, opts) {
     const o = opts || {};
     if (!file || typeof file.size !== 'number') return T('r4.files.invalid', 0, 'Arquivo inválido.');
-    if (o.accept && !acceptOk(file, o.accept)) return T('r4.files.badType', { name: file.name, accept: o.accept }, '"' + file.name + '": tipo de arquivo não permitido (aceitos: ' + o.accept + ').');
-    if (o.maxSize && file.size > o.maxSize) return T('r4.files.tooBig', { name: file.name, size: bytes(file.size), max: bytes(o.maxSize) }, '"' + file.name + '": arquivo muito grande (' + bytes(file.size) + '; máximo ' + bytes(o.maxSize) + ').');
+    const nm = shownName(file.name);
+    if (o.accept && !acceptOk(file, o.accept)) return T('r4.files.badType', { name: nm, accept: o.accept }, '"' + nm + '": tipo de arquivo não permitido (aceitos: ' + o.accept + ').');
+    if (o.maxSize && file.size > o.maxSize) return T('r4.files.tooBig', { name: nm, size: bytes(file.size), max: bytes(o.maxSize) }, '"' + nm + '": arquivo muito grande (' + bytes(file.size) + '; máximo ' + bytes(o.maxSize) + ').');
     return null;
   }
   /** Abre o seletor do sistema. Promise<File[]>; rejeita com erro (e.errors, e.files) se algum arquivo não passar. */
@@ -604,7 +608,9 @@
   /* ================= filedrop ================= */
   R4.define('filedrop', {
     config: { accept: '', multiple: false, maxSize: 10 * MB, maxFiles: 0, parse: '', text: '', buttonText: '',   // '' = texto padrão no idioma atual
-      hint: '', disabled: false, list: true, delimiter: 'auto', header: true },
+      hint: '', disabled: false, list: true, delimiter: 'auto', header: true,
+      // segurança (R4.sanitize): bloqueia .php/.exe/.js/... e dupla extensão; confere a assinatura dos bytes
+      blockExec: true, sniff: true, field: 'arquivo' },
     build() {
       this._files = [];
       const hint = this._hint();
@@ -651,12 +657,25 @@
       let files = [...(list || [])];
       const errs = [], ok = [];
       if (!this.multiple && files.length > 1) { errs.push('Selecione apenas um arquivo.'); files = files.slice(0, 1); }
+      const S = R4.sanitize;
       for (const f of files) {
-        const e = validate(f, { accept: this.accept, maxSize: this.maxSize });
+        const shown = shownName(f && f.name);
+        let e = validate(f, { accept: this.accept, maxSize: this.maxSize });
+        if (!e && S && bool(this.blockExec)) {
+          const d = S.dangerousName(f.name);
+          if (d === 'exec') e = T('r4.files.blocked', { name: shown }, '"' + shown + '": tipo de arquivo bloqueado por segurança (executável/script).');
+          else if (d === 'double') e = T('r4.files.double', { name: shown }, '"' + shown + '": extensão dupla suspeita (ex.: .php.jpg).');
+        }
+        if (!e && S && bool(this.sniff)) {
+          const r = await S.sniffFile(f);
+          if (r.match === false || (bool(this.blockExec) && ['exe', 'script', 'php'].includes(r.kind)))
+            e = T('r4.files.mismatch', { name: shown, ext: r.ext || '?', kind: r.kind }, '"' + shown + '": o conteúdo não corresponde à extensão .' + (r.ext || '?') + ' (parece ' + r.kind + ').');
+        }
         if (e) errs.push(e);
-        else if (this.multiple && this._files.concat(ok).some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) errs.push(T('r4.files.dup', { name: f.name }, '"' + f.name + '" já está na lista.'));
+        else if (this.multiple && this._files.concat(ok).some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) errs.push(T('r4.files.dup', { name: shown }, '"' + shown + '" já está na lista.'));
         else ok.push(f);
       }
+      if (this._destroyed) return this;
       if (this.multiple && this.maxFiles && this._files.length + ok.length > this.maxFiles) {
         errs.push(T('r4.files.maxFiles', { n: this.maxFiles }, 'Selecione no máximo ' + this.maxFiles + ' arquivo(s).'));
         ok.splice(Math.max(0, this.maxFiles - this._files.length));
@@ -671,7 +690,7 @@
         data = [];
         for (const f of ok) {
           try { const d = await this._read(f); data.push(d); this.fire('data', this, d, f); }
-          catch (e) { data.push(null); errs.push('"' + f.name + '": ' + e.message); }
+          catch (e) { data.push(null); errs.push('"' + shownName(f.name) + '": ' + e.message); }
         }
         this._msg(errs);
       }
@@ -695,9 +714,42 @@
     _msg(errs) { this.msgEl.hidden = !errs.length; this.msgEl.textContent = errs.join('\n'); },
     _list() {
       this.listEl.hidden = !this.list || !this._files.length;
-      this.listEl.replaceChildren(...this._files.map((f, i) => el('li', { class: 'r4-fd-item' }, [
-        el('span', { class: 'r4-fd-name', text: f.name, title: f.name }), el('span', { class: 'r4-fd-size', text: bytes(f.size) }),
-        el('button', { type: 'button', class: 'r4-fd-rm', 'data-i': i, 'aria-label': T('r4.form.remove', { item: f.name }, 'Remover ' + f.name), title: T('r4.remove', 0, 'Remover') }, [R4.icon('close')])])));
+      this.listEl.replaceChildren(...this._files.map((f, i) => { const n = shownName(f.name); return el('li', { class: 'r4-fd-item' }, [
+        el('span', { class: 'r4-fd-name', text: n, title: n }), el('span', { class: 'r4-fd-size', text: bytes(f.size) }),
+        el('button', { type: 'button', class: 'r4-fd-rm', 'data-i': i, 'aria-label': T('r4.form.remove', { item: n }, 'Remover ' + n), title: T('r4.remove', 0, 'Remover') }, [R4.icon('close')])]); }));
+    },
+    /**
+     * Envia os arquivos aceitos para `url` (multipart/form-data, um POST por arquivo, campo `field`).
+     * O nome no corpo é o SANEADO (R4.sanitize.filename); `data` vira campos de texto extras (sem
+     * chaves __proto__/constructor/prototype). Promise<[{file, ok, status, data}]>; eventos upload/uploaderror.
+     * O servidor precisa validar de novo (Core\Security\Upload): o navegador pode ser contornado.
+     */
+    async upload(url, opts) {
+      const o = Object.assign({ field: this.field || 'arquivo', data: null, headers: null }, opts);
+      url = R4.http && R4.http.check ? R4.http.check(url) : url;
+      const extra = o.data && typeof o.data === 'object' ? (R4.sanitize ? R4.sanitize.deep(o.data) : o.data) : null;
+      const out = [];
+      for (const f of this._files.slice()) {
+        const fd = new FormData();
+        if (extra) Object.keys(extra).forEach(k => { const v = extra[k]; if (v != null && typeof v !== 'object') fd.append(k, String(v)); });
+        fd.append(String(o.field), f, shownName(f.name));
+        let r;
+        try {
+          const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: Object.assign({ Accept: 'application/json' }, o.headers || {}) });
+          const text = await res.text();
+          let data = null; try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+          r = { file: f, ok: res.ok && !(data && typeof data.status === 'number' && data.status >= 400), status: res.status, data };
+        } catch (e) { r = { file: f, ok: false, status: 0, data: null, error: e }; }
+        out.push(r);
+        if (this._destroyed) return out;
+        this.fire(r.ok ? 'upload' : 'uploaderror', this, r);
+      }
+      const fails = out.filter(r => !r.ok).map(r => {
+        const er = r.data && r.data.erros, m = er && typeof er === 'object' ? Object.values(er).filter(x => typeof x === 'string').join(' ') : '';
+        return '"' + shownName(r.file.name) + '": ' + (m || (r.data && typeof r.data.retorno === 'string' && r.data.retorno) || T('r4.files.uploadFail', 0, 'falha no envio.'));
+      });
+      this._msg(fails);
+      return out;
     }
   }, {
     title: 'filedrop', group: 'Dados',
@@ -710,11 +762,15 @@
       { name: 'delimiter / header', type: "string / boolean", default: "'auto' / true", desc: 'Opções de leitura do CSV/XLSX (primeira linha como cabeçalho).' },
       { name: 'text / buttonText / hint', type: 'string', default: "'' / '' / ''", desc: 'Textos da área (vazios = padrão no idioma atual; o hint padrão mostra tipos e tamanho máximo).' },
       { name: 'disabled / list', type: 'boolean', default: 'false / true', desc: 'Desabilita; mostra a lista de arquivos.' },
+      { name: 'blockExec', type: 'boolean', default: 'true', desc: 'Recusa extensões executáveis/script (.php, .phtml, .phar, .exe, .bat, .cmd, .sh, .js, .jar, .msi, .com, .scr, .vbs, .ps1, .htaccess...) e dupla extensão perigosa (shell.php.jpg).' },
+      { name: 'sniff', type: 'boolean', default: 'true', desc: 'Lê os primeiros bytes (R4.sanitize.sniffFile) e recusa conteúdo que não bate com a extensão (PHP com nome .png, executável com nome .csv...).' },
+      { name: 'upload(url, {field, data, headers})', type: 'Promise', desc: 'Envia cada arquivo aceito em multipart/form-data (campo "arquivo" por padrão) com o nome JÁ saneado. Eventos upload / uploaderror. O servidor valida de novo (Core\\Security\\Upload).' },
+      { name: 'Nome exibido', type: 'segurança', desc: 'A lista e as mensagens mostram R4.sanitize.filename(nome): sem caminho, bidi (U+202E), controles; só a última extensão.' },
       { name: 'add(files) / open() / remove(i|file) / clear() / getFiles() / setDisabled(b)', type: 'método', desc: 'add aceita FileList/array (ex.: new File([...], "x.csv")) e devolve Promise.' },
       { name: 'files(cmp, novos, dados)', type: 'evento', desc: 'Arquivos aceitos; dados = array paralelo com o conteúdo lido (quando parse).' },
       { name: 'data(cmp, dados, file) / invalid(cmp, mensagens) / remove(cmp, file)', type: 'evento', desc: 'Conteúdo de cada arquivo, erros de validação e remoção.' }
     ],
-    events: ['files', 'data', 'invalid', 'remove']
+    events: ['files', 'data', 'invalid', 'remove', 'upload', 'uploaderror']
   });
   R4.registry.filedrop.meta.playground = {
     html: '<r4-filedrop{attrs}></r4-filedrop>', cfg: {},

@@ -6,3 +6,6 @@ env
 ./vendor/*
 .vendor
 vendor
+
+# arquivos enviados por usuários (Core\Security\Upload grava aqui, fora de public/)
+storage/

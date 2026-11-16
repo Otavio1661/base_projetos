@@ -633,7 +633,14 @@
         drop: 'Arraste arquivos para cá ou', choose: 'Escolher arquivo', selected: 'Arquivos selecionados', invalid: 'Arquivo inválido.',
         badType: '"{name}": tipo de arquivo não permitido (aceitos: {accept}).', tooBig: '"{name}": arquivo muito grande ({size}; máximo {max}).',
         readFail: 'Não foi possível ler "{name}".', dup: '"{name}" já está na lista.', maxFiles: { um: 'Selecione no máximo {n} arquivo.', outros: 'Selecione no máximo {n} arquivos.' },
-        badJson: 'JSON inválido.', types: 'Tipos: {types}', max: 'Máx. {size}', maxEach: 'Máx. {size} por arquivo'
+        badJson: 'JSON inválido.', types: 'Tipos: {types}', max: 'Máx. {size}', maxEach: 'Máx. {size} por arquivo',
+        blocked: '"{name}": tipo de arquivo bloqueado por segurança (executável/script).', double: '"{name}": extensão dupla suspeita (ex.: .php.jpg).',
+        mismatch: '"{name}": o conteúdo não corresponde à extensão .{ext} (parece {kind}).', uploadFail: 'falha no envio.'
+      },
+      sanitize: {
+        warn: 'Atenção: o texto parece conter {kinds}. Ele será enviado como texto comum e o servidor valida de novo.',
+        block: 'Conteúdo não permitido neste campo (parece conter {kinds}).',
+        sql: 'comando SQL', script: 'código HTML/JavaScript', path: 'caminho de arquivo', prompt: 'instruções para IA', proto: 'chave de protótipo'
       },
       ui: {
         menu: 'Menu', progress: 'Progresso', loadingShort: 'Carregando', loadingContent: 'Carregando conteúdo',
@@ -685,7 +692,14 @@
         drop: 'Drag files here or', choose: 'Choose file', selected: 'Selected files', invalid: 'Invalid file.',
         badType: '"{name}": file type not allowed (accepted: {accept}).', tooBig: '"{name}": file too large ({size}; maximum {max}).',
         readFail: 'Could not read "{name}".', dup: '"{name}" is already in the list.', maxFiles: { one: 'Select at most {n} file.', other: 'Select at most {n} files.' },
-        badJson: 'Invalid JSON.', types: 'Types: {types}', max: 'Max. {size}', maxEach: 'Max. {size} per file'
+        badJson: 'Invalid JSON.', types: 'Types: {types}', max: 'Max. {size}', maxEach: 'Max. {size} per file',
+        blocked: '"{name}": file type blocked for security (executable/script).', double: '"{name}": suspicious double extension (e.g. .php.jpg).',
+        mismatch: '"{name}": the content does not match the .{ext} extension (looks like {kind}).', uploadFail: 'upload failed.'
+      },
+      sanitize: {
+        warn: 'Heads up: the text looks like it contains {kinds}. It will be sent as plain text and the server validates it again.',
+        block: 'Content not allowed in this field (looks like {kinds}).',
+        sql: 'an SQL command', script: 'HTML/JavaScript code', path: 'a file path', prompt: 'instructions for an AI', proto: 'a prototype key'
       },
       ui: {
         menu: 'Menu', progress: 'Progress', loadingShort: 'Loading', loadingContent: 'Loading content',

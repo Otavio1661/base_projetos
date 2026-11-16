@@ -18,6 +18,9 @@
 .r4-req{color:var(--r4-err);font-weight:600}
 .r4-help{font-size:12px;color:var(--r4-mut)}
 .r4-field-error{font-size:12px;color:var(--r4-err);line-height:1.35}
+/* guard="warn" (R4.sanitize): aviso de conteúdo suspeito — não é erro, o envio continua */
+.r4-guard{font-size:12px;line-height:1.35;color:var(--r4-txt);border-left:3px solid var(--r4-warn,var(--r4-err));padding:2px 0 2px 8px;background:color-mix(in srgb,var(--r4-warn,var(--r4-err)) 10%,transparent);border-radius:0 var(--r4-radius) var(--r4-radius) 0}
+.r4-suspect .r4-input{border-color:var(--r4-warn,var(--r4-err))}
 .r4-invalid .r4-input,.r4-input[aria-invalid="true"]{border-color:var(--r4-err)}
 .r4-invalid .r4-input:focus,.r4-invalid .r4-select-trigger:focus{outline-color:var(--r4-err)}
 .r4-input::placeholder{color:var(--r4-mut);opacity:.8}

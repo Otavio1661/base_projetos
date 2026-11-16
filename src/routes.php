@@ -66,6 +66,11 @@ $router->post('/vitrine/api/echo', 'VitrineApiController@echo');
 $router->post('/vitrine/api/cadastro', 'VitrineApiController@cadastro');
 $router->get('/vitrine/api/lento', 'VitrineApiController@lento');
 $router->get('/vitrine/api/falha', 'VitrineApiController@falha');
+// demonstrações de defesa contra injeção (SQL, arquivo, prompt) — docs/SEGURANCA.md seção 13
+$router->post('/vitrine/api/upload', 'VitrineApiController@upload');
+$router->post('/vitrine/api/prompt', 'VitrineApiController@prompt');
+$router->get('/vitrine/api/busca', 'VitrineApiController@busca');
+$router->get('/vitrine/api/sql-seguro', 'VitrineApiController@sqlSeguro');
 
 
 return $router;

@@ -61,14 +61,20 @@ class Database
     {
         if (self::$instance === null) {
             try {
+                // utf8mb4: o "utf8" do MySQL tem só 3 bytes (corta emoji/caracteres raros e já foi
+                // vetor de truncamento). EMULATE_PREPARES=false: o valor vai separado do SQL (prepare real).
+                $driver = (string) Config::DB_HOST_LG;
+                $dsn = $driver . ":host=" . Config::DB_HOST . ";port=" . Config::DB_PORT . ";dbname=" . Config::DB_DATABASE
+                    . ($driver === 'mysql' ? ";charset=utf8mb4" : "");
                 self::$instance = new PDO(
-                    Config::DB_HOST_LG . ":host=" . Config::DB_HOST . ";port=" . Config::DB_PORT . ";dbname=" . Config::DB_DATABASE . ";charset=utf8",
+                    $dsn,
                     Config::DB_USERNAME,
                     Config::DB_PASSWORD,
                     [
                         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        PDO::ATTR_EMULATE_PREPARES   => false
+                        PDO::ATTR_EMULATE_PREPARES   => false,
+                        PDO::ATTR_STRINGIFY_FETCHES  => false
                     ]
                 );
             } catch (PDOException $e) {
@@ -142,15 +148,21 @@ class Database
         $asObject = 0,
         $transacao = true
     ) {
+        // O nome do .sql vira caminho de arquivo: só letras/números/_/-/ (subpasta), nunca "..".
+        // (Se um dia ele vier de entrada do usuário, isto impede ler arquivos fora de src/sql/.)
+        if ($sqlPrm === '' && (!is_string($sqlnome) || !preg_match('#^[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*$#', $sqlnome))) {
+            throw new \Exception('Nome de arquivo SQL inválido.');
+        }
         $sqlFile = $sqlPrm !== '' ? $sqlPrm : __DIR__ . '/../src/sql/' . $sqlnome . '.sql';
 
-        if (!file_exists($sqlFile)) {
-            throw new \Exception("Arquivo SQL não encontrado: {$sqlFile}");
+        if (!is_file($sqlFile)) {
+            throw new \Exception(Config::APP_DEBUG === true ? "Arquivo SQL não encontrado: {$sqlFile}" : 'Arquivo SQL não encontrado.');
         }
 
         $sql = file_get_contents($sqlFile);
         $res = ['retorno' => false, 'error' => false];
         $pdo = null;
+        $startedTransaction = false;
 
         try {
             $pdo = self::getInstance();
@@ -182,6 +194,11 @@ class Database
                     $isList = array_keys($params) === range(0, count($params) - 1);
 
                     if ($isList && empty($placeholders)) {
+                        foreach ($params as $valor) {
+                            if (!is_null($valor) && !is_scalar($valor)) {
+                                throw new \Exception('Parametros precisam ser escalares');
+                            }
+                        }
                         $stmt->execute(array_values($params));
                     } else {
                         // Bind each placeholder found in the SQL; require matching param
@@ -191,6 +208,11 @@ class Database
                             }
 
                             $valor = $params[$name];
+
+                            // Só valores escalares viram parâmetro (array/objeto vindos de JSON → erro, não "Array")
+                            if (!is_null($valor) && !is_scalar($valor)) {
+                                throw new \Exception("Parametro :{$name} precisa ser escalar");
+                            }
 
                             // Infer PDO param type
                             if (is_int($valor)) {
@@ -234,11 +256,18 @@ class Database
                 $res['retorno'] = $sql;
             }
 
-        } catch (\Exception $e) {
-            if ($pdo instanceof PDO && $transacao) {
-                $pdo->rollBack();
+        } catch (\Throwable $e) {
+            // só desfaz a transação que ESTA chamada abriu (não derruba a de quem chamou)
+            if ($pdo instanceof PDO && $startedTransaction && $pdo->inTransaction()) {
+                try {
+                    $pdo->rollBack();
+                } catch (\Throwable $e2) {
+                    error_log('[Database] rollBack falhou: ' . $e2->getMessage());
+                }
             }
-            $res['error'] = $e->getMessage();
+            // O detalhe (SQL, nome de tabela/coluna) vai para o log; na resposta, só com APP_DEBUG.
+            error_log('[Database] switchParams(' . (is_string($sqlnome) ? $sqlnome : '?') . '): ' . $e->getMessage());
+            $res['error'] = Config::APP_DEBUG === true ? $e->getMessage() : 'Erro ao executar a consulta.';
         }
 
         return $res;
@@ -266,13 +295,34 @@ class Database
     {
         $pdo = self::getInstance();
         foreach ($tables as $tableName => $columns) {
+            // Identificadores não podem ser parâmetros de prepare: só por allowlist de formato.
+            $tableName = self::ident($tableName);
             $cols = [];
             foreach ($columns as $colName => $colType) {
-                $cols[] = "`$colName` $colType";
+                $colType = (string) $colType;
+                // A definição do tipo é SQL escrito pelo desenvolvedor (nunca entrada do usuário);
+                // mesmo assim, nada de múltiplos comandos/comentários.
+                if (preg_match('/;|--|\/\*|#/', $colType)) {
+                    throw new \InvalidArgumentException("Definição de coluna suspeita em {$tableName}.{$colName}");
+                }
+                $cols[] = '`' . self::ident($colName) . '` ' . $colType;
             }
             $colsSql = implode(", ", $cols);
-            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($colsSql) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($colsSql) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
             $pdo->exec($sql);
         }
+    }
+
+    /**
+     * Valida um identificador SQL (tabela/coluna) por formato: [A-Za-z_][A-Za-z0-9_]{0,63}.
+     * Use também para ORDER BY/colunas dinâmicas — de preferência com uma allowlist explícita:
+     *   $col = in_array($_GET['sort'] ?? '', ['nome', 'criado_em'], true) ? $_GET['sort'] : 'nome';
+     */
+    public static function ident($nome): string
+    {
+        if (!is_string($nome) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]{0,63}$/', $nome)) {
+            throw new \InvalidArgumentException('Identificador SQL inválido.');
+        }
+        return $nome;
     }
 }

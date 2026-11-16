@@ -255,7 +255,11 @@
    * ===================================================================== */
   const FIELD_CFG = { name: '', label: '', value: '', required: false, disabled: false, readOnly: false, helpText: '',
     validateOn: 'blur', validator: null, messages: {} };
-  const TEXT_CFG = { placeholder: '', minLength: 0, maxLength: 0, pattern: '', patternText: '', email: false, match: '', autocomplete: '' };
+  // sanitize: getValue() devolve texto limpo (R4.sanitize.text) e limitado; guard: 'off'|'warn'|'block' (sinais de injeção)
+  const TEXT_CFG = { placeholder: '', minLength: 0, maxLength: 0, pattern: '', patternText: '', email: false, match: '', autocomplete: '',
+    sanitize: true, guard: 'warn' };
+  const BAD_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+  const GUARD_TXT = { sql: 'comando SQL', script: 'código HTML/JavaScript', path: 'caminho de arquivo', prompt: 'instruções para IA', proto: 'chave de protótipo' };
 
   /** destroy idempotente que também destrói componentes montados pelo HTML interno */
   function destroyAll() {
@@ -311,7 +315,7 @@
     },
     _describe() {
       const c = this._ctl(); if (!c) return;
-      const ids = [this.helpEl && this.helpEl.id, this._error && this.errEl && this.errEl.id, ...this._extraDesc()].filter(Boolean);
+      const ids = [this.helpEl && this.helpEl.id, this.guardEl && !this.guardEl.hidden && this.guardEl.id, this._error && this.errEl && this.errEl.id, ...this._extraDesc()].filter(Boolean);
       ids.length ? c.setAttribute('aria-describedby', ids.join(' ')) : c.removeAttribute('aria-describedby');
     },
     _applyState() {
@@ -341,6 +345,7 @@
     reset() {
       this.setValue(this._copy(this._initial));
       this.clearError(); this._touched = false; this._validated = false;
+      if (this._gKey) { this._gKey = ''; this._showGuard(null); }
       this.fire('reset', this);
       return this;
     },
@@ -359,11 +364,83 @@
       const f = this._form(), o = f && f.getField(name);
       return (o && o.label) || name;
     },
+    /* ---- higiene do texto (R4.sanitize) e guarda contra injeção (só nos campos de texto: _textual) ---- */
+    _san() { return R4.sanitize && this.sanitize !== false && this.sanitize !== 'false' ? R4.sanitize : null; },
+    /** Limite efetivo: maxLength ou, se 0, o padrão seguro (1000; textarea 10000). */
+    _limit() {
+      const d = R4.sanitize ? R4.sanitize.defaults : { maxText: 1000, maxTextarea: 10000 };
+      return this.maxLength > 0 ? +this.maxLength : (this._multiline ? d.maxTextarea : d.maxText);
+    },
+    _clean(v) { const S = this._san(); return S && typeof v === 'string' ? S.text(v, { max: this._limit(), multiline: !!this._multiline }) : v; },
+    _rawText() { return this.input ? String(this.input.value) : String(this.value ?? ''); },
+    /** O texto (limpo, sem cortar) passa do limite? (getValue corta; a validação avisa) */
+    _over() {
+      const S = this._san(); if (!S || !this._textual) return false;
+      const raw = this._rawText(), lim = this._limit();
+      if (raw.length <= lim) return false;
+      if (raw.length > lim * 2 + 64) return true;
+      return [...S.text(raw, { max: 0, multiline: !!this._multiline })].length > lim;
+    },
+    _guardMode() { const g = String(this.guard || 'off').toLowerCase(); return this._textual && (g === 'warn' || g === 'block') ? g : 'off'; },
+    /** Sinais de R4.sanitize.detect no texto atual ({kinds, detail} ou null); guarda o último resultado. */
+    _findings() {
+      const S = R4.sanitize;
+      if (!S || this._guardMode() === 'off') return null;
+      const raw = this._rawText();
+      if (raw !== this._gRaw) {
+        // analisa o que SERIA enviado (NUL/bidi/invisíveis já removidos pelo sanitize), não o lixo que some
+        const r = S.detect(this._san() ? S.text(raw, { max: 0, multiline: !!this._multiline }) : raw), k = S.kinds(r);
+        this._gRaw = raw; this._gRes = k.length ? { kinds: k, detail: r } : null;
+      }
+      return this._gRes;
+    },
+    _guardText(kinds, block) {
+      const names = kinds.map(x => T('r4.sanitize.' + x, 0, GUARD_TXT[x] || x)).join(', ');
+      if (block) return (this.messages && this.messages.suspicious) || T('r4.sanitize.block', { kinds: names }, 'Conteúdo não permitido neste campo (parece conter ' + names + ').');
+      return T('r4.sanitize.warn', { kinds: names }, 'Atenção: o texto parece conter ' + names + '. Ele será enviado como texto comum e o servidor valida de novo.');
+    },
+    /** Depois de cada digitação: aviso visível (warn), validação imediata (block), console.warn e evento suspicious. */
+    _guard() {
+      const mode = this._guardMode(), f = mode === 'off' ? null : this._findings();
+      const key = f ? f.kinds.join(',') : '';
+      if (key === (this._gKey || '')) return f;
+      this._gKey = key;
+      if (f) {
+        // nunca registra o VALOR (pode ser dado pessoal); só o campo e as categorias
+        console.warn('[R4] campo "' + (this.name || this.id) + '": conteúdo com cara de ' + f.kinds.join('/') + ' — é só um SINAL (o servidor valida de novo; valor não registrado).');
+        this.fire('suspicious', this, f.detail, f.kinds);
+        this.el && this.el.dispatchEvent(new CustomEvent('r4-suspicious', { bubbles: true, detail: { field: this, kinds: f.kinds, detail: f.detail } }));
+      }
+      if (mode === 'warn') this._showGuard(f);
+      else if (f && !this._destroyed) this.validate();
+      return f;
+    },
+    _showGuard(f) {
+      if (!this.el) return;
+      if (!f) {
+        if (this.guardEl) { this.guardEl.hidden = true; this.guardEl.textContent = ''; }
+        this.el.classList.remove('r4-suspect'); this._describe(); return;
+      }
+      if (!this.guardEl) {
+        this.guardEl = el('div', { class: 'r4-guard', id: this._ids().input + '-guard', role: 'status' });
+        this.errEl ? this.errEl.before(this.guardEl) : this.el.append(this.guardEl);
+      }
+      this.guardEl.textContent = this._guardText(f.kinds, false);
+      this.guardEl.hidden = false;
+      this.el.classList.add('r4-suspect');
+      this._describe();
+    },
+    /** Sinais de injeção no valor atual (mesmo com guard 'off'): {sql, script, path, prompt, proto} */
+    getSuspicion() { return R4.sanitize ? R4.sanitize.detect(this._rawText()) : null; },
     /** true ou a mensagem de erro (sem mexer na tela) */
     _check(values) {
       const v = this.getValue();
       const pre = this._preCheck ? this._preCheck() : true;
       if (pre !== true) return pre;
+      if (this._textual) {
+        if (this._over()) return fmt(this._msg('maxLength'), { n: this._limit() });
+        if (this._guardMode() === 'block') { const g = this._findings(); if (g) return this._guardText(g.kinds, true); }
+      }
       if (this.isEmpty(v)) return this.required ? this._msg(this._reqKey || 'required') : true;
       if (typeof v === 'string') {
         const len = [...v].length;
@@ -430,6 +507,7 @@
     /** O usuário mudou o valor */
     _changed() {
       this._touched = true;
+      if (this._textual) this._guard();
       const v = this.getValue();
       this.fire('change', this, v);
       this.el && this.el.dispatchEvent(new CustomEvent('r4-fieldchange', { bubbles: true, detail: { field: this, value: v } }));
@@ -462,9 +540,13 @@
     { name: 'pattern / patternText', type: 'string', default: "''", desc: 'Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor.' },
     { name: 'email', type: 'boolean', default: 'false', desc: 'Exige e-mail válido.' },
     { name: 'match', type: 'string', default: "''", desc: 'Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha).' },
-    { name: 'autocomplete', type: 'string', default: "''", desc: 'Atributo autocomplete do navegador.' }
+    { name: 'autocomplete', type: 'string', default: "''", desc: 'Atributo autocomplete do navegador.' },
+    { name: 'sanitize', type: 'boolean', default: 'true', desc: 'getValue() devolve o texto limpo por R4.sanitize.text: sem NUL, controles, bidi (U+202E...) e invisíveis, NFC, espaços normalizados, cortado em maxLength (ou no limite padrão: 1000; textarea 10000 — maxLength 0 só desliga o contador/mensagem). false devolve o texto cru.' },
+    { name: 'guard', type: "'off' | 'warn' | 'block'", default: "'warn'", desc: "Sinais de injeção (SQL, HTML/JS, caminho, prompt de IA, __proto__) via R4.sanitize.detect. warn: aviso visível no campo, console.warn (sem o valor) e evento suspicious; block: o campo fica inválido e o form não envia. É UX/log — a proteção real é no servidor." },
+    { name: 'getSuspicion()', type: 'método', desc: 'Sinais do valor atual: {sql, script, path, prompt, proto}.' }
   ];
   const fieldEvents = ['change', 'blur', 'invalid', 'reset'];
+  const textEvents = ['change', 'blur', 'invalid', 'reset', 'suspicious'];
 
   R4.define('field', Object.assign({ config: Object.assign({}, FIELD_CFG), destroy: destroyAll }, Field), { hidden: true, group: G });
 
@@ -473,7 +555,7 @@
     const ids = c._ids();
     const i = el('input', Object.assign({ class: 'r4-input', id: ids.input, type: 'text', name: c.name || null,
       placeholder: c.placeholder || null, autocomplete: c.autocomplete || null,
-      maxlength: c.maxLength > 0 ? c.maxLength : null }, attrs));
+      maxlength: c.maxLength > 0 ? c.maxLength : (c._textual && c._san && c._san() ? c._limit() : null) }, attrs));
     i.addEventListener('keydown', ev => { if (ev.key === 'Enter') c.fire('enter', c, c.getValue()); });
     return i;
   }
@@ -487,21 +569,22 @@
     const P = e.cls.prototype, old = Object.assign({}, P.config);
     Object.assign(P.config, FIELD_CFG, TEXT_CFG, old);
     const own = Object.assign({}, Field, {
+      _textual: true,
       build() {
         this.input = textInput(this, { type: this.inputType || 'text', oninput: () => this._changed() });
         this.input.value = this.value ?? '';
         return this._wrap(this.input, 'r4-textfield');
       },
       afterRender() { this._initField(); },
-      getValue() { return this.input ? this.input.value : (this.value ?? ''); },
+      getValue() { return this._clean(this.input ? this.input.value : (this.value ?? '')); },
       setValue(v) { if (this.input) this.input.value = v ?? ''; else this.value = v; return this; }
     });
     Object.defineProperties(P, Object.getOwnPropertyDescriptors(own));
     const m = e.meta;
     m.description = 'Campo de texto com rótulo, validação (obrigatório, tamanho, e-mail, pattern, match, validator), mensagem de erro acessível e eventos change/enter/blur.';
     m.props = [{ name: 'inputType', type: 'string', default: "'text'", desc: 'text, email, url, tel, search...' }, ...fieldDocs, ...textDocs];
-    m.events = ['change', 'enter', 'blur', 'invalid', 'reset'];
-    if (m.playground) m.playground.controls = Object.assign({}, m.playground.controls, { required: false, minLength: 0, email: false, helpText: '', validateOn: ['blur', 'input', 'submit'], disabled: false });
+    m.events = ['change', 'enter', 'blur', 'invalid', 'reset', 'suspicious'];
+    if (m.playground) m.playground.controls = Object.assign({}, m.playground.controls, { required: false, minLength: 0, email: false, helpText: '', validateOn: ['blur', 'input', 'submit'], disabled: false, guard: ['warn', 'block', 'off'], sanitize: true });
   })();
 
   /* =====================================================================
@@ -952,10 +1035,11 @@
   R4.define('textarea', {
     extend: 'field',
     config: Object.assign({}, TEXT_CFG, { rows: 3, autoGrow: false, maxRows: 12, counter: false }),
+    _textual: true, _multiline: true,
     build() {
       const ids = this._ids();
       this.input = el('textarea', { class: 'r4-input r4-textarea', id: ids.input, name: this.name || null, rows: this.rows,
-        placeholder: this.placeholder || null, maxlength: this.maxLength > 0 ? this.maxLength : null,
+        placeholder: this.placeholder || null, maxlength: this.maxLength > 0 ? this.maxLength : (this._san() ? this._limit() : null),
         oninput: () => { this._count(); this._grow(); this._changed(); } });
       this.input.value = this.value ?? '';
       if (this.autoGrow) { this.input.style.maxHeight = (this.maxRows * 1.5 + 1) + 'em'; this.input.style.resize = 'none'; }
@@ -979,18 +1063,18 @@
       const h = this.input.scrollHeight;
       if (h) this.input.style.height = (h + 2) + 'px';
     },
-    getValue() { return this.input ? this.input.value : (this.value ?? ''); },
+    getValue() { return this._clean(this.input ? this.input.value : (this.value ?? '')); },
     setValue(v) { if (this.input) { this.input.value = v ?? ''; this._count(); this._grow(); } return this; }
   }, {
     title: 'textarea', group: G,
-    description: 'Texto em várias linhas com contador de caracteres e crescimento automático opcional. Enter não envia o form.',
+    description: 'Texto em várias linhas com contador de caracteres e crescimento automático opcional. Enter não envia o form. getValue() mantém as quebras de linha e tira controles/bidi/invisíveis (limite padrão 10.000 caracteres).',
     props: [
       { name: 'rows', type: 'number', default: '3', desc: 'Linhas visíveis.' },
       { name: 'autoGrow / maxRows', type: 'boolean / number', default: 'false / 12', desc: 'Cresce com o texto até maxRows linhas.' },
       { name: 'counter', type: 'boolean', default: 'false', desc: 'Mostra o contador (automático quando há maxLength).' },
       ...textDocs.filter(p => p.name !== 'email' && p.name !== 'autocomplete'), ...fieldDocs
     ],
-    events: fieldEvents
+    events: textEvents
   });
 
   /* =====================================================================
@@ -1125,7 +1209,13 @@
    * ===================================================================== */
   R4.define('passwordfield', {
     extend: 'field',
-    config: Object.assign({}, TEXT_CFG, { showToggle: true, showStrength: false, minStrength: 0 }),
+    // senha: nada de normalizar/colapsar (mudaria a senha); sanitize só tira NUL e guard fica desligado
+    // (nunca inspecionar/registrar senha)
+    config: Object.assign({}, TEXT_CFG, { showToggle: true, showStrength: false, minStrength: 0, guard: 'off' }),
+    _textual: true,
+    _clean(v) { return this._san() && typeof v === 'string' ? v.replace(/\u0000/g, '') : v; },
+    _over() { return !!this._san() && [...this._rawText()].length > this._limit(); },
+    _guardMode() { return 'off'; },
     build() {
       const ids = this._ids();
       this.input = textInput(this, { type: 'password', spellcheck: 'false', autocapitalize: 'off',
@@ -1170,7 +1260,7 @@
       }
       return this;
     },
-    getValue() { return this.input ? this.input.value : (this.value ?? ''); },
+    getValue() { return this._clean(this.input ? this.input.value : (this.value ?? '')); },
     setValue(v) { if (this.input) { this.input.value = v ?? ''; this._meter(); } return this; },
     _typeCheck(v) { return this.minStrength > 0 && strength(v) < this.minStrength ? this._msg('weak') : true; }
   }, {
@@ -1180,7 +1270,10 @@
       { name: 'showToggle', type: 'boolean', default: 'true', desc: 'Botão Mostrar/Ocultar.' },
       { name: 'showStrength', type: 'boolean', default: 'false', desc: 'Barra de força (Muito fraca → Muito forte).' },
       { name: 'minStrength', type: 'number', default: '0', desc: 'Força mínima exigida (0 a 4); também liga o medidor.' },
-      ...textDocs.filter(p => p.name !== 'email'), ...fieldDocs,
+      ...textDocs.filter(p => p.name !== 'email' && p.name !== 'sanitize' && p.name !== 'guard' && p.name !== 'getSuspicion()'),
+      { name: 'sanitize', type: 'boolean', default: 'true', desc: 'Na senha só tira NUL e limita ao tamanho (1000 por padrão): normalizar mudaria a senha.' },
+      { name: 'guard', type: "'off'", default: "'off'", desc: 'Sempre desligado na senha: a lib nunca inspeciona nem registra senhas.' },
+      ...fieldDocs,
       { name: 'toggleVisible(bool) / getStrength()', type: 'método', desc: 'Mostra/oculta / força atual (0-4).' }
     ],
     events: ['change', 'blur', 'enter', 'invalid', 'reset']
@@ -1192,6 +1285,7 @@
   R4.define('maskfield', {
     extend: 'field',
     config: Object.assign({}, TEXT_CFG, { mask: '', raw: true, validateMask: true }),
+    _textual: true,
     build() {
       const m = String(this.mask || '').toLowerCase(), digits = ['cpf', 'telefone', 'celular', 'fone', 'cep', 'moeda', 'data', 'hora', 'cartao'].includes(m) || (!NAMED[m] && /^[^AS]*$/.test(String(this.mask)));
       this.input = textInput(this, { inputmode: digits ? 'numeric' : null, autocomplete: this.autocomplete || 'off', maxlength: null,
@@ -1219,8 +1313,8 @@
     _raw() { return unmaskValue(this.input ? this.input.value : this.value, this.mask); },
     getValue() {
       if (!this.input) return this.value;
-      if (this.raw === false || this.raw === 'false') return this.input.value;
-      return this._raw();
+      if (this.raw === false || this.raw === 'false') return this._clean(this.input.value);
+      return this._raw();   // só os caracteres significativos da máscara ([0-9A-Za-z]) ou Number (moeda)
     },
     setValue(v) { if (this.input) this.input.value = maskValue(v ?? '', this.mask); return this; },
     /** Valor formatado (com máscara), independente de raw */
@@ -1248,7 +1342,7 @@
       ...textDocs.filter(p => p.name !== 'email'), ...fieldDocs,
       { name: 'getMasked()', type: 'string', desc: 'Texto formatado, sempre.' }
     ],
-    events: ['change', 'blur', 'enter', 'invalid', 'reset']
+    events: ['change', 'blur', 'enter', 'invalid', 'reset', 'suspicious']
   });
 
   /* =====================================================================
@@ -1394,6 +1488,7 @@
       f.addEventListener('reset', ev => { ev.preventDefault(); this.reset(); });
       f.addEventListener('keydown', ev => this._onKey(ev));
       f.addEventListener('r4-fieldchange', ev => this._onFieldChange(ev));
+      f.addEventListener('r4-suspicious', ev => { const d = ev.detail || {}; if (d.field && d.field._form && d.field._form() === this) this.fire('suspicious', this, d.field, d.kinds, d.detail); });
       if (this.html) f.innerHTML = this.html;
       this.renderItems(f, [...(this.fields || []), ...(this.items || [])].map(fieldCfg), 'textfield');
       this.msgEl = el('div', { class: 'r4-form-msg r4-alert', hidden: true });
@@ -1440,16 +1535,25 @@
     getFields() { return this.el ? fieldsIn(this.el, this) : []; },
     getField(name) { return this.getFields().find(f => f.name === name) || null; },
     _groups(all) {
-      const g = {};
-      this.getFields().forEach(f => { if (all || !f.disabled) (g[f.name] ||= []).push(f); });
+      const g = Object.create(null);   // name "__proto__" não vira acesso ao protótipo
+      this.getFields().forEach(f => {
+        if (BAD_NAMES.has(f.name)) { if (!f._badName) { f._badName = true; R4.warn('form: campo com name "' + f.name + '" ignorado (chave perigosa)'); } return; }
+        if (all || !f.disabled) (g[f.name] ||= []).push(f);
+      });
       return g;
     },
-    /** Objeto { name: valor }. Campos desabilitados ficam de fora (passe true para incluir). */
+    /**
+     * Objeto { name: valor }. Campos desabilitados ficam de fora (passe true para incluir).
+     * Higiene: names __proto__/constructor/prototype são ignorados; texto sai sem NUL/controles/bidi
+     * (R4.sanitize.deep), exceto campos com sanitize:false; senha só perde NUL.
+     */
     getValues(all) {
-      const out = {}, g = this._groups(all);
+      const out = {}, g = this._groups(all), S = R4.sanitize;
       Object.keys(g).forEach(n => {
-        const list = g[n];
-        out[n] = list.length === 1 ? list[0].getValue() : list.map(f => f.getValue()).filter(v => !(v === '' || v === false || v == null));
+        const list = g[n], f0 = list[0];
+        let v = list.length === 1 ? f0.getValue() : list.map(f => f.getValue()).filter(v => !(v === '' || v === false || v == null));
+        if (S && f0.sanitize !== false && f0.sanitize !== 'false' && f0.xtype !== 'passwordfield') v = S.deep(v);
+        out[n] = v;
       });
       return out;
     },
@@ -1458,6 +1562,7 @@
       if (!obj || typeof obj !== 'object') return this;
       const g = this._groups(true);
       Object.keys(obj).forEach(n => {
+        if (BAD_NAMES.has(n)) return;
         const list = g[n]; if (!list) return;
         const v = obj[n];
         if (list.length > 1 && Array.isArray(v)) list.forEach(f => f.setValue(f.inputValue ? v.includes(f.inputValue) : v));
@@ -1560,10 +1665,12 @@
       if (this.fire('beforesubmit', this, values) === false) return false;
       this.fire('submit', this, values);
       if (!this.action) return { ok: true, status: 0, data: values };
+      // o que um ouvinte de beforesubmit/submit tiver acrescentado também perde chaves de protótipo
+      const data = R4.sanitize ? R4.sanitize.deep(values, { strip: false }) : values;
       this._setBusy(true);
       let res;
       try {
-        res = await send(this.action, { method: this.method, data: values, encrypt: bool(this.encrypt), headers: this.headers });
+        res = await send(this.action, { method: this.method, data, encrypt: bool(this.encrypt), headers: this.headers });
       } catch (e) {
         res = { ok: false, status: 0, data: null, error: e };
         R4.warn('form: envio falhou — ' + (e && e.message));
@@ -1619,13 +1726,14 @@
       { name: 'values', type: 'object', default: 'null', desc: 'Valores iniciais (viram o "original" para reset/isDirty).' },
       { name: 'resetOnSuccess', type: 'boolean', default: 'false', desc: 'Limpa após enviar com sucesso (senão os valores enviados viram o original).' },
       { name: 'submitOnEnter / focusInvalid', type: 'boolean', default: 'true', desc: 'Enter num campo envia / foca o primeiro campo inválido.' },
-      { name: 'getValues() / setValues(obj, commit)', type: 'método', desc: 'Lê / preenche pelo name. Campos desabilitados ficam fora de getValues().' },
+      { name: 'getValues() / setValues(obj, commit)', type: 'método', desc: 'Lê / preenche pelo name. Campos desabilitados ficam fora de getValues(). Texto sai limpo (sem NUL/controles/bidi) e names __proto__/constructor/prototype são ignorados — também no envio.' },
+      { name: 'suspicious(form, campo, tipos, detalhe)', type: 'evento', desc: "Um campo de texto com guard 'warn'/'block' encontrou sinais de injeção (tipos: sql, script, path, prompt, proto). Só sinal para UX/log: valide no servidor." },
       { name: 'validate() / isValid() / isDirty()', type: 'método', desc: 'Valida mostrando erros e focando o 1º inválido / só confere / houve alteração?' },
       { name: 'submit() / reset() / commit()', type: 'método', desc: 'submit() devolve Promise<{ok, status, data} | false>.' },
       { name: 'markErrors({campo: msg}) / clearErrors()', type: 'método', desc: 'Erros manuais por campo.' },
       { name: 'getFields() / getField(name) / isBusy()', type: 'método', desc: 'Acesso aos campos.' }
     ],
-    events: ['change', 'invalid', 'beforesubmit', 'submit', 'success', 'failure', 'reset']
+    events: ['change', 'invalid', 'beforesubmit', 'submit', 'success', 'failure', 'reset', 'suspicious']
   });
 
   /* =====================================================================
@@ -1727,7 +1835,7 @@
   PG('textarea', {
     html: '<r4-textarea name="obs" label="Observações"{attrs}></r4-textarea>',
     cfg: { name: 'obs', label: 'Observações' },
-    controls: { rows: 3, maxLength: 200, autoGrow: false, counter: false, required: false, minLength: 0, placeholder: 'Escreva aqui...', validateOn: ['blur', 'input', 'submit'] }
+    controls: { rows: 3, maxLength: 200, autoGrow: false, counter: false, required: false, minLength: 0, placeholder: 'Escreva aqui...', validateOn: ['blur', 'input', 'submit'], guard: ['warn', 'block', 'off'] }
   });
   PG('numberfield', {
     html: '<r4-numberfield name="qtd" label="Quantidade"{attrs}></r4-numberfield>',

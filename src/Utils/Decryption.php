@@ -27,7 +27,7 @@ class Decryption
      * @param array $encryptedData Array contendo 'x' (dados), 'y' (salt) e 'z' (iv)
      * @return array|null Retorna os dados descriptografados ou null em caso de erro
      */
-    public static function decrypt($encryptedData)
+    public static function decrypt($encryptedData, int $maxDepth = 512)
     {
         try {
             // Verificar se os dados necessários estão presentes
@@ -41,12 +41,13 @@ class Decryption
                 throw new \Exception('Dados de criptografia inválidos');
             }
 
-            $encrypted = base64_decode($encryptedData['x']); // data
-            $salt = base64_decode($encryptedData['y']);      // salt
-            $iv = base64_decode($encryptedData['z']);        // iv
+            // base64 estrito: lixo fora do alfabeto é erro, não é ignorado
+            $encrypted = base64_decode($encryptedData['x'], true); // data
+            $salt = base64_decode($encryptedData['y'], true);      // salt
+            $iv = base64_decode($encryptedData['z'], true);        // iv
 
             // GCM: IV de 12 bytes e tag de 16 (tag truncada enfraquece a autenticação)
-            if (strlen($iv) !== 12 || strlen($encrypted) < 17) {
+            if ($encrypted === false || $salt === false || $iv === false || strlen($iv) !== 12 || strlen($encrypted) < 17) {
                 throw new \Exception('Pacote de criptografia malformado');
             }
 
@@ -74,8 +75,8 @@ class Decryption
                 throw new \Exception('Falha ao descriptografar dados');
             }
 
-            // Retornar dados decodificados
-            return json_decode($decrypted, true);
+            // Retornar dados decodificados (profundidade limitada pelo chamador)
+            return json_decode($decrypted, true, max(1, $maxDepth));
 
         } catch (\Throwable $e) {
             error_log('Erro na descriptografia: ' . $e->getMessage());

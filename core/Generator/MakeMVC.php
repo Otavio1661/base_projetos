@@ -1,4 +1,3 @@
-
 <?php
 
 // Uso: php core/Generator/MakeMVC.php NomeMvc [get|post|put|delete] [/rota]
@@ -9,9 +8,20 @@ if ($argc < 2) {
 }
 
 $name = $argv[1];
+// O nome vira classe, método, caminho de arquivo e texto dentro do código gerado:
+// só [A-Za-z][A-Za-z0-9_]* (sem "../", aspas, ";" — que gravariam fora de src/ ou injetariam código).
+if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{0,63}$/', $name)) {
+    echo "Erro: nome inválido. Use apenas letras, números e _ (começando por letra).\n";
+    exit(1);
+}
 $httpMethod = isset($argv[2]) ? strtolower($argv[2]) : 'get';
 $httpMethod = in_array($httpMethod, ['get','post','put','delete'], true) ? $httpMethod : 'get';
 $routePath = isset($argv[3]) ? $argv[3] : '/' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $name));
+// A rota vai para dentro de src/routes.php entre aspas simples: só caminho simples
+if (!preg_match('#^/[A-Za-z0-9_\-/]*$#', $routePath)) {
+    echo "Erro: rota inválida. Use algo como /produto ou /admin/produtos.\n";
+    exit(1);
+}
 
 // Nomes de classes/método
 $controllerClass = ucfirst($name) . "Controller";
@@ -25,9 +35,9 @@ $modelFile      = "src/Model/{$modelClass}.php";
 $viewFile       = "src/view/{$name}.php";
 
 // Garante diretórios
-@mkdir("src/Controllers", 0777, true);
-@mkdir("src/Model", 0777, true);
-@mkdir("src/view", 0777, true);
+@mkdir("src/Controllers", 0755, true);
+@mkdir("src/Model", 0755, true);
+@mkdir("src/view", 0755, true);
 
 // Templates
 $controllerContent = <<<PHP
@@ -68,15 +78,27 @@ use Core\\Controller as ctrl;
 
 class {$modelClass}
 {
-    public function example()
+    /**
+     * Exemplo de consulta SEGURA: valor sempre por parâmetro (prepare/bind), nunca concatenado.
+     *   ERRADO: "SELECT * FROM tabela WHERE nome = '" . \$nome . "'"
+     *   CERTO : prepare('... WHERE nome = :nome') + execute([':nome' => \$nome])
+     * Coluna/tabela dinâmica (ORDER BY) não pode ser parâmetro: use allowlist ou Database::ident().
+     */
+    public function example(string \$nome = '')
     {
         try {
-            // Exemplo de chamada ao Database::switchParams
-            // \$info = Database::switchParams(\$params, 'seu_sql', true);
+            \$pdo = Database::getInstance();
+            \$stmt = \$pdo->prepare('SELECT * FROM tabela WHERE nome = :nome LIMIT 50');
+            \$stmt->bindValue(':nome', \$nome, PDO::PARAM_STR);
+            \$stmt->execute();
+            return \$stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            ctrl::retorno(['message' => 'OK'], 200);
+            // ou com SQL em arquivo (src/sql/seu_sql.sql com :nome):
+            // \$info = Database::switchParams(['nome' => \$nome], 'seu_sql', true);
         } catch (Exception \$e) {
-            ctrl::retorno(['error' => \$e->getMessage()], 400);
+            // detalhe (SQL, tabela) só no log; o cliente recebe mensagem genérica
+            error_log('[{$modelClass}] ' . \$e->getMessage());
+            ctrl::retorno('Erro ao consultar os dados.', 500);
         }
     }
 }

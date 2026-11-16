@@ -15,8 +15,9 @@ if ($argc >= 3 && in_array(strtolower($argv[1]), ['mvc','controller','model','vi
     $idx = 2;
 }
 $name = $argv[$idx] ?? null;
-if (!$name) {
-    echo "Erro: Nome inválido.\n";
+// O nome vira caminho de arquivo que será APAGADO: só [A-Za-z][A-Za-z0-9_]* (nunca "../")
+if (!$name || !preg_match('/^[A-Za-z][A-Za-z0-9_]{0,63}$/', $name)) {
+    echo "Erro: Nome inválido. Use apenas letras, números e _ (começando por letra).\n";
     exit(1);
 }
 

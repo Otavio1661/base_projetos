@@ -5,6 +5,7 @@ continua sendo responsabilidade de quem a usa, a verdade sobre a criptografia no
 checklist de produção e a auditoria feita (achados, correções e testes).
 
 Testes automatizados: `node tools/testes-seguranca.js` (veja a seção 12).
+Injeção de SQL, de arquivos e de prompt (servidor + cliente): seção 13.
 
 ---
 
@@ -198,6 +199,12 @@ de tema e usa `style="..."` nos gráficos).
 - [ ] `R4.config.strictOrigins = true` (e `allowedOrigins` se usar API de outro domínio).
 - [ ] Vitrine desabilitada (automático com `APP_DEBUG=false`) e rota `/` apontando para a aplicação.
 - [ ] Toda entrada validada de novo no servidor (tamanho, tipo, formato); limite de taxa no proxy.
+      Use `ctrl::validate([...])` / `Core\Security\Input` em toda rota que recebe dados (seção 13).
+- [ ] Nenhum SQL montado com concatenação de entrada: só `prepare`/`bind`; colunas dinâmicas por allowlist.
+- [ ] Upload só com `Core\Security\Upload` (allowlist, destino em `storage/`, fora do `public/`); `storage/`
+      gravável só pelo usuário do PHP e fora do backup público.
+- [ ] Texto que vai para IA com `Core\Security\Prompt`; o modelo sem ferramentas perigosas; a SAÍDA dele
+      escapada/validada antes de virar HTML, SQL ou comando.
 - [ ] HTML de usuário só sanitizado e dentro de `r4-ignore`.
 - [ ] Revisar os pontos "não corrigidos" da seção 11 (`Decryption.php`, `index.php`, sessão).
 
@@ -285,16 +292,16 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 
 ## 11. Não corrigido (fora dos arquivos desta tarefa) — recomendações
 
-- **`src/Utils/Decryption.php`**: capturar `\Throwable` (não só `\Exception`), exigir `is_string`
-  em `x/y/z`, `base64_decode(..., true)`, IV com 12 bytes e **tag com exatamente 16 bytes** (o
-  OpenSSL aceita tags truncadas). Hoje um pacote malformado derruba qualquer rota que use
-  `getPost()` com erro fatal (e mostra caminho/stack com `APP_DEBUG=true`).
+- **`src/Utils/Decryption.php`**: ~~capturar `\Throwable`, `is_string` em `x/y/z`, IV de 12 bytes,
+  tag de 16~~ (já feito); `base64_decode(..., true)` e profundidade do JSON limitada **feitos na seção 13**.
+  `getDecryptedPost()` ficou só por compatibilidade: `Controller::getPost()` não usa mais (lê o corpo
+  com limite de 2 MB e profundidade 32).
 - **`public/index.php`**: injetar a chave com `json_encode($chave, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)`
   (aspas ou `</script>` na chave quebrariam/injetariam script); usar nonce de CSP; injetar só nas
   páginas que usam `R4.crypto`; `session_set_cookie_params(['httponly' => true, 'secure' => true, 'samesite' => 'Lax'])`
   antes de `session_start()`; `expose_php=Off`.
-- **`core/Controller.php`**: a página de "view não encontrada" mostra caminhos do servidor (só
-  ocorre em erro de programação; esconder quando `APP_DEBUG=false`).
+- ~~**`core/Controller.php`**: a página de "view não encontrada" mostra caminhos do servidor~~ —
+  corrigido na seção 13 (com `APP_DEBUG=false` só "Erro interno"; detalhe no log).
 - **CSP estrita**: depende do item do `index.php` (seção 7).
 - **ReDoS por alternância sobreposta** (`(a|aa)+$`) não é detectado — limitação documentada.
 - **HTML confiável por design** (seção 3) continua sendo HTML: a lib documenta, não escapa.
@@ -320,3 +327,165 @@ não estiver pronto). Os testes usam payloads reais (`<img src=x onerror=...>`, 
 quebradas, valores gigantes, `(a+)+$`, XLSX malicioso, JSON malicioso no `localStorage`) e conferem
 `window.__pwn` indefinido, nenhum `alert()` e nenhum elemento/atributo ativo no DOM (o jsdom não
 carrega imagens, então além da execução o teste procura `on*`, `<script>` e `javascript:` no DOM).
+
+A parte de injeção (seção 13) faz requisições HTTP reais contra o `:8087` (equivalentes a `curl`,
+inclusive multipart montado byte a byte para nomes com NUL/`../`), roda o PHP pela linha de comando
+(`Input`/`Prompt` unitários e os geradores numa pasta temporária) e confere que nada foi gravado fora
+de `storage/uploads/vitrine`. Payloads: `' OR 1=1 --`, `'; DROP TABLE`, `UNION SELECT`, `%`, `../`,
+`%00`/NUL, `.php` disfarçado de imagem, `shell.php.jpg`, `.phtml`/`.phar`/`.htaccess`/`.user.ini`, PNG
+poliglota, arquivo de 2,5 MB e de 5 MB, PNG de 20000×20000, "ignore as instruções anteriores"/"ignore
+all previous instructions", `<|im_start|>`, arrays/objetos no lugar de texto, JSON com 100 níveis,
+bidi/zero-width/"tags" Unicode, `__proto__`.
+
+---
+
+## 13. Injeção: SQL, arquivos e prompts
+
+> **Princípio (inegociável):** validação no navegador **não protege o servidor**. Qualquer pessoa
+> chama `/sua/api` com `curl`, Postman ou um script, sem passar pela página, sem libr4 e sem os
+> avisos dos campos. A proteção real fica no PHP: **consultas preparadas**, **validação por
+> esquema**, **upload seguro** e **tratamento do texto que vai para um modelo de IA**. O cliente faz
+> defesa em profundidade: normaliza (não manda NUL/bidi/lixo invisível), limita tamanho, avisa ou
+> bloqueia o envio de conteúdo suspeito (UX) e gera sinais para log.
+>
+> O cliente **não** "escapa SQL". Trocar `'` por `\'` no navegador é antipadrão: quebra nomes como
+> O'Brien, dá falsa sensação de segurança e não impede nada (o atacante não usa o seu navegador).
+
+### 13.1 O que a lib garante
+
+| Camada | Garantia |
+|---|---|
+| `Core\Database` | PDO com `ERRMODE_EXCEPTION`, `EMULATE_PREPARES=false` (prepare real no servidor), `utf8mb4`; `switchParams` só faz bind (parâmetro não escalar → erro, nunca "Array"); nome do `.sql` só `[A-Za-z0-9_-/]` (sem `..`); erro detalhado só no log (sem `APP_DEBUG` a resposta é genérica); rollback só da transação que a chamada abriu; `Database::ident()` valida identificadores (tabela/coluna) por formato. |
+| `Core\Controller` | `getPost()` lê no máximo 2 MB (`MAX_POST_BYTES` no `.env` muda) e JSON com profundidade ≤ 32 (`Controller::$postErro` = 413/400); `ctrl::validate($regras)` responde 422 `{status, retorno:'Dados inválidos', erros:{campo:msg}}`; JSON das respostas com `JSON_HEX_*` + `JSON_INVALID_UTF8_SUBSTITUTE` + `nosniff`; `render()` só aceita nome de view `[A-Za-z0-9_-/]` e faz `extract(..., EXTR_SKIP)` depois de calcular o caminho (dado nunca troca `$viewFile`). |
+| `Core\Security\Input` | Esquema declarativo; **recusa campos não declarados** (mass-assignment); tipos `string, int, float, bool, email, url (só http/https), enum, date, array, object, cpf, cnpj, phone`; texto sempre limpo (UTF-8 válido, NFC se houver `intl`, sem NUL/controles/bidi/zero-width/"tags"), `maxLength` padrão 1000; listas ≤ 100 itens, profundidade ≤ 5, corpo ≤ 200 chaves; nunca erro fatal/aviso com entrada malformada. |
+| `Core\Security\Upload` | Um arquivo por campo; erro do PHP; `is_uploaded_file`; tamanho real; nome com NUL/controle/`/`/`\`/bidi recusado; extensão final em allowlist; **dupla extensão perigosa** recusada; extensões executáveis/ativas **nunca** aceitas (php, phtml, phar, exe, js, svg, html, htaccess, ini...); **MIME real (`finfo`) + assinatura** coerentes com a extensão; `<?php` em qualquer ponto (e `<?=` em texto) recusado; texto precisa ser UTF-8; imagem lida por `getimagesize` com limite de pixels; grava com **nome aleatório** (`bin2hex(random_bytes(16))`) **fora do docroot** (`storage/`), pasta 0750 + `.htaccess` "deny", arquivo 0640; nunca inclui/executa; `Upload::limpar()` apaga antigos. |
+| `Core\Security\Prompt` | `untrusted()` limpa, corta, neutraliza `system:`/`### Assistant:`, `<system>`/`</instructions>`/`</dados_do_usuario>`, `<|im_start|>`, `[INST]`, `<<SYS>>`, cercas ` ``` `/`~~~`, e embrulha em `<dados_do_usuario id="aleatório">`; `systemGuard($id)` diz ao modelo que aquilo é DADO; `looksLikeInjection()` devolve sinais (pt/en) para log. |
+| `R4.sanitize` (cliente) | `text`, `strip`, `deep`, `filename`, `detect`, `prompt`, `sniffFile`, `dangerousName`, `url`. Campos de texto: `sanitize: true` (padrão) — `getValue()` limpo e limitado (1000; textarea 10000; `maxlength` no HTML); `guard: 'warn'` (padrão; aviso visível, `console.warn` **sem o valor**, evento `suspicious`) ou `'block'` (campo inválido, form não envia); senha só perde NUL e nunca é inspecionada. `form.getValues()`/`submit()` tiram NUL/controles/bidi e chaves `__proto__/constructor/prototype`. `filedrop`: nome exibido/enviado saneado, `blockExec` (executáveis e dupla extensão), `sniff` (assinatura × extensão), `upload(url)` em multipart com o nome saneado. |
+
+### 13.2 O que o desenvolvedor DEVE fazer no servidor
+
+1. **SQL: só consulta preparada.** Nunca concatene entrada em SQL — nem "validada", nem "escapada".
+   ```php
+   // ERRADO (injeção): "SELECT * FROM clientes WHERE nome = '" . $nome . "'"
+   $st = Database::getInstance()->prepare('SELECT id, nome FROM clientes WHERE nome = :nome');
+   $st->execute([':nome' => $nome]);
+   // LIKE: o valor também é parâmetro, e % _ digitados são escapados
+   $st = $pdo->prepare("SELECT id FROM clientes WHERE nome LIKE :p ESCAPE '\\'");
+   $st->execute([':p' => '%' . strtr($busca, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']) . '%']);
+   // ORDER BY / coluna dinâmica: NÃO pode ser parâmetro → allowlist
+   $col = in_array($_GET['sort'] ?? '', ['nome', 'criado_em'], true) ? $_GET['sort'] : 'nome';
+   ```
+2. **Toda rota que recebe dados valida por esquema** (tipo, tamanho, formato, campos permitidos):
+   ```php
+   use Core\Controller as ctrl;
+   $d = ctrl::validate([
+       'nome'  => ['type' => 'string', 'required' => true, 'minLength' => 3, 'maxLength' => 120],
+       'email' => ['type' => 'email', 'required' => true],
+       'idade' => ['type' => 'int', 'min' => 0, 'max' => 130],
+       'plano' => ['type' => 'enum', 'in' => ['basico', 'pro']],
+       'tags'  => ['type' => 'array', 'items' => ['type' => 'string', 'maxLength' => 30], 'maxItems' => 10],
+       'obs'   => ['type' => 'string', 'multiline' => true, 'maxLength' => 2000],
+   ]);
+   // chegou aqui: $d tem só esses campos, limpos e com o tipo certo (senão já respondeu 422)
+   $id  = Input::id($_GET['id'] ?? null);                       // int > 0 ou null
+   $url = Input::safeRedirect($_GET['volta'] ?? '', ['app.exemplo.com']);   // sem redirecionamento aberto
+   ```
+   Validar **não** substitui o prepare (texto válido pode conter `'`), e **não** substitui escapar na
+   saída HTML (`htmlspecialchars($v, ENT_QUOTES, 'UTF-8')` / `R4.util.esc`).
+3. **Upload só pela classe, para fora do `public/`:**
+   ```php
+   $r = Upload::save('arquivo', ['permitidos' => ['png', 'jpg', 'pdf'], 'maxBytes' => 2 * 1024 * 1024,
+       'destino' => Upload::storage('documentos'), 'imagem' => ['maxLargura' => 4000, 'maxAltura' => 4000]]);
+   if (!$r['ok']) ctrl::responder(['status' => 422, 'retorno' => 'Arquivo recusado', 'erros' => ['arquivo' => implode(' ', $r['erros'])]], 422);
+   // guarde $r['arquivo']['nome'] (aleatório) no banco; NUNCA devolva $r['arquivo']['caminho'] ao cliente
+   ```
+   Para devolver o arquivo: controller que confere a permissão do usuário, lê de `storage/` e envia
+   com `Content-Type` fixo da allowlist, `Content-Disposition: attachment` e `X-Content-Type-Options: nosniff`.
+   Nunca `include`/`require` de arquivo enviado; nunca sirva `storage/` direto pelo servidor web.
+4. **Texto para IA:**
+   ```php
+   $p = Prompt::montar('Classifique a reclamação em: entrega, produto ou cobrança. Responda só a palavra.', $d['mensagem']);
+   if ($p['sinais']) error_log('[ia] possível injeção: ' . json_encode(array_column($p['sinais'], 'sinal')));
+   // $resposta = seuClienteLLM($p['system'], $p['user']);
+   $categoria = in_array($resposta, ['entrega', 'produto', 'cobranca'], true) ? $resposta : 'indefinida';   // valide a SAÍDA
+   ```
+   **Injeção de prompt não pode ser eliminada só com filtros.** O modelo não separa instrução de dado
+   com garantia; o bloco delimitado e a guarda reduzem a chance, a heurística ajuda a detectar — e
+   ambos podem ser contornados (paráfrase, outro idioma, texto codificado, conteúdo de documento/página
+   que o modelo lê). O que limita o estrago: **privilégio mínimo** (o modelo só vê o que o usuário
+   já pode ver), **nenhuma ferramenta sensível** (apagar, pagar, enviar e-mail, rodar SQL/comando) sem
+   **confirmação humana**, **validar/escapar a SAÍDA** do modelo como dado não confiável (HTML → escape;
+   SQL → prepare; nunca `eval`/shell), **nunca colocar segredos** no prompt (chaves, senhas, dados de
+   outros usuários) e registrar os sinais para auditoria e limite de taxa.
+
+### 13.3 Exemplos no cliente (UX, não segurança)
+
+```html
+<!-- padrão: limpa e avisa; o servidor valida de novo -->
+<r4-textfield name="nome" label="Nome" max-length="120"></r4-textfield>
+<!-- campo de busca: bloqueia o envio de algo com cara de injeção -->
+<r4-textfield name="q" label="Buscar" guard="block"></r4-textfield>
+<!-- conteúdo técnico legítimo (ex.: SQL num campo de "consulta salva"): sem aviso -->
+<r4-textarea name="sql" label="Consulta" guard="off"></r4-textarea>
+<r4-filedrop accept=".png,.jpg,.pdf" max-size="2097152"></r4-filedrop>
+```
+
+```js
+R4.sanitize.text('  Ana\u0000 Souza  ')          // 'Ana Souza'
+R4.sanitize.filename('..\\..\\shell.php.jpg')     // 'shell_php.jpg'
+R4.sanitize.kinds(R4.sanitize.detect("' OR '1'='1"))   // ['sql']  (só sinal)
+await R4.sanitize.sniffFile(arquivo)               // { kind: 'php', ext: 'png', match: false }
+filedrop.upload('/api/upload')                     // multipart com o nome saneado
+form.on('suspicious', (f, campo, tipos) => log(campo.name, tipos))
+```
+
+Na vitrine, item **R4.sanitize** (grupo Núcleo): cadastro com payload SQL, os três modos de `guard`
+com payloads prontos para copiar (`' OR '1'='1`, `'; DROP TABLE x;--`, `../../etc/passwd`,
+`shell.php.jpg`, `ignore as instruções anteriores...`), "pular o navegador" (chama a API direto e
+mostra o 422 do servidor), upload com arquivos hostis gerados na hora, prompt (prévia no cliente e
+bloco montado no servidor) e busca/SQL real com prepare.
+
+Endpoints de demonstração (só com `APP_DEBUG=true`): `POST /vitrine/api/cadastro` (esquema),
+`POST /vitrine/api/upload` (campo `arquivo`; png/jpg/pdf/csv/txt até 2 MB; grava em
+`storage/uploads/vitrine`, apaga após 1 h e mantém no máximo 50), `POST /vitrine/api/prompt`
+(`{texto}`; não chama LLM), `GET /vitrine/api/busca?q=` (texto literal) e
+`GET /vitrine/api/sql-seguro?nome=&contem=` (SQLite em memória com prepare/bind; `x' OR '1'='1` → 0 linhas).
+
+### 13.4 Achados no PHP existente e correções
+
+| # | Sev. | Onde | Problema | Correção |
+|---|---|---|---|---|
+| 23 | M | `core/Generator/*`, `core/Migration/Migration.php` | Nome vindo da linha de comando ia direto para o código gerado e para o caminho: `composer controller "../../public/x"` grava fora de `src/`; `x';system('id');//` injeta código no arquivo gerado; `excluir mvc ../../core/Controller` apagaria arquivos do núcleo. | Nome só `[A-Za-z][A-Za-z0-9_]{0,63}`, rota só `/[A-Za-z0-9_-/]*`; `fopen(..., 'x')`; pastas 0755. Testado (nada criado, saída 1). |
+| 24 | M | templates dos geradores | Model gerado devolvia `$e->getMessage()` ao cliente (SQL/tabela no 400) e não tinha exemplo de prepare; controller gerado usava `App\Model\Model` inexistente (erro fatal); migration fazia `rollBack()` depois de DDL (exceção "no active transaction"); `MakeMVC.php` tinha uma linha em branco antes do `<?php`. | Templates com `prepare` + `bindValue`, `ctrl::validate` de exemplo, erro só no log, `inTransaction()`; geradores testados com `php -l`. |
+| 25 | M | `core/Controller.php` `render()` | `extract($data)` antes de montar `$viewFile` e sem validar `$view`: `render('x', $_GET)` ou `render($_GET['p'])` permitiria incluir outro `.php` (LFI). Página de erro mostrava caminhos mesmo sem `APP_DEBUG`. | Nome de view por allowlist, `EXTR_SKIP` depois do caminho, sem caminhos fora do debug. |
+| 26 | M | `core/Database.php` `switchParams()` | Nome do `.sql` concatenado no caminho (traversal); mensagem do PDO devolvida a quem chamou (e os templates repassavam ao cliente); `rollBack()` mesmo sem transação própria (desfazia a do chamador ou gerava exceção fatal no `catch`); array de JSON virava "Array" com aviso. | Allowlist no nome, `\Throwable`, rollback só do que abriu, erro genérico sem debug, parâmetros só escalares. |
+| 27 | M | `core/Controller.php` `getPost()` | Corpo sem limite e JSON com profundidade 512 (DoS por memória/CPU). | 2 MB / profundidade 32, resultado em cache, `Controller::$postErro`. |
+| 28 | B | `core/Database.php` | `charset=utf8` (3 bytes no MySQL: corta emoji, histórico de truncamento) e identificadores de `runMigration` sem validação. | `utf8mb4`, `Database::ident()`, definição de coluna sem `;`/comentário. |
+| 29 | B | `core/Controller.php` `json()`/`retorno()` | `json_encode` sem flags: UTF-8 inválido → corpo vazio; `<`/`>` crus. | `JSON_HEX_*`, `JSON_INVALID_UTF8_SUBSTITUTE`, `nosniff`. |
+| 30 | B | `src/Utils/Decryption.php` | `base64_decode` não estrito; profundidade do JSON decifrado 512. | Estrito; profundidade passada pelo `getPost()`. |
+| 31 | B | `VitrineApiController::cadastro` | Validação manual só de nome/e-mail; demais campos ignorados (mass-assignment se fosse gravar). | `ctrl::validate` com esquema completo. |
+| 32 | I | `docker/nginx/default.conf`, `docker/php/zz-app.ini` | `client_max_body_size 20m`; `.phtml`/`.phar` em `public/` seriam servidos como texto; nada impedia servir `storage/`. | 10m + `client_body_timeout`; `.php[0-9]`/`.phtml`/`.phar`/`.phps`/`.inc` → 404; `/storage` e `/uploads` → 404; limites de upload/`max_input_*` no PHP; `storage/` no `.gitignore`/`.dockerignore`. |
+
+Procurado e **não encontrado** no PHP: `eval`, `exec`/`shell_exec`/`system`/`passthru`/`proc_open`,
+`unserialize`, `include`/`require` com entrada, `file_get_contents` com URL do usuário,
+`header('Location: ' . $entrada)` e reflexão de entrada em HTML sem escape (as páginas de erro 404/405
+são estáticas). `$_GET` direto só na API de teste, sempre por funções que tipam/limitam.
+
+**Compatibilidade:** `getPost()` agora devolve `null` para corpo acima de 2 MB (antes lia tudo) —
+ajuste `MAX_POST_BYTES` se a sua API recebe mais. `Controller` ganhou os métodos estáticos
+`validate()` e `responder()` e a propriedade `$postErro`: um controller seu com método de mesmo
+nome (`public function validate()`, não estático) passa a dar erro fatal de assinatura — renomeie.
+Os campos de texto agora devolvem o valor **aparado e normalizado** e têm `maxlength` padrão
+(1000/10000); use `sanitize: false` para o comportamento antigo.
+
+### 13.5 Checklist (injeção)
+
+- [ ] Nenhum `"... WHERE x = '" . $v . "'"` no código (procure por `->query(` e `->exec(` com variável).
+- [ ] Toda rota POST/PUT/PATCH usa `ctrl::validate` (ou `Input::validate`) com `maxLength`/`max` em tudo.
+- [ ] IDs da URL passam por `Input::id`; redirecionamentos por `Input::safeRedirect`.
+- [ ] Ordenação/filtros dinâmicos por allowlist de colunas.
+- [ ] Upload só por `Upload::save`, destino em `storage/`, allowlist mínima, sem `svg`/`html`.
+- [ ] Saída para HTML sempre escapada; saída de IA tratada como entrada de usuário.
+- [ ] Modelo de IA sem ferramentas destrutivas; confirmação humana para ações; nenhum segredo no prompt.
+- [ ] Logs registram os sinais (`suspicious` no cliente, `looksLikeInjection` no servidor) sem gravar senhas.
+- [ ] `node tools/testes-seguranca.js` passando antes de publicar.
