@@ -11,6 +11,8 @@
  *    criptografia v2) é OBRIGATÓRIA e precisa ser válida;
  *  - política HTTPS (HTTPS_MODE, HTTP_PERMITIDO_PARA, TRUSTED_PROXIES, APP_HOSTS, HSTS_*) validada aqui e
  *    aplicada por Core\Security\Transport logo depois (public/index.php);
+ *  - anti-CSRF (CSRF_ATIVO, padrão true; CSRF_ORIGENS_PERMITIDAS, origens esquema://host[:porta]) validado
+ *    aqui e aplicado por Core\Security\Csrf (public/index.php);
  *  - BASE_CRIPTOGRAFIA está DEPRECADA: é ignorada (só gera aviso no log se ainda existir).
  */
 
@@ -36,7 +38,7 @@
     }
 
     // as classes de segurança são usadas na validação (funciona mesmo sem o autoload do Composer)
-    foreach (['Crypto', 'Transport'] as $classe) {
+    foreach (['Transport', 'Crypto', 'Csrf'] as $classe) {
         if (!class_exists('Core\\Security\\' . $classe)) {
             require_once __DIR__ . '/../core/Security/' . $classe . '.php';
         }
@@ -105,6 +107,21 @@
 
     $env['HSTS_MAX_AGE'] = $inteiro('HSTS_MAX_AGE', \Core\Security\Transport::HSTS_PADRAO, 0, 63072000);
     $env['HSTS_SUBDOMAINS'] = $booleano('HSTS_SUBDOMAINS', false);
+
+    /* ---------- anti-CSRF por origem (Core\Security\Csrf) ---------- */
+    $env['CSRF_ATIVO'] = $booleano('CSRF_ATIVO', true);
+    if (!$env['CSRF_ATIVO'] && $producao) {
+        \Core\Security\Transport::avisoUnico('csrf-desligado', 'CSRF_ATIVO=false em produção: POST/PUT/PATCH/DELETE vindos de outros sites NÃO são recusados. Use só temporariamente (docs/SEGURANCA.md, seção 5.2).');
+    }
+    $erros = [];
+    $origens = \Core\Security\Csrf::lerOrigens($texto($env['CSRF_ORIGENS_PERMITIDAS'] ?? ''), $erros);
+    if ($erros) {
+        $falhar('CSRF_ORIGENS_PERMITIDAS com item inválido: ' . implode(', ', $erros) . ' (use origens completas separadas por vírgula, ex.: https://app.exemplo.com ou https://app.exemplo.com:8443 — sem caminho, barra final ou curinga)');
+    }
+    if ($producao && array_filter($origens, static fn($o) => str_starts_with($o, 'http://'))) {
+        \Core\Security\Transport::avisoUnico('csrf-origem-http', 'CSRF_ORIGENS_PERMITIDAS tem origem http:// em produção (sem TLS ela pode ser falsificada no caminho).');
+    }
+    $env['CSRF_ORIGENS_PERMITIDAS'] = implode(',', $origens);
 
     /* ---------- criptografia v2 (Core\Security\Crypto) ---------- */
     $env['CRYPTO_OBRIGATORIA'] = $booleano('CRYPTO_OBRIGATORIA', false);

@@ -35,15 +35,18 @@ $conteudo = <<<PHP
 namespace App\\Middleware;
 
 use Core\\Controller as ctrl;
+use Core\\Security\\Session;
 
 class {$className}
 {
     /**
      * Executado antes da rota. Para barrar: responda e encerre (ctrl::retorno faz die).
-     * Exemplo: exige sessão autenticada.
+     * Exemplo: exige sessão autenticada. A sessão é sob demanda: Session::start() (idempotente) aplica o
+     * cookie seguro; no login chame Session::regenerar() logo depois de autenticar.
      */
     public function handle()
     {
+        Session::start();
         if (empty(\$_SESSION['usuario_id'])) {
             ctrl::retorno('Não autenticado.', 401);
         }

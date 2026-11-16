@@ -178,12 +178,13 @@ class HomeController extends ctrl
 
 ## Criptografia (frontend ↔ backend)
 
-- **Nenhum segredo vai para o navegador.** O servidor tem um par de chaves P-256: a privada fica só no `.env` (`CRYPTO_PRIVATE_KEY`, gerada com `php tools/gerar-chave.php`; em `APP_ENV=local` ela é criada sozinha em `storage/dev-crypto-key.pem`) e a pública vai para a página (`window.R4_SERVER_KEY`, injetada pelo `public/index.php`, ou `GET /r4/chave`).
+- **Nenhum segredo vai para o navegador.** O servidor tem um par de chaves P-256: a privada fica só no `.env` (`CRYPTO_PRIVATE_KEY`, gerada com `php tools/gerar-chave.php`; em `APP_ENV=local` ela é criada sozinha em `storage/dev-crypto-key.pem`) e a pública vai para a página (`<meta name="r4-server-key">`, inserida pelo `public/index.php` — sem script inline —, ou `GET /r4/chave`).
 - A libr4 (`R4.crypto`/`R4.http`) gera a cada sessão de página um par ECDH efêmero (só em memória), deriva com HKDF-SHA256 uma chave AES-256-GCM e envia `{v:2, kid, k, s, z, x}` com IV novo por mensagem. O AAD (`método + caminho`) amarra o pacote ao endpoint e o servidor recusa pacotes fora da janela de tempo (`CRYPTO_JANELA_SEG`).
 - No PHP, `Controller::getPost()` decifra (`Core\Security\Crypto`); pacote inválido, adulterado, de outra rota ou expirado → 400 JSON limpo. Resposta cifrada opcional: `R4.http.post(url, dados, { cifrarResposta: true })` + `Controller::responderCifrado($dados)`.
 - `BASE_CRIPTOGRAFIA` e o formato antigo `{x, y, z}` deixaram de existir (a variável é ignorada, com aviso no log).
 - **HTTPS continua obrigatório em produção** (`HTTPS_MODE=required`, padrão): sem TLS um atacante ativo pode trocar a chave pública entregue com a página. Política HTTPS/HTTP (redireciono 308, 426 para POST em HTTP, HSTS, IPs isentos, proxies confiáveis, `APP_HOSTS`) em [`docs/PRODUCAO.md`](docs/PRODUCAO.md).
-- Limites (XSS lê os dados antes de cifrar; replay dentro da janela só some com APCu) em [`docs/SEGURANCA.md`](docs/SEGURANCA.md), seção 5.
+- O mesmo pacote reenviado é recusado (nonces guardados no APCu ou, sem ele, em `storage/cache/nonces/`). O envelope não autentica quem envia: POST vindo de outro site é barrado pela checagem de origem (`Core\Security\Csrf`, `CSRF_ATIVO`/`CSRF_ORIGENS_PERMITIDAS`).
+- Limites (XSS lê os dados antes de cifrar; vários servidores = vários caches de nonce) em [`docs/SEGURANCA.md`](docs/SEGURANCA.md), seções 5 e 5.2.
 
 --------------------------------------------------------------------------------
 
@@ -194,7 +195,10 @@ class HomeController extends ctrl
 - Evite passar dados sensíveis via `render()` sem validação — `render()` usa `extract()`.
 - Faça backup de `src/routes.php` antes de rodar os scripts de geração/remoção.
 - A vitrine (`/`, `/vitrine`) e a API de teste (`/vitrine/api/*`) só respondem com `APP_DEBUG=true`.
-- Modelo de ameaça, checklist de produção, CSP e a auditoria da libr4: [`docs/SEGURANCA.md`](docs/SEGURANCA.md). Testes: `node tools/testes-seguranca.js` (servidor em `:8087` e jsdom instalado).
+- Modelo de ameaça, checklist de produção, CSP e a auditoria da libr4: [`docs/SEGURANCA.md`](docs/SEGURANCA.md). Testes: `node tools/testes-seguranca.js` (servidor em `:8087` e jsdom instalado). Vulnerabilidade? Relate pelo canal privado descrito em [`SECURITY.md`](SECURITY.md).
+- **Sessão sob demanda:** o `index.php` não abre sessão. Quem precisa chama `Core\Security\Session::start()` (cookie HttpOnly, SameSite=Lax, `__Host-R4SID` + Secure em HTTPS); no login, `Session::regenerar()`; no logout, `Session::encerrar()`.
+- **CSRF:** POST/PUT/PATCH/DELETE de outro site (cabeçalhos `Origin`/`Sec-Fetch-Site`) → 403; `Content-Type` diferente de JSON/multipart → 415. Clientes sem navegador (curl, serviços) passam se mandarem JSON.
+- **CSP:** `script-src 'self'` (sem `'unsafe-inline'`): nada de `<script>` inline nem `onclick="..."` nas views — use arquivos `.js`.
 - **Injeção (SQL, arquivo, prompt) — a proteção é no SERVIDOR** (qualquer um chama a API sem passar pelo navegador):
   - SQL: sempre `prepare` + `bind` (o `Core\Database` já usa `EMULATE_PREPARES=false` e `utf8mb4`); coluna/tabela dinâmica só por allowlist (`Database::ident()`); nunca "escapar aspas".
   - Entrada: `$d = ctrl::validate(['nome' => ['type' => 'string', 'required' => true, 'maxLength' => 120], 'email' => ['type' => 'email']]);` (`Core\Security\Input`: esquema, recusa campos não declarados, limpa NUL/controles/bidi; responde 422 sozinho).

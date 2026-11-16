@@ -5,6 +5,22 @@ services:
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor   # mantém o vendor instalado na imagem
+    # Endurecimento (docs/PRODUCAO.md, "Docker"): nenhum ganho de privilégio por setuid e só as
+    # capacidades que o php-fpm usa — o processo mestre roda como root e troca para www-data
+    # (SETUID/SETGID). Escuta na 9000 (> 1024): não precisa de NET_BIND_SERVICE.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    # Sistema de arquivos só leitura (EXEMPLO, não testado aqui): o código vem do volume acima (que
+    # continua gravável — storage/ precisa de escrita) e /tmp vira tmpfs (sessões, uploads em curso).
+    # Ligue em produção depois de testar um upload, um login (sessão) e um POST cifrado (nonces):
+    # read_only: true
+    # tmpfs:
+    #   - /tmp:size=64m,mode=1777
 
   web:
     image: nginx:1.30.6-alpine
@@ -16,6 +32,25 @@ services:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - app
+    # nginx: o mestre (root) abre a porta 80 (NET_BIND_SERVICE), cria/ajusta o dono das pastas
+    # temporárias em /var/cache/nginx (CHOWN) e troca para o usuário nginx (SETUID/SETGID).
+    # Se subir com "Permission denied" em /var/cache/nginx ou /var/run, acrescente DAC_OVERRIDE.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    # Só leitura (EXEMPLO, não testado aqui): o nginx precisa escrever em /var/cache/nginx e no pid
+    # (/var/run); os scripts de entrada da imagem tentam ajustar conf.d (já montado :ro, eles só avisam).
+    # read_only: true
+    # tmpfs:
+    #   - /var/cache/nginx:size=32m
+    #   - /var/run:size=1m
+    #   - /tmp:size=16m
 
 #  db:
 #    image: mysql:8.0

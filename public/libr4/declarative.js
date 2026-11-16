@@ -234,7 +234,7 @@
   });
 
   /* ---------- animações r4-anim ---------- */
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(entries => entries.forEach(e => {
+  const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => entries.forEach(e => {
     const el = e.target;
     if (e.isIntersecting) { el.classList.add('r4-in'); if (el.getAttribute('r4-once') !== 'false') io.unobserve(el); }
     else if (el.getAttribute('r4-once') === 'false') el.classList.remove('r4-in');

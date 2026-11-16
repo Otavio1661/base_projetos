@@ -6,7 +6,18 @@
  * HTML gerado usa o atributo r4-i18n e elementos criados usam R4.util.tx (ambos se retraduzem sozinhos).
  */
 // Modo demonstração (VITRINE_PUBLICA): a API de teste (/vitrine/api/*) não existe; exemplos que dependem dela mostram um aviso claro.
-const VIT = window.R4_VITRINE || { api: true, publica: false };
+// A flag vem de <meta name="r4-vitrine" content="{...json...}"> (a página não tem script inline: CSP estrita);
+// window.R4_VITRINE continua valendo como alternativa. Só booleanos são aceitos; qualquer falha → padrão de desenvolvimento.
+const VIT = (() => {
+  const padrao = { api: true, publica: false };
+  const normaliza = o => (o && typeof o === 'object' ? { api: o.api !== false, publica: o.publica === true } : null);
+  try {
+    const m = document.querySelector('meta[name="r4-vitrine"]');
+    const daMeta = m && m.content && m.content.length <= 512 ? normaliza(JSON.parse(m.content)) : null;
+    if (daMeta) return daMeta;
+  } catch (e) { /* meta inválida: tenta a alternativa */ }
+  return normaliza(window.R4_VITRINE) || padrao;
+})();
 if (VIT.api === false) {
   const fetchOriginal = window.fetch;
   window.fetch = function (u) {
@@ -186,11 +197,19 @@ R4.ready(() => {
   }
 
   // ---- UI ----
+  // Aviso de navegador (R4.support): obrigatório ausente = alerta; só opcionais ausentes = nota discreta. Nada aparece se tudo existe.
+  const supportHtml = () => {
+    let rel; try { rel = R4.support.report(); } catch (e) { return ''; }
+    if (!rel.ok) return '<div class="r4-alert r4-alert-err r4-mb-3" role="alert"><b>' + esc(vt('supportBad')) + '</b> ' + esc(rel.faltando.join(', ')) + '. ' + esc(R4.support.motivoCripto() || '') + ' ' + esc(vt('supportBadTail')) + '</div>';
+    return rel.opcionais.length ? '<p class="r4-text-muted"><small>' + esc(vt('supportOpt')) + ' ' + esc(rel.opcionais.join(', ')) + '.</small></p>' : '';
+  };
+
   // A página Início é refeita ao trocar o idioma (não tem nada digitado pelo usuário).
   const homeHtml = () => `
       <h2 style="margin:0 0 6px">libr4 <small style="color:var(--r4-mut)">v${R4.version} · ${esc(R4.brand)}</small></h2>
       <p>${esc(vt('homeP1'))} <code>R4.create({ xtype: 'grid', ... })</code> ${esc(vt('homeP2'))} <code>&lt;r4-grid page-size="10"&gt;</code>. ${esc(vt('homeP3'))}</p>
       ${VIT.publica ? '<div class="r4-alert r4-mb-3"><b>Modo demonstração.</b> Os exemplos que usam a API de teste (upload, servidor, criptografia ponta a ponta) só funcionam em desenvolvimento.</div>' : ''}
+      ${supportHtml()}
       <r4-button variant="primary" icon="play" r4-click="toast:${R4.util.escArg(vt('toastActive'))}">${esc(vt('testTag'))} &lt;r4-button&gt;</r4-button>
       <div class="r4-h">${esc(vt('found'))} (${entries.length})</div>
       <p>${entries.map(e => `<a href="#${esc(e.id)}" class="vt-chip">${esc(e.meta.title)}</a>`).join(' ')}</p>
@@ -201,6 +220,9 @@ R4.ready(() => {
 }, { title: 'meuTipo', description: '...', props: [] });
 
 // + um exemplo em public/showcase/demos.js  →  R4Demos.meuTipo = [{ title, fn(el, out) }]</pre>`;
+  // textos novos da casca (a vitrine/i18n.js tem os demais)
+  R4.i18n.add('pt-BR', { vt: { clearTabs: 'Limpar abas', clearTabsTip: 'Fecha todas as abas (menos o Início) e apaga as abas salvas', tabsCleared: 'Abas fechadas e estado salvo apagado.', supportBad: 'Este navegador não tem recursos necessários:', supportBadTail: 'Os exemplos de criptografia não funcionam; o restante da biblioteca segue (docs/NAVEGADORES.md).', supportOpt: 'Recursos opcionais ausentes neste navegador (a biblioteca usa alternativas):' } });
+  R4.i18n.add('en', { vt: { clearTabs: 'Clear tabs', clearTabsTip: 'Closes every tab (except Home) and erases the saved tabs', tabsCleared: 'Tabs closed and saved state erased.', supportBad: 'This browser lacks required features:', supportBadTail: 'The encryption examples will not work; the rest of the library keeps working (docs/NAVEGADORES.md).', supportOpt: 'Optional features missing in this browser (the library uses fallbacks):' } });
   const home = { title: vt('home'), key: '__home', html: homeHtml() };
 
   let tree, tabs;
@@ -223,9 +245,6 @@ R4.ready(() => {
     history.replaceState(null, '', '#' + id);
   };
 
-  // textos novos da casca (a vitrine/i18n.js tem os demais)
-  R4.i18n.add('pt-BR', { vt: { clearTabs: 'Limpar abas', clearTabsTip: 'Fecha todas as abas (menos o Início) e apaga as abas salvas', tabsCleared: 'Abas fechadas e estado salvo apagado.' } });
-  R4.i18n.add('en', { vt: { clearTabs: 'Clear tabs', clearTabsTip: 'Closes every tab (except Home) and erases the saved tabs', tabsCleared: 'Tabs closed and saved state erased.' } });
 
   R4.create({
     xtype: 'viewport', renderTo: document.body, items: [

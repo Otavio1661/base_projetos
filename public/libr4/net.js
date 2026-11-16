@@ -3,8 +3,13 @@
  * libr4 / net.js  —  R4 dev
  * ============================================
  * R4.crypto  criptografia v2: NENHUM segredo no navegador.
- *            O servidor publica só a chave PÚBLICA P-256 (window.R4_SERVER_KEY, injetada pelo
- *            public/index.php, ou GET /r4/chave). A cada sessão de página a lib gera um par ECDH
+ *            O servidor publica só a chave PÚBLICA P-256. De onde a lib a lê (a PRIMEIRA fonte presente vale;
+ *            se estiver malformada a lib RECUSA — não cai para a próxima, para não mascarar adulteração):
+ *              1. R4.config.serverKey               (configuração explícita)
+ *              2. window.R4_SERVER_KEY              (compatibilidade: script inline antigo)
+ *              3. <meta name="r4-server-key" content='{"v":2,"pub":"...","kid":"..."}'>  (sem script inline: CSP estrita)
+ *              4. GET /r4/chave                     (R4.config.serverKeyUrl)
+ *            A cada sessão de página a lib gera um par ECDH
  *            efêmero (WebCrypto, só em memória — nunca em storage), faz ECDH + HKDF-SHA256 (salt de
  *            16 bytes por sessão, info "R4v2 req") e cifra cada mensagem com AES-256-GCM e IV
  *            aleatório de 12 bytes. Envelope: {v:2, kid, k, s, z, x} (base64url).
@@ -29,9 +34,18 @@
 (function (R4) {
   'use strict';
 
-  const enc = new TextEncoder(), dec = new TextDecoder();
+  // TextEncoder/Decoder criados só no uso: navegador sem eles não derruba o carregamento da lib (a criptografia é que recusa)
+  let _enc = null, _dec = null;
+  const enc = { encode: s => (_enc || (_enc = new TextEncoder())).encode(s) };
+  const dec = { decode: b => (_dec || (_dec = new TextDecoder())).decode(b) };
+  /** Texto do motivo de a criptografia não funcionar (R4.support, se carregado). */
+  const motivoCripto = () => (R4.support && R4.support.motivoCripto && R4.support.motivoCripto()) || null;
   const subtle = () => {
-    if (!window.crypto || !window.crypto.subtle) throw erro('WebCrypto indisponível (o navegador só libera crypto.subtle em HTTPS ou localhost).');
+    if (!window.crypto || !window.crypto.subtle) {
+      if (R4.support && R4.support.avisar) R4.support.avisar();
+      throw erro('criptografia indisponível: ' + (motivoCripto() || 'WebCrypto ausente (o navegador só libera crypto.subtle em HTTPS ou localhost).'));
+    }
+    if (typeof TextEncoder !== 'function' || typeof TextDecoder !== 'function') throw erro('TextEncoder/TextDecoder indisponíveis neste navegador (veja docs/NAVEGADORES.md).');
     return window.crypto.subtle;
   };
   const warn = m => console.warn('[R4] ' + m);
@@ -84,10 +98,38 @@
   const MAX_RECENTES = 100;
   let relogio = 0;              // diferença (ms) entre o relógio do servidor e o daqui (aprendida do cabeçalho Date)
 
-  async function importarChave(info) {
-    if (!info || typeof info !== 'object' || info.v !== 2 || typeof info.pub !== 'string' || typeof info.kid !== 'string' || !/^[0-9a-f]{8}$/.test(info.kid)) {
-      throw erro('chave pública do servidor ausente ou inválida (esperado {v:2, pub, kid}).');
+  /** Formato (barato, síncrono): {v:2, pub: 87 caracteres base64url (ponto P-256 de 65 bytes), kid: 8 hex}. Devolve uma CÓPIA só com esses 3 campos. */
+  function normalizarChave(info, onde) {
+    if (!info || typeof info !== 'object' || Array.isArray(info) || info.v !== 2 || typeof info.pub !== 'string' || typeof info.kid !== 'string'
+      || !/^[A-Za-z0-9_-]{87}$/.test(info.pub) || !/^[0-9a-f]{8}$/.test(info.kid)) {
+      throw erro('chave pública do servidor ausente ou inválida' + (onde ? ' (' + onde + ')' : '') + ' — esperado {v:2, pub, kid}.');
     }
+    return { v: 2, pub: info.pub, kid: info.kid };
+  }
+
+  /** <meta name="r4-server-key" content="{...}">: só a PRIMEIRA (a do <head>); conteúdo limitado, JSON em try/catch. undefined se não existe (JSON null NÃO é "não existe": é meta inválida). */
+  function chaveDaMeta() {
+    let m = null;
+    try { m = document.querySelector('meta[name="r4-server-key"]'); } catch (e) { m = null; }
+    if (!m) return undefined;
+    const txt = m.getAttribute('content');
+    if (typeof txt !== 'string' || !txt.trim()) throw erro('<meta name="r4-server-key"> sem conteúdo.');
+    if (txt.length > 512) throw erro('<meta name="r4-server-key"> grande demais para ser uma chave pública.');
+    let o;
+    try { o = JSON.parse(txt); } catch (e) { throw erro('o conteúdo de <meta name="r4-server-key"> não é JSON válido.'); }
+    return o;
+  }
+
+  /** Primeira fonte presente (sem rede): config → global → meta. Devolve {info, fonte} ou null. Malformada → lança (não cai para a próxima). */
+  function chaveEmbutida() {
+    if (R4.config.serverKey) return { info: R4.config.serverKey, fonte: 'config' };
+    if (window.R4_SERVER_KEY) return { info: window.R4_SERVER_KEY, fonte: 'global' };
+    const m = chaveDaMeta();
+    return m === undefined ? null : { info: m, fonte: 'meta' };
+  }
+
+  async function importarChave(info, onde) {
+    info = normalizarChave(info, onde);
     let raw;
     try { raw = deb64u(info.pub, 65); } catch (e) { throw erro('chave pública do servidor inválida.'); }
     if (raw[0] !== 4) throw erro('chave pública do servidor inválida.');
@@ -98,12 +140,17 @@
     return { kid: info.kid, chave };
   }
 
-  /** Chave pública: R4.config.serverKey > window.R4_SERVER_KEY > GET R4.config.serverKeyUrl ('/r4/chave'). */
+  /**
+   * Chave pública: R4.config.serverKey > window.R4_SERVER_KEY > <meta name="r4-server-key"> > GET R4.config.serverKeyUrl ('/r4/chave').
+   * buscar = true (rotação de chave) pula as fontes embutidas e vai direto ao endpoint.
+   */
   function obterChave(buscar) {
     if (!chaveP) {
       chaveP = (async () => {
-        let info = !buscar && (R4.config.serverKey || window.R4_SERVER_KEY);
-        if (!info) {
+        const emb = buscar ? null : chaveEmbutida();
+        let info = emb && emb.info, fonte = emb ? emb.fonte : 'endpoint';
+        if (!emb) {
+          if (typeof fetch !== 'function') throw erro('este navegador não tem fetch para obter a chave pública do servidor (veja docs/NAVEGADORES.md).');
           const url = check(R4.config.serverKeyUrl || '/r4/chave');
           let r;
           try { r = await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } }); }
@@ -111,7 +158,9 @@
           if (!r.ok) throw erro('não foi possível obter a chave pública do servidor (HTTP ' + r.status + ').');
           try { info = JSON.parse(await r.text()); } catch (e) { throw erro('a chave pública do servidor não veio em JSON.'); }
         }
-        return importarChave(info);
+        const ch = await importarChave(info, fonte === 'meta' ? '<meta name="r4-server-key">' : fonte === 'global' ? 'window.R4_SERVER_KEY' : fonte === 'config' ? 'R4.config.serverKey' : 'GET /r4/chave');
+        ch.fonte = fonte;
+        return ch;
       })();
       chaveP.catch(() => { chaveP = null; });
     }
@@ -123,8 +172,8 @@
     if (!sessaoP) {
       sessaoP = (async () => {
         if (R4.config.cryptoKey || window.BASE_CRIPTOGRAFIA) avisarUmaVez('legado', 'R4.config.cryptoKey / window.BASE_CRIPTOGRAFIA foram removidos (a criptografia v2 não usa segredo no navegador) e são ignorados.');
+        const S = subtle();   // falha primeiro (mensagem clara) se o navegador não tem criptografia
         const srv = await obterChave(false);
-        const S = subtle();
         const par = await S.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
         const seg = await S.deriveBits({ name: 'ECDH', public: srv.chave }, par.privateKey, 256);
         const hk = await S.importKey('raw', seg, 'HKDF', false, ['deriveKey']);
@@ -230,17 +279,18 @@
       if (buscarChave) { chaveP = null; return obterChave(true).then(() => true); }
       return Promise.resolve(true);
     },
-    /** A chave pública em uso: {kid}. */
-    async chaveServidor() { const c = await obterChave(false); return { kid: c.kid }; }
+    /** A chave pública em uso: {kid, fonte} (fonte: 'config' | 'global' | 'meta' | 'endpoint'). */
+    async chaveServidor() { const c = await obterChave(false); return { kid: c.kid, fonte: c.fonte }; }
   }, {
     title: 'R4.crypto', group: 'Núcleo',
-    description: 'Criptografia v2: nenhum segredo vai para o navegador. A página recebe só a chave PÚBLICA P-256 do servidor (window.R4_SERVER_KEY ou GET /r4/chave); a cada sessão de página a lib gera um par ECDH efêmero (só em memória), deriva com HKDF-SHA256 uma chave AES-256-GCM e cifra cada mensagem com IV novo. O AAD amarra o pacote ao método + caminho do endpoint, e o servidor recusa pacotes fora da janela de tempo (5 min). Limites: não substitui HTTPS (sem TLS um atacante ativo troca a chave pública), não protege contra XSS e replay dentro da janela só some com cache de nonces no servidor.',
+    description: 'Criptografia v2: nenhum segredo vai para o navegador. A página recebe só a chave PÚBLICA P-256 do servidor (<meta name="r4-server-key">, window.R4_SERVER_KEY ou GET /r4/chave — a primeira presente vale, e uma chave malformada é recusada, não substituída); a cada sessão de página a lib gera um par ECDH efêmero (só em memória), deriva com HKDF-SHA256 uma chave AES-256-GCM e cifra cada mensagem com IV novo. O AAD amarra o pacote ao método + caminho do endpoint, e o servidor recusa pacotes fora da janela de tempo (5 min). Limites: não substitui HTTPS (sem TLS um atacante ativo troca a chave pública), não protege contra XSS e replay dentro da janela só some com cache de nonces no servidor.',
     props: [
       { name: 'encrypt(dados, {metodo, caminho})', type: 'Promise<{v,kid,k,s,z,x}>', desc: 'Cifra para o servidor. metodo + caminho formam o AAD (R4.http preenche sozinho). Sem eles: POST + caminho da página, com aviso.' },
       { name: 'decrypt(pacote, {caminho})', type: 'Promise<any|null>', desc: 'Decifra uma resposta cifrada da sessão ({v,z,x}) ou um pedido desta sessão. null se inválido/adulterado/de outra rota.' },
       { name: 'sessao()', type: 'Promise<{kid,k}|null>', desc: 'Dados públicos da sessão atual.' },
       { name: 'novaSessao(buscarChave)', type: 'Promise', desc: 'Descarta o par efêmero; buscarChave = true relê a chave em /r4/chave (rotação).' },
-      { name: 'R4.config.serverKey / serverKeyUrl', type: 'object / string', default: 'window.R4_SERVER_KEY / "/r4/chave"', desc: 'De onde vem a chave pública {v:2, pub, kid}.' },
+      { name: 'chaveServidor()', type: 'Promise<{kid, fonte}>', desc: 'A chave pública em uso e de onde veio: config, global (window.R4_SERVER_KEY), meta (<meta name="r4-server-key">) ou endpoint (GET /r4/chave).' },
+      { name: 'R4.config.serverKey / serverKeyUrl', type: 'object / string', default: 'meta r4-server-key / window.R4_SERVER_KEY / "/r4/chave"', desc: 'De onde vem a chave pública {v:2, pub, kid}. Ordem: serverKey, window.R4_SERVER_KEY, <meta name="r4-server-key" content="{&quot;v&quot;:2,...}"> (permite CSP sem script inline), GET serverKeyUrl.' },
       { name: 'R4.config.exigirHttps', type: 'boolean', default: 'true em página https', desc: 'true numa página http (fora de localhost/rede privada) → recusa cifrar/enviar. Sem definir: só aviso no console.' }
     ]
   });
@@ -288,6 +338,7 @@
      */
     async request(url, { method = 'POST', data = null, encrypt = true, headers = {}, credentials = 'same-origin', cifrarResposta = false } = {}) {
       url = check(url);
+      if (typeof fetch !== 'function') throw new Error('R4.http: este navegador não tem fetch (veja docs/NAVEGADORES.md).');
       method = String(method || 'GET').toUpperCase();
       const alvo = new URL(url, location.href);
       const comCorpo = data != null && method !== 'GET' && method !== 'HEAD';

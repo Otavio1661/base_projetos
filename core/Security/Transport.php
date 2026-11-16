@@ -162,6 +162,24 @@ final class Transport
         return $ip;
     }
 
+    /**
+     * Host da requisição já validado (minúsculo, com :porta se veio no cabeçalho) ou null se inválido/fora
+     * de APP_HOSTS. Usado por Core\Security\Csrf para comparar com o cabeçalho Origin.
+     */
+    public static function hostDaRequisicao(?array $server = null, ?array $cfg = null): ?string
+    {
+        return self::hostValidado($server ?? $_SERVER, $cfg ?? self::config());
+    }
+
+    /**
+     * Confere a SINTAXE de um host (nome DNS, IPv4 ou [IPv6], com :porta opcional) — sem consultar APP_HOSTS.
+     * Usado na validação de CSRF_ORIGENS_PERMITIDAS.
+     */
+    public static function hostValido(string $h): bool
+    {
+        return $h !== '' && strlen($h) <= 260 && self::hostSintaxe(strtolower($h), false);
+    }
+
     /** O IP (padrão: o do cliente) pode usar HTTP mesmo com HTTPS_MODE=required? */
     public static function ipPermitido(?string $ip = null, ?array $cfg = null): bool
     {

@@ -4,15 +4,20 @@ require __DIR__ . '/../src/Env.php';
 
 use App\Config;
 use Core\Security\Crypto;
+use Core\Security\Csrf;
 use Core\Security\Transport;
 
 // Política HTTPS/HTTP do .env (HTTPS_MODE, HTTP_PERMITIDO_PARA, TRUSTED_PROXIES, APP_HOSTS, HSTS_*).
 // Pode responder 308 (GET/HEAD → https), 426 (outros métodos em HTTP) ou 400 (Host inválido) e encerrar aqui.
 Transport::aplicar();
 
+// Anti-CSRF por origem (CSRF_ATIVO, CSRF_ORIGENS_PERMITIDAS): POST/PUT/PATCH/DELETE vindos de outro site
+// (Origin / Sec-Fetch-Site) → 403; Content-Type que um <form> forja sem preflight → 415. Ver Core\Security\Csrf.
+Csrf::guard();
+
 /**
  * GET /r4/chave — chave PÚBLICA do servidor para a criptografia v2 ({v:2, pub, kid}).
- * É o mesmo JSON injetado em window.R4_SERVER_KEY; serve páginas que não passam por este index.php.
+ * É o mesmo JSON da <meta name="r4-server-key"> das páginas; serve páginas que não passam por este index.php.
  * Público por natureza (não é segredo); sem sessão e sem cache longo (a chave pode ser rotacionada).
  */
 if (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) === '/r4/chave') {
@@ -33,18 +38,15 @@ if (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) === '/r4/
     exit($metodo === 'HEAD' ? '' : json_encode($info, JSON_UNESCAPED_SLASHES));
 }
 
-session_set_cookie_params([
-    'httponly' => true,
-    'samesite' => 'Lax',
-    'secure' => Transport::isHttps(),   // detecção real (HTTPS, porta 443 ou proxy confiável)
-]);
-session_start();
+// Sessão: NÃO é iniciada aqui. Quem precisa (login, middleware de autenticação...) chama
+// Core\Security\Session::start() — cookie HttpOnly, SameSite=Lax, Secure + "__Host-R4SID" em HTTPS.
 
-// Configurar exibição de erros baseado em APP_DEBUG
+// Erros: sempre registrados no log; na tela só com APP_DEBUG=true
 if (Config::APP_DEBUG === false) {
-    error_reporting(0);
+    error_reporting(E_ALL & ~E_DEPRECATED);
     ini_set('display_errors', '0');
     ini_set('display_startup_errors', '0');
+    ini_set('log_errors', '1');
 } else {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
@@ -68,10 +70,12 @@ function asset($path)
 $GLOBALS['asset'] = 'asset';
 
 /**
- * Injeta a chave PÚBLICA do servidor (criptografia v2) nas páginas HTML, antes do primeiro </head>:
- *   <script>window.R4_SERVER_KEY = {"v":2,"pub":"...","kid":"..."};</script>
- * Nenhum segredo vai para o navegador (a chave privada fica só no .env). json_encode com JSON_HEX_*
- * impede que o valor feche o <script>. Respostas que não são HTML (JSON etc.) não são tocadas.
+ * Insere a chave PÚBLICA do servidor (criptografia v2) nas páginas HTML, antes do primeiro </head>:
+ *   <meta name="r4-server-key" content="{&quot;v&quot;:2,&quot;pub&quot;:&quot;...&quot;,&quot;kid&quot;:&quot;...&quot;}">
+ * Sem <script> inline: a CSP pode usar script-src 'self' (sem 'unsafe-inline'). A libr4 (net.js) lê a
+ * meta; window.R4_SERVER_KEY continua aceito como alternativa, e GET /r4/chave serve quem não tem a meta.
+ * Nenhum segredo vai para o navegador (a chave privada fica só no .env). htmlspecialchars(ENT_QUOTES)
+ * impede que o valor saia do atributo. Respostas que não são HTML (JSON etc.) não são tocadas.
  */
 function injectCryptoConfig($content)
 {
@@ -89,10 +93,14 @@ function injectCryptoConfig($content)
         if ($info === null) {
             return $content;
         }
-        $script = '<script>window.R4_SERVER_KEY = ' . json_encode($info, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES) . ';</script>' . "\n";
-        return substr_replace($content, $script, $pos, 0);
+        $json = json_encode($info, JSON_UNESCAPED_SLASHES);
+        if (!is_string($json)) {
+            return $content;
+        }
+        $meta = '<meta name="r4-server-key" content="' . htmlspecialchars($json, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . "\n";
+        return substr_replace($content, $meta, $pos, 0);
     } catch (\Throwable $e) {
-        error_log('[R4 crypto] falha ao injetar a chave pública: ' . $e->getMessage());
+        error_log('[R4 crypto] falha ao inserir a chave pública: ' . $e->getMessage());
         return $content;
     }
 }

@@ -682,16 +682,20 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
   let CHAVE = null;
   try { CHAVE = await (await fetch(BASE + '/r4/chave')).json(); } catch (e) { /* o caso abaixo reprova */ }
 
-  await caso('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid}); BASE_CRIPTOGRAFIA sumiu da página', async () => {
+  await caso('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid} numa <meta>, sem script inline); BASE_CRIPTOGRAFIA sumiu da página', async () => {
     const r = await fetch(BASE + '/r4/chave');
     const html = await (await fetch(BASE + '/vitrine')).text();
-    const m = html.match(/window\.R4_SERVER_KEY = (\{[^<]*?\});<\/script>/);
-    const injetada = m ? JSON.parse(m[1]) : null;
+    // a chave pública vai em <meta name="r4-server-key" content="{&quot;v&quot;:2,...}"> (CSP sem 'unsafe-inline' em script-src)
+    const metas = html.match(/<meta name="r4-server-key"[^>]*>/g) || [];
+    const m = metas.length === 1 ? metas[0].match(/^<meta name="r4-server-key" content="([^"<>]*)">$/) : null;
+    const desc = s => s.replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    let injetada = null; try { injetada = m ? JSON.parse(desc(m[1])) : null; } catch (e) { /* reprova */ }
     const ok = CHAVE && Object.keys(CHAVE).sort().join() === 'kid,pub,v' && CHAVE.v === 2 && Buffer.from(CHAVE.pub, 'base64url').length === 65
       && Buffer.from(CHAVE.pub, 'base64url')[0] === 4 && require('crypto').createHash('sha256').update(Buffer.from(CHAVE.pub, 'base64url')).digest('hex').slice(0, 8) === CHAVE.kid
       && JSON.stringify(injetada) === JSON.stringify(CHAVE) && !/BASE_CRIPTOGRAFIA|PRIVATE KEY|CRYPTO_PRIVATE/.test(html)
+      && !/<script>\s*window\.R4_SERVER_KEY/.test(html) && html.indexOf(metas[0]) < html.indexOf('</head>')
       && /no-cache/.test(r.headers.get('cache-control') || '') && /application\/json/.test(r.headers.get('content-type') || '');
-    check('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid}); BASE_CRIPTOGRAFIA sumiu da página', ok, JSON.stringify({ CHAVE, injetada }));
+    check('crypto v2: nenhum segredo vai para o navegador (só {v,pub,kid} numa <meta>, sem script inline); BASE_CRIPTOGRAFIA sumiu da página', ok, JSON.stringify({ CHAVE, injetada, metas }));
   });
   await caso('crypto v2: sem chave pública (ou chave adulterada) a lib recusa cifrar e nada é enviado', async () => {
     const p = openLocal('https://app.exemplo.com/', ['core.js', 'net.js']);
@@ -895,17 +899,83 @@ const xlsx = (sheet, extra = [], opts = {}) => zipBuild([
     const ctl = fs.readFileSync(path.join(ROOT, 'core/Controller.php'), 'utf8');
     const idx = fs.readFileSync(path.join(ROOT, 'public/index.php'), 'utf8');
     const net = fs.readFileSync(path.join(ROOT, 'public/libr4/net.js'), 'utf8');
-    const ok = /CRYPTO_OBRIGATORIA/.test(ctl) && /'obrigatoria'/.test(ctl) && !/BASE_CRIPTOGRAFIA/.test(idx) && /R4_SERVER_KEY/.test(idx)
+    const ok = /CRYPTO_OBRIGATORIA/.test(ctl) && /'obrigatoria'/.test(ctl) && !/BASE_CRIPTOGRAFIA/.test(idx) && /r4-server-key/.test(idx) && !/['"]<script/.test(idx)
       && !/PBKDF2|BASE_CRIPTOGRAFIA\s*\|\||localStorage|sessionStorage/.test(net) && /generateKey\(\{ name: 'ECDH'/.test(net);
-    check('crypto v2 (código): Controller tem CRYPTO_OBRIGATORIA; index.php e net.js sem segredo nem storage da chave', ok);
+    check('crypto v2 (código): Controller tem CRYPTO_OBRIGATORIA; index.php (meta, sem script inline) e net.js sem segredo nem storage da chave', ok);
   });
-  await caso('config: vitrine só com APP_DEBUG (controller) e nginx com CSP/Permissions-Policy', async () => {
+  await caso('crypto v2: replay do MESMO pacote na MESMA rota → 400 (cache de nonces sem APCu); pacotes novos continuam passando', async () => {
+    const ss = await sessaoNode();
+    const { env } = await selarNode(ss, { pedido: 'unico' }, 'POST', '/vitrine/api/echo');
+    const a = await postC('/vitrine/api/echo', env), b = await postC('/vitrine/api/echo', env), c = await postC('/vitrine/api/echo', env);
+    const novo = await postC('/vitrine/api/echo', (await selarNode(ss, { pedido: 'novo' }, 'POST', '/vitrine/api/echo')).env);
+    check('crypto v2: replay do MESMO pacote na MESMA rota → 400 (cache de nonces sem APCu); pacotes novos continuam passando',
+      a.s === 200 && a.j.retorno.cifrado === true && limpo400(b) && limpo400(c) && !b.j.codigo && novo.s === 200 && novo.j.retorno.recebido.pedido === 'novo',
+      [a, b, c, novo].map(r => r.s + ' ' + r.t.slice(0, 80)).join(' | '));
+  });
+  await caso('csrf: POST de outro site (Origin/Sec-Fetch-Site) → 403 e text/plain/form → 415, JSON limpo; same-origin, curl sem Origin e GET passam', async () => {
+    const eco = '/vitrine/api/echo', corpo = JSON.stringify({ a: 1 });
+    const pp = async (h, body = corpo, rota = eco) => {
+      const r = await fetch(BASE + rota, { method: 'POST', headers: h, body });
+      const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) { /* */ }
+      return { s: r.status, t, j, ct: r.headers.get('content-type') || '' };
+    };
+    const JS = { 'Content-Type': 'application/json' };
+    const rs = {
+      mesma: await pp({ ...JS, Origin: BASE, 'Sec-Fetch-Site': 'same-origin' }),
+      semOrigin: await pp(JS),
+      outraOrigem: await pp({ ...JS, Origin: 'https://evil.example' }),
+      origemNull: await pp({ ...JS, Origin: 'null' }),
+      outraPorta: await pp({ ...JS, Origin: BASE.replace(/:(\d+)$/, (x, p) => ':' + (Number(p) + 1)) }),
+      crossSite: await pp({ ...JS, 'Sec-Fetch-Site': 'cross-site' }),
+      sameSite: await pp({ ...JS, 'Sec-Fetch-Site': 'same-site' }),
+      textPlain: await pp({ 'Content-Type': 'text/plain;charset=UTF-8' }),
+      form: await pp({ 'Content-Type': 'application/x-www-form-urlencoded' }, 'a=1'),
+      uploadForjado: await pp({ 'Content-Type': 'multipart/form-data; boundary=x', Origin: 'https://evil.example' }, '--x--', '/vitrine/api/upload'),
+      cadastroForjado: await pp({ ...JS, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' }, JSON.stringify({ nome: 'Ana Souza', email: 'a@b.co' }), '/vitrine/api/cadastro')
+    };
+    const get = await fetch(BASE + '/vitrine/api/clientes?size=1', { headers: { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' } });
+    const recusa = (r, s) => r.s === s && r.j && Object.keys(r.j).sort().join() === 'retorno,status' && r.j.status === s && /application\/json/.test(r.ct) && !/evil|\.php|Stack/i.test(r.t);
+    const ok = rs.mesma.s === 200 && rs.semOrigin.s === 200 && get.status === 200
+      && ['outraOrigem', 'origemNull', 'outraPorta', 'crossSite', 'sameSite', 'uploadForjado', 'cadastroForjado'].every(k => recusa(rs[k], 403))
+      && recusa(rs.textPlain, 415) && recusa(rs.form, 415);
+    check('csrf: POST de outro site (Origin/Sec-Fetch-Site) → 403 e text/plain/form → 415, JSON limpo; same-origin, curl sem Origin e GET passam', ok,
+      Object.entries(rs).map(([k, r]) => k + '=' + r.s).join(' ') + ' get=' + get.status);
+  });
+  await caso('sessao: nenhuma página/API cria cookie de sessão sozinha (sessão só sob demanda: Session::start)', async () => {
+    const rotas = ['/vitrine', '/r4/chave', '/vitrine/api/clientes?size=1', '/rota-inexistente-404'];
+    const cookies = [];
+    for (const r of rotas) { const x = await fetch(BASE + r); const c = x.headers.get('set-cookie'); if (c) cookies.push(r + ': ' + c); }
+    const ec = await fetch(BASE + '/vitrine/api/echo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"a":1}' });
+    if (ec.headers.get('set-cookie')) cookies.push('POST echo: ' + ec.headers.get('set-cookie'));
+    const ses = fs.readFileSync(path.join(ROOT, 'core/Security/Session.php'), 'utf8');
+    const ok = !cookies.length && /__Host-R4SID/.test(ses) && /use_strict_mode/.test(ses) && /'samesite' => 'Lax'/.test(ses) && /session_regenerate_id\(true\)/.test(ses);
+    check('sessao: nenhuma página/API cria cookie de sessão sozinha (sessão só sob demanda: Session::start)', ok, cookies.join(' | '));
+  });
+  await caso('config: vitrine só com APP_DEBUG (controller) e nginx com CSP (script-src sem unsafe-inline)/Permissions-Policy/COOP/CORP e cache', async () => {
     const ctl = fs.readFileSync(path.join(ROOT, 'src/Controllers/VitrineController.php'), 'utf8');
     const ng = fs.readFileSync(path.join(ROOT, 'docker/nginx/default.conf'), 'utf8');
-    const csp = ng.match(/map \$request_uri \$r4_csp \{[\s\S]*?\}/);
-    const ok = /APP_DEBUG\s*!==\s*true/.test(ctl) && /http_response_code\(404\)/.test(ctl) && csp && /Content-Security-Policy/.test(ng) && /Permissions-Policy/.test(ng)
-      && /default\s+"[^"]*object-src 'none'/.test(csp[0]) && !/default\s+"[^"]*unsafe-eval/.test(csp[0]) && /vitrine[^\n]*unsafe-eval/.test(csp[0]);
-    check('config: vitrine só com APP_DEBUG (controller) e nginx com CSP/Permissions-Policy', ok);
+    const ativo = ng.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');   // só linhas que valem (sem comentários)
+    const csp = ativo.match(/map \$request_uri \$r4_csp \{[\s\S]*?\}/);
+    const scriptSrc = (ativo.match(/script-src[^;"]*/g) || []);
+    const estaticos = ativo.match(/location ~\* \\\.\(\?:css\|js[^{]*\{[\s\S]*?\n {4}\}/);
+    const ok = /APP_DEBUG\s*!==\s*true/.test(ctl) && /http_response_code\(404\)/.test(ctl) && csp && /Content-Security-Policy/.test(ativo) && /Permissions-Policy/.test(ativo)
+      && /default\s+"[^"]*object-src 'none'/.test(csp[0]) && !/default\s+"[^"]*unsafe-eval/.test(csp[0]) && /vitrine[^\n]*unsafe-eval/.test(csp[0])
+      && scriptSrc.length >= 2 && scriptSrc.every(s => !/unsafe-inline/.test(s)) && /default\s+"[^"]*script-src 'self';/.test(csp[0])
+      && (ativo.match(/Cross-Origin-Resource-Policy "same-origin" always/g) || []).length === 2 && (ativo.match(/Cross-Origin-Opener-Policy "same-origin" always/g) || []).length === 2
+      && /map \$arg_v \$r4_cache/.test(ativo) && /immutable/.test(ativo) && estaticos && /add_header Cache-Control \$r4_cache;/.test(estaticos[0]) && !/expires/.test(estaticos[0])
+      && /Permissions-Policy/.test(estaticos[0]) && /open_file_cache /.test(ativo);
+    check('config: vitrine só com APP_DEBUG (controller) e nginx com CSP (script-src sem unsafe-inline)/Permissions-Policy/COOP/CORP e cache', ok, JSON.stringify({ scriptSrc, estaticos: !!estaticos }));
+  });
+  await caso('config: PHP-FPM endurecido (disable_functions, allow_url_fopen=Off, open_basedir) sem quebrar a CLI; compose sem privilégios extras', async () => {
+    const ini = fs.readFileSync(path.join(ROOT, 'docker/php/zz-app.ini'), 'utf8'), fpm = fs.readFileSync(path.join(ROOT, 'docker/php/zz-fpm-seguranca.conf'), 'utf8');
+    const df = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8'), dc = fs.readFileSync(path.join(ROOT, 'docker-compose.yml'), 'utf8');
+    const fns = (fpm.match(/disable_functions\]\s*=\s*([^\n]+)/) || [])[1] || '';
+    const ok = ['exec', 'passthru', 'shell_exec', 'system', 'proc_open', 'popen', 'pcntl_exec', 'dl', 'symlink', 'link'].every(f => fns.split(',').includes(f))
+      && /allow_url_fopen\]\s*=\s*off/.test(fpm) && /open_basedir\]\s*=\s*\/var\/www\/html:\/tmp/.test(fpm) && /^\[www\]/m.test(fpm)
+      && !/^\s*disable_functions/m.test(ini) && /^session\.use_strict_mode=1/m.test(ini) && /^zend\.exception_ignore_args=1/m.test(ini) && /^display_errors=0/m.test(ini)
+      && /zz-fpm-seguranca\.conf \/usr\/local\/etc\/php-fpm\.d\//.test(df) && /php-fpm -t/.test(df)
+      && (dc.match(/no-new-privileges:true/g) || []).length === 2 && (dc.match(/cap_drop:\s*\n\s*- ALL/g) || []).length === 2;
+    check('config: PHP-FPM endurecido (disable_functions, allow_url_fopen=Off, open_basedir) sem quebrar a CLI; compose sem privilégios extras', ok, fns);
   });
 
   /* ===================== 4. injeção no SERVIDOR: SQL, arquivo, prompt (curl-equivalente contra :8087) ===================== */

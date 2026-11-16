@@ -8,8 +8,9 @@
  *  - a chave PRIVADA fica só no .env (CRYPTO_PRIVATE_KEY = base64 do PKCS#8 DER, uma linha;
  *    gere com `php tools/gerar-chave.php`). Em APP_ENV=local, se faltar, é gerada e guardada em
  *    storage/dev-crypto-key.pem (0600). Em produção é obrigatória (src/Env.php).
- *  - a chave PÚBLICA vai para a página (window.R4_SERVER_KEY, injetada pelo public/index.php) e
- *    também em GET /r4/chave: {v:2, pub:<ponto P-256 não comprimido, 65 bytes, base64url>, kid}.
+ *  - a chave PÚBLICA vai para a página (<meta name="r4-server-key" content="{...}">, inserida pelo
+ *    public/index.php — sem script inline, compatível com CSP estrita) e também em GET /r4/chave:
+ *    {v:2, pub:<ponto P-256 não comprimido, 65 bytes, base64url>, kid}.
  *
  * O navegador (public/libr4/net.js, R4.crypto) cria a cada sessão de página um par ECDH efêmero
  * (só em memória), faz ECDH com a chave pública do servidor e deriva com HKDF-SHA256
@@ -18,7 +19,8 @@
  * Envelope da requisição (JSON do corpo):
  *   {v:2, kid, k:<pub do cliente, 65 bytes>, s:<salt 16>, z:<iv 12>, x:<cifra + tag 16>}  (base64url sem "=")
  *   AAD = "R4v2|" + MÉTODO + "|" + caminho     (o pacote só vale para aquele método + endpoint)
- *   texto claro = {t:<epoch s>, n:<nonce aleatório>, d:<dados>}   t fora da janela → recusado
+ *   texto claro = {t:<epoch s>, n:<nonce aleatório>, d:<dados>}   t fora da janela → recusado;
+ *   nonce repetido dentro da janela → recusado (APCu, ou arquivos em storage/cache/nonces/; ver nonceNovo)
  *
  * Resposta cifrada (opcional; o cliente pede com o cabeçalho X-R4-Res: 1):
  *   {v:2, z, x}  chave = HKDF(mesmo segredo, mesmo salt, info "R4v2 res"), IV novo,
@@ -141,7 +143,7 @@ final class Crypto
             if ($in['t'] < $agora - self::janela() || $in['t'] > $agora + self::FUTURO_MAX) {
                 return self::falha('tempo');
             }
-            if (!self::nonceNovo($env['k'], $in['n'])) {
+            if (!self::nonceNovo($env['kid'], $in['n'])) {
                 return self::falha('replay');
             }
             return self::$memo[$memoKey] = [
@@ -501,15 +503,129 @@ final class Crypto
     }
 
     /**
-     * Cache de nonces (anti-replay DENTRO da janela) — só com APCu ligado; sem APCu devolve true
-     * (a proteção fica só pela janela de tempo; ver docs/SEGURANCA.md).
+     * Cache de nonces (anti-replay DENTRO da janela). Ordem:
+     *  1. APCu (apcu_add é atômico);
+     *  2. senão, um arquivo por nonce em storage/cache/nonces/ (criação exclusiva fopen "x" = atômica;
+     *     o arquivo já existir = replay);
+     *  3. senão (storage não gravável), aceita e registra um aviso no log (1x/dia): sobra só a janela de tempo.
+     * Chave = sha256(kid|nonce). Validade = janela + 60 s (relógio adiantado) + 5 s.
      */
-    private static function nonceNovo(string $k, string $n): bool
+    private static function nonceNovo(string $kid, string $n): bool
     {
-        if (!function_exists('apcu_enabled') || !apcu_enabled()) {
+        $id = hash('sha256', $kid . '|' . $n);
+        $ttl = self::ttlNonce();
+        if (self::cfg('NONCE_BACKEND', '') !== 'arquivo' && function_exists('apcu_enabled') && apcu_enabled()) {
+            return (bool) apcu_add('r4v2n:' . $id, 1, $ttl);
+        }
+        $r = self::nonceArquivo($id, $ttl);
+        if ($r === null) {
+            Transport::avisoUnico('nonce-sem-storage', 'Anti-replay sem APCu e sem storage/cache/nonces gravável: pacotes repetidos dentro de CRYPTO_JANELA_SEG serão aceitos. Dê permissão de escrita em storage/ ao usuário do PHP (ou ligue o APCu).');
             return true;
         }
-        return (bool) apcu_add('r4v2n:' . hash('sha256', $k . '|' . $n), 1, self::janela() + self::FUTURO_MAX + 5);
+        return $r;
+    }
+
+    /** Tempo (s) que um nonce precisa ficar guardado. */
+    private static function ttlNonce(): int
+    {
+        return self::janela() + self::FUTURO_MAX + 5;
+    }
+
+    /** Pasta dos nonces (Crypto::configurar(['NONCE_DIR' => ...]) troca nos testes). */
+    private static function dirNonces(): string
+    {
+        $d = (string) self::cfg('NONCE_DIR', '');
+        return $d !== '' ? rtrim($d, '/\\') : dirname(__DIR__, 2) . '/storage/cache/nonces';
+    }
+
+    /**
+     * Fallback em arquivos: true = nonce novo (arquivo criado), false = replay, null = storage indisponível.
+     * $agora só para testes (simular o relógio).
+     */
+    private static function nonceArquivo(string $id, int $ttl, ?int $agora = null): ?bool
+    {
+        $agora ??= time();
+        $dir = self::dirNonces();
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            return null;
+        }
+        $p = $dir . '/' . $id . '.n';
+        for ($tentativa = 0; $tentativa < 2; $tentativa++) {
+            $fh = @fopen($p, 'x');
+            if ($fh !== false) {
+                fclose($fh);
+                @touch($p, $agora);
+                @chmod($p, 0600);
+                self::limparNonces(false, $agora);
+                return true;
+            }
+            clearstatcache(true, $p);
+            $t = @filemtime($p);
+            if ($t === false) {
+                return null;   // não existe e não deu para criar: sem permissão de escrita
+            }
+            if ($t >= $agora - $ttl) {
+                return false;  // já visto dentro da validade: REPLAY
+            }
+            @unlink($p);       // sobra vencida (limpeza ainda não passou): apaga e tenta de novo
+        }
+        return false;
+    }
+
+    /**
+     * Limpeza oportunista da pasta de nonces: no máximo 1x por minuto (marcador .limpeza), remove os
+     * vencidos, examina no máximo NONCE_VARREDURA arquivos por chamada e, se sobrarem mais que NONCE_TETO,
+     * apaga os mais velhos (teto contra enchimento do disco; um nonce apagado antes da hora volta a ser
+     * aceito — por isso o teto é alto e há limite de taxa no nginx).
+     * Devolve quantos arquivos apagou. Pública para testes/manutenção (php -r ... Crypto::limparNonces(true)).
+     */
+    public static function limparNonces(bool $forcar = false, ?int $agora = null): int
+    {
+        $agora ??= time();
+        $dir = self::dirNonces();
+        $marca = $dir . '/.limpeza';
+        if (!$forcar) {
+            $t = @filemtime($marca);
+            if ($t !== false && $t > $agora - 60) {
+                return 0;
+            }
+        }
+        @touch($marca, $agora);
+        $h = @opendir($dir);
+        if ($h === false) {
+            return 0;
+        }
+        $ttl = self::ttlNonce();
+        $varredura = max(10, (int) self::cfg('NONCE_VARREDURA', 20000));
+        $teto = max(1, (int) self::cfg('NONCE_TETO', 10000));
+        $vivos = [];
+        $apagados = 0;
+        $vistos = 0;
+        while (($nome = readdir($h)) !== false && $vistos < $varredura) {
+            if (preg_match('/^[0-9a-f]{64}\.n$/D', $nome) !== 1) {
+                continue;
+            }
+            $vistos++;
+            $p = $dir . '/' . $nome;
+            $t = @filemtime($p);
+            if ($t === false) {
+                continue;
+            }
+            if ($t < $agora - $ttl) {
+                $apagados += @unlink($p) ? 1 : 0;
+            } else {
+                $vivos[$nome] = $t;
+            }
+        }
+        closedir($h);
+        if (count($vivos) > $teto) {
+            asort($vivos);
+            foreach (array_slice(array_keys($vivos), 0, count($vivos) - $teto) as $nome) {
+                $apagados += @unlink($dir . '/' . $nome) ? 1 : 0;
+            }
+        }
+        clearstatcache();
+        return $apagados;
     }
 
     private static function limparErrosOpenssl(): void

@@ -11,10 +11,20 @@
     return { status: r.status, json };
   };
 
+  /** A chave pública que o servidor entrega com a página: <meta name="r4-server-key"> (CSP estrita) ou window.R4_SERVER_KEY (antigo). null se a página não embute. */
+  const chaveEmbutida = () => {
+    if (window.R4_SERVER_KEY) return window.R4_SERVER_KEY;
+    const m = document.querySelector('meta[name="r4-server-key"]');
+    return m ? JSON.parse(m.getAttribute('content')) : null;
+  };
+  let KEY = null;
+  /** a chave do servidor: a embutida na página ou, na falta, GET /r4/chave */
+  const chave = async () => KEY || (KEY = chaveEmbutida() || await (await fetch('/r4/chave')).json());
+
   suite('net', () => {
     test('crypto: a página tem só a chave PÚBLICA do servidor ({v:2, pub de 65 bytes, kid}) e nenhum segredo', async t => {
-      const k = window.R4_SERVER_KEY;
-      assert.ok(k && typeof k === 'object', 'window.R4_SERVER_KEY injetada pelo index.php');
+      const k = chaveEmbutida();
+      assert.ok(k && typeof k === 'object', 'chave pública embutida na página (<meta name="r4-server-key"> ou window.R4_SERVER_KEY)');
       assert.deepEq(Object.keys(k).sort(), ['kid', 'pub', 'v']);
       assert.eq(k.v, 2);
       assert.eq(b64uLen(k.pub), 65, 'ponto P-256 não comprimido');
@@ -30,7 +40,7 @@
       const b = await R4.crypto.encrypt({ n: 1 }, { metodo: 'POST', caminho: '/api/a' });
       assert.deepEq(Object.keys(a).sort(), ['k', 'kid', 's', 'v', 'x', 'z']);
       assert.eq(a.v, 2);
-      assert.eq(a.kid, window.R4_SERVER_KEY.kid, 'kid da chave do servidor');
+      assert.eq(a.kid, (await chave()).kid, 'kid da chave do servidor');
       assert.eq(b64uLen(a.k), 65, 'chave pública efêmera do cliente (65 bytes)');
       assert.eq(b64uLen(a.s), 16, 'salt de 16 bytes');
       assert.eq(b64uLen(a.z), 12, 'IV de 12 bytes');
@@ -79,11 +89,12 @@
       assert.ok(W.R4 && W.R4.crypto, 'lib carregada no iframe');
       W.R4.config.serverKey = { v: 2, pub: 'AAAA', kid: '00000000' };
       await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /chave pública do servidor/, 'pub inválida');
-      W.R4.config.serverKey = { ...window.R4_SERVER_KEY, kid: 'ffffffff' };
+      const K = await chave();
+      W.R4.config.serverKey = { ...K, kid: 'ffffffff' };
       await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /kid não confere/, 'kid que não é o da chave');
-      W.R4.config.serverKey = { v: 1, pub: window.R4_SERVER_KEY.pub, kid: window.R4_SERVER_KEY.kid };
+      W.R4.config.serverKey = { v: 1, pub: K.pub, kid: K.kid };
       await assert.rejects(W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' }), /chave pública/, 'versão errada');
-      W.R4.config.serverKey = window.R4_SERVER_KEY;
+      W.R4.config.serverKey = K;
       const p = await W.R4.crypto.encrypt({ a: 1 }, { metodo: 'POST', caminho: '/x' });
       assert.deepEq(await W.R4.crypto.decrypt(p), { a: 1 }, 'com a chave do servidor: funciona');
       f.remove();
@@ -136,7 +147,7 @@
       let n = 0;
       const m = t.mockFetch({
         'POST /api/rot': () => (++n === 1 ? { status: 400, body: { status: 400, retorno: 'Pacote de criptografia inválido ou expirado.', codigo: 'R4_CHAVE' } } : { body: { status: 200, retorno: 'ok' } }),
-        'GET /r4/chave': { body: window.R4_SERVER_KEY },
+        'GET /r4/chave': { body: await chave() },
         'POST /api/sempre': { status: 400, body: { status: 400, retorno: 'x', codigo: 'R4_CHAVE' } }
       });
       const k1 = (await R4.crypto.sessao() || {}).k;

@@ -99,7 +99,8 @@ window.R4Demos = {
     { title: 'O que vai pela rede (só a chave PÚBLICA do servidor está na página)', async fn(el, out) {
       // {metodo, caminho} formam o AAD: o pacote só vale para POST /vitrine/api/echo
       const pacote = await R4.crypto.encrypt({ cartao: '4111 1111 1111 1111' }, { metodo: 'POST', caminho: '/vitrine/api/echo' });
-      out({ chavePublicaDoServidor: window.R4_SERVER_KEY, pacote, decifradoPelaPropriaSessao: await R4.crypto.decrypt(pacote) });
+      // chaveServidor() diz qual chave pública está em uso e de onde veio (meta r4-server-key, window.R4_SERVER_KEY ou /r4/chave)
+      out({ chavePublicaDoServidor: await R4.crypto.chaveServidor(), pacote, decifradoPelaPropriaSessao: await R4.crypto.decrypt(pacote) });
     } },
     { title: 'AAD: o mesmo pacote enviado para outra rota é recusado (400)', async fn(el, out) {
       const pacote = await R4.crypto.encrypt({ valor: 100 }, { metodo: 'POST', caminho: '/vitrine/api/echo' });
@@ -136,6 +137,20 @@ window.R4Demos = {
   util: [
     { title: 'Formatação pt-BR', fn(el, out) {
       out({ bytes: R4.util.bytes(5242880), number: R4.util.number(1234567.891), money: R4.util.money(1999.9), date: R4.util.date('2026-11-09T12:00:00') });
+    } }
+  ],
+  support: [
+    { title: 'O que este navegador oferece (relatório)', fn(el, out) {
+      const r = R4.support.report();
+      out({ ok: r.ok, faltando: r.faltando, opcionais: r.opcionais, contexto: r.contexto, efeitoDoQueFalta: r.detalhes.filter(d => !d.ok).map(d => d.nome + ': ' + d.efeito) });
+    } },
+    { title: 'Testar de verdade ECDH, HKDF e AES-GCM (probe)', async fn(el, out) {
+      const r = await R4.support.probe();
+      out({ ok: r.ok, verificado: r.verificado, motivoCripto: R4.support.motivoCripto(), crypto: r.detalhes.filter(d => d.obrigatorio).map(d => d.nome + ': ' + (d.ok ? 'ok' : 'FALTA')) });
+    } },
+    { title: 'Usar a checagem no seu código (degradar sem quebrar)', fn(el, out) {
+      // exemplo: só anima ao entrar na tela se o navegador tem IntersectionObserver; senão mostra direto
+      out({ animaAoEntrar: R4.support.has('IntersectionObserver'), cifraNoNavegador: R4.support.has('crypto.subtle') });
     } }
   ]
 };

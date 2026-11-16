@@ -16,8 +16,12 @@ if (PHP_SAPI !== 'cli') {
 }
 require_once __DIR__ . '/../core/Security/Transport.php';
 require_once __DIR__ . '/../core/Security/Crypto.php';
+require_once __DIR__ . '/../core/Security/Csrf.php';
+require_once __DIR__ . '/../core/Security/Session.php';
 
 use Core\Security\Crypto;
+use Core\Security\Csrf;
+use Core\Security\Session;
 use Core\Security\Transport;
 
 $total = 0;
@@ -215,7 +219,213 @@ $r = Crypto::decryptRequest(selar($info, 1, $aad)['env'], $aad);
 caso('sem a ANTERIOR, pacote da chave velha → kid desconhecido', $r === null && Crypto::motivo() === 'kid' && Crypto::codigoCliente() === 'R4_CHAVE');
 Crypto::configurar(['CRYPTO_PRIVATE_KEY' => '', 'APP_ENV' => 'production']);
 caso('produção sem chave: publicKeyInfo null (nada é gerado fora de local)', Crypto::publicKeyInfo() === null);
+
+/* ================= anti-replay: cache de nonces em ARQUIVOS (sem APCu) ================= */
+$tmpN = sys_get_temp_dir() . '/r4-testes-nonces-' . bin2hex(random_bytes(4));
+$cfgN = ['CRYPTO_PRIVATE_KEY' => $a['privada'], 'APP_ENV' => 'production', 'CRYPTO_JANELA_SEG' => 300, 'NONCE_DIR' => $tmpN, 'NONCE_BACKEND' => 'arquivo'];
+$novoRequest = fn(array $extra = []) => Crypto::configurar($extra + $cfgN);   // cada configurar() = "outro request" (limpa o memo)
+$arquivosN = fn() => array_values(array_filter(is_dir($tmpN) ? scandir($tmpN) : [], fn($n) => preg_match('/^[0-9a-f]{64}\.n$/', $n)));
+$idN = fn(string $kid, string $n) => hash('sha256', $kid . '|' . $n);
+$velho = time() - 2000;
+
+$novoRequest();
+$p1 = selar($info, ['pedido' => 1], $aad);
+$r1 = Crypto::decryptRequest($p1['env'], $aad);
+caso('nonce em arquivo: 1º envio aceito e cria um arquivo sha256(kid|nonce).n', is_array($r1) && $arquivosN() === [$idN($a['kid'], $p1['n']) . '.n'], Crypto::motivo() . ' ' . json_encode($arquivosN()));
+caso('nonce em arquivo: pasta criada (0700 no Linux)', is_dir($tmpN) && (PHP_OS_FAMILY === 'Windows' || (fileperms($tmpN) & 0777) === 0700));
+caso('mesmo pacote lido 2x no MESMO request não conta como replay (memo)', is_array(Crypto::decryptRequest($p1['env'], $aad)));
+$novoRequest();
+$r2 = Crypto::decryptRequest($p1['env'], $aad);
+caso('REPLAY: o mesmo pacote em outro request → null (replay)', $r2 === null && Crypto::motivo() === 'replay', 'motivo=' . Crypto::motivo());
+$novoRequest();
+caso('replay de novo continua recusado', Crypto::decryptRequest($p1['env'], $aad) === null && Crypto::motivo() === 'replay');
+$novoRequest();
+$p2 = selar($info, ['pedido' => 2], $aad);
+caso('pacote novo (nonce novo) continua passando', is_array(Crypto::decryptRequest($p2['env'], $aad)) && count($arquivosN()) === 2, Crypto::motivo());
+
+// sobra vencida com o mesmo id (limpeza ainda não passou): é apagada e o pacote é aceito
+$p3 = selar($info, ['pedido' => 3], $aad);
+touch($tmpN . '/' . $idN($a['kid'], $p3['n']) . '.n', $velho);
+$novoRequest();
+caso('arquivo de nonce VENCIDO não bloqueia (é recriado)', is_array(Crypto::decryptRequest($p3['env'], $aad)) && filemtime($tmpN . '/' . $idN($a['kid'], $p3['n']) . '.n') >= time() - 5, Crypto::motivo());
+// arquivo recente com o mesmo id (outro processo já viu): replay
+$p4 = selar($info, ['pedido' => 4], $aad);
+touch($tmpN . '/' . $idN($a['kid'], $p4['n']) . '.n', time() - 10);
+$novoRequest();
+caso('arquivo de nonce RECENTE (visto por outro processo) → replay', Crypto::decryptRequest($p4['env'], $aad) === null && Crypto::motivo() === 'replay');
+
+// limpeza: relógio simulado (arquivos antigos) + no máximo 1x por minuto
+$antes = count($arquivosN());
+for ($i = 0; $i < 6; $i++) {
+    touch($tmpN . '/' . hash('sha256', 'antigo' . $i) . '.n', $velho);
+}
+touch($tmpN . '/' . 'nao-e-nonce.txt', $velho);
+touch($tmpN . '/.limpeza', time());
+$novoRequest();
+caso('limpeza: no máximo 1x por minuto (marcador recente → nada apagado)', Crypto::limparNonces(false) === 0 && count($arquivosN()) === $antes + 6);
+touch($tmpN . '/.limpeza', time() - 120);
+$apagados = Crypto::limparNonces(false);
+caso('limpeza: apaga só os vencidos (6), mantém os válidos e ignora arquivos que não são nonce', $apagados === 6 && count($arquivosN()) === $antes && is_file($tmpN . '/nao-e-nonce.txt'), "apagados=$apagados restam=" . count($arquivosN()));
+caso('limpeza: relógio adiantado além da janela → tudo vence', Crypto::limparNonces(true, time() + 3600) === $antes && $arquivosN() === []);
+// teto de arquivos: passou de N → apaga os mais velhos
+$novoRequest(['NONCE_TETO' => 5]);
+for ($i = 0; $i < 8; $i++) {
+    touch($tmpN . '/' . hash('sha256', 'vivo' . $i) . '.n', time() - 100 + $i);
+}
+$apagados = Crypto::limparNonces(true);
+$restam = $arquivosN();
+$esperados = array_map(fn($i) => hash('sha256', 'vivo' . $i) . '.n', [3, 4, 5, 6, 7]);
+sort($esperados);
+sort($restam);
+caso('teto (NONCE_TETO=5): com 8 arquivos válidos apaga os 3 mais velhos', $apagados === 3 && $restam === $esperados, "apagados=$apagados " . json_encode($restam));
+// varredura limitada por chamada
+$novoRequest(['NONCE_VARREDURA' => 10]);
+foreach ($arquivosN() as $n) {
+    unlink($tmpN . '/' . $n);
+}
+for ($i = 0; $i < 25; $i++) {
+    touch($tmpN . '/' . hash('sha256', 'lote' . $i) . '.n', $velho);
+}
+$apagados = Crypto::limparNonces(true);
+caso('varredura limitada (NONCE_VARREDURA=10): uma chamada examina no máximo 10 arquivos', $apagados === 10 && count($arquivosN()) === 15, "apagados=$apagados");
+Crypto::limparNonces(true);
+Crypto::limparNonces(true);
+caso('chamadas seguintes terminam a limpeza (não acumula)', $arquivosN() === []);
+
+// storage não gravável → aceita (com aviso único no log): sobra só a janela de tempo
+$arqBloqueio = $tmpN . '/arquivo-comum';
+file_put_contents($arqBloqueio, 'x');
+$novoRequest(['NONCE_DIR' => $arqBloqueio . '/sub']);
+$p5 = selar($info, ['pedido' => 5], $aad);
+$ok1 = is_array(Crypto::decryptRequest($p5['env'], $aad));
+$novoRequest(['NONCE_DIR' => $arqBloqueio . '/sub']);
+$ok2 = is_array(Crypto::decryptRequest($p5['env'], $aad));
+caso('storage não gravável: não derruba a aplicação (aceita; aviso no log)', $ok1 && $ok2);
+// limpa a pasta de teste
+foreach (glob($tmpN . '/{,.}*', GLOB_BRACE) ?: [] as $f) {
+    if (is_file($f)) {
+        unlink($f);
+    }
+}
+@rmdir($tmpN);
 Crypto::configurar(null);
+
+/* ================= anti-CSRF por origem (Core\Security\Csrf) ================= */
+$tc = cfg(['HTTPS_MODE' => 'optional'], false);
+$cc = Csrf::normalizar([]);
+/** POST JSON de http://exemplo.com (sem Origin = cliente não navegador). */
+function post(array $extra = []): array
+{
+    return $extra + ['REQUEST_METHOD' => 'POST', 'REQUEST_URI' => '/api/salvar', 'HTTP_HOST' => 'exemplo.com', 'REMOTE_ADDR' => '203.0.113.9',
+        'SERVER_PORT' => '80', 'CONTENT_TYPE' => 'application/json', 'CONTENT_LENGTH' => '7'];
+}
+$cs = function (string $nome, array $server, int $status, ?string $motivo = null, ?array $c = null, ?array $t = null) use ($tc, $cc) {
+    $r = Csrf::avaliar($server, $c ?? $cc, $t ?? $tc);
+    $ok = $r['status'] === $status && ($motivo === null || $r['motivo'] === $motivo);
+    if ($ok && $status !== 200) {
+        $j = json_decode((string) $r['corpo'], true);
+        $ok = is_array($j) && array_keys($j) === ['status', 'retorno'] && $j['status'] === $status && !str_contains((string) $r['corpo'], 'evil');
+    }
+    caso('csrf: ' . $nome . ' → ' . $status, $ok, json_encode($r));
+};
+caso('csrf: padrão = ativo e sem origens extras', $cc === ['ativo' => true, 'origens' => []]);
+$cs('GET de outro site (Sec-Fetch-Site: cross-site) não é conferido', post(['REQUEST_METHOD' => 'GET', 'HTTP_SEC_FETCH_SITE' => 'cross-site', 'HTTP_ORIGIN' => 'https://evil.com']), 200);
+$cs('OPTIONS não é conferido', post(['REQUEST_METHOD' => 'OPTIONS', 'HTTP_ORIGIN' => 'https://evil.com']), 200);
+$cs('POST same-origin (Origin igual + Sec-Fetch-Site: same-origin)', post(['HTTP_ORIGIN' => 'http://exemplo.com', 'HTTP_SEC_FETCH_SITE' => 'same-origin']), 200);
+$cs('POST sem Origin e sem Sec-Fetch-Site (curl/serviço) com JSON', post(), 200);
+$cs('Sec-Fetch-Site: none (digitado/favorito) sem Origin', post(['HTTP_SEC_FETCH_SITE' => 'none']), 200);
+$cs('Origin de outro domínio', post(['HTTP_ORIGIN' => 'https://evil.com']), 403, 'origin-outra');
+$cs('Origin: null (iframe sandbox/file://)', post(['HTTP_ORIGIN' => 'null']), 403, 'origin-invalida');
+$cs('Origin vazio', post(['HTTP_ORIGIN' => '']), 403, 'origin-invalida');
+$cs('Origin com caminho/barra final', post(['HTTP_ORIGIN' => 'http://exemplo.com/']), 403, 'origin-invalida');
+$cs('Origin com usuário (http://exemplo.com@evil.com)', post(['HTTP_ORIGIN' => 'http://exemplo.com@evil.com']), 403, 'origin-invalida');
+$cs('Origin com sufixo (exemplo.com.evil.com)', post(['HTTP_ORIGIN' => 'http://exemplo.com.evil.com']), 403, 'origin-outra');
+$cs('Origin de subdomínio (app.exemplo.com) não é a mesma origem', post(['HTTP_ORIGIN' => 'http://app.exemplo.com']), 403, 'origin-outra');
+$cs('Origin https numa requisição http (esquema diferente)', post(['HTTP_ORIGIN' => 'https://exemplo.com']), 403, 'origin-outra');
+$cs('Origin com a porta padrão explícita (:80) = mesma origem', post(['HTTP_ORIGIN' => 'http://exemplo.com:80']), 200);
+$cs('Origin em maiúsculas é normalizado', post(['HTTP_ORIGIN' => 'HTTP://EXEMPLO.COM']), 200);
+$cs('porta: Host 127.0.0.1:8087 + Origin :8087', post(['HTTP_HOST' => '127.0.0.1:8087', 'HTTP_ORIGIN' => 'http://127.0.0.1:8087']), 200);
+$cs('porta: Host 127.0.0.1:8087 + Origin :8088', post(['HTTP_HOST' => '127.0.0.1:8087', 'HTTP_ORIGIN' => 'http://127.0.0.1:8088']), 403, 'origin-outra');
+$cs('IPv6: Host [::1]:8087 + Origin http://[::1]:8087', post(['HTTP_HOST' => '[::1]:8087', 'HTTP_ORIGIN' => 'http://[::1]:8087']), 200);
+$cs('HTTPS direto: Origin https://exemplo.com', post(['HTTPS' => 'on', 'SERVER_PORT' => '443', 'HTTP_ORIGIN' => 'https://exemplo.com']), 200);
+$cs('HTTPS direto: Origin http://exemplo.com (rebaixado) recusado', post(['HTTPS' => 'on', 'SERVER_PORT' => '443', 'HTTP_ORIGIN' => 'http://exemplo.com']), 403, 'origin-outra');
+$tp = cfg(['HTTPS_MODE' => 'required', 'TRUSTED_PROXIES' => '10.0.0.0/8', 'APP_HOSTS' => 'exemplo.com']);
+$cs('atrás de proxy confiável (X-Forwarded-Proto: https) + Origin https', post(['REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_PROTO' => 'https', 'HTTP_ORIGIN' => 'https://exemplo.com']), 200, null, null, $tp);
+$cs('X-Forwarded-Proto forjado por cliente comum não vira https', post(['HTTP_X_FORWARDED_PROTO' => 'https', 'HTTP_ORIGIN' => 'https://exemplo.com']), 403, 'origin-outra', null, $tp);
+$cs('APP_HOSTS: Host fora da lista nunca casa com Origin', post(['HTTP_HOST' => 'atacante.com', 'HTTP_ORIGIN' => 'http://atacante.com']), 403, 'origin-outra', null, cfg(['HTTPS_MODE' => 'optional', 'APP_HOSTS' => 'exemplo.com'], false));
+$cs('Sec-Fetch-Site: cross-site sem Origin', post(['HTTP_SEC_FETCH_SITE' => 'cross-site']), 403, 'sec-fetch-site');
+$cs('Sec-Fetch-Site: same-site (subdomínio irmão)', post(['HTTP_SEC_FETCH_SITE' => 'same-site']), 403, 'sec-fetch-site');
+$cs('Origin igual mas Sec-Fetch-Site: cross-site (contraditório)', post(['HTTP_ORIGIN' => 'http://exemplo.com', 'HTTP_SEC_FETCH_SITE' => 'cross-site']), 403, 'sec-fetch-site');
+$cs('PUT de outro site', post(['REQUEST_METHOD' => 'PUT', 'HTTP_ORIGIN' => 'https://evil.com']), 403);
+$cs('PATCH de outro site', post(['REQUEST_METHOD' => 'PATCH', 'HTTP_SEC_FETCH_SITE' => 'cross-site']), 403);
+$cs('DELETE de outro site', post(['REQUEST_METHOD' => 'delete', 'HTTP_ORIGIN' => 'https://evil.com']), 403);
+$extra = Csrf::normalizar(['CSRF_ORIGENS_PERMITIDAS' => 'https://app.parceiro.com, https://admin.exemplo.com:8443']);
+$cs('CSRF_ORIGENS_PERMITIDAS: origem listada passa (mesmo cross-site)', post(['HTTP_ORIGIN' => 'https://app.parceiro.com', 'HTTP_SEC_FETCH_SITE' => 'cross-site']), 200, null, $extra);
+$cs('CSRF_ORIGENS_PERMITIDAS: porta faz parte da origem', post(['HTTP_ORIGIN' => 'https://admin.exemplo.com:8443']), 200, null, $extra);
+$cs('CSRF_ORIGENS_PERMITIDAS: mesma origem sem a porta listada é recusada', post(['HTTP_ORIGIN' => 'https://admin.exemplo.com']), 403, 'origin-outra', $extra);
+$cs('CSRF_ORIGENS_PERMITIDAS: outra origem continua recusada', post(['HTTP_ORIGIN' => 'https://outro.parceiro.com']), 403, 'origin-outra', $extra);
+$cs('CSRF_ORIGENS_PERMITIDAS: listada mas com text/plain → 415', post(['HTTP_ORIGIN' => 'https://app.parceiro.com', 'CONTENT_TYPE' => 'text/plain']), 415, 'content-type', $extra);
+$cs('Content-Type text/plain (forjável sem preflight)', post(['CONTENT_TYPE' => 'text/plain;charset=UTF-8']), 415, 'content-type');
+$cs('Content-Type x-www-form-urlencoded', post(['CONTENT_TYPE' => 'application/x-www-form-urlencoded']), 415, 'content-type');
+$cs('Content-Type application/jsonp não é JSON', post(['CONTENT_TYPE' => 'application/jsonp']), 415, 'content-type');
+$cs('corpo sem Content-Type', post(['CONTENT_TYPE' => '']), 415, 'sem-content-type');
+$cs('chunked sem Content-Type', post(['CONTENT_TYPE' => '', 'CONTENT_LENGTH' => '', 'HTTP_TRANSFER_ENCODING' => 'chunked']), 415, 'sem-content-type');
+$cs('POST sem corpo e sem Content-Type', post(['CONTENT_TYPE' => '', 'CONTENT_LENGTH' => '0']), 200);
+$cs('application/json; charset=utf-8', post(['CONTENT_TYPE' => 'application/json; charset=utf-8']), 200);
+$cs('application/merge-patch+json', post(['CONTENT_TYPE' => 'application/merge-patch+json']), 200);
+$cs('multipart/form-data (upload) same-origin', post(['CONTENT_TYPE' => 'multipart/form-data; boundary=x', 'HTTP_ORIGIN' => 'http://exemplo.com']), 200);
+$cs('multipart/form-data de outro site', post(['CONTENT_TYPE' => 'multipart/form-data; boundary=x', 'HTTP_ORIGIN' => 'https://evil.com']), 403);
+$cs('CSRF_ATIVO=false desliga a conferência', post(['HTTP_ORIGIN' => 'https://evil.com', 'CONTENT_TYPE' => 'text/plain']), 200, null, Csrf::normalizar(['CSRF_ATIVO' => false]));
+caso('csrf: CSRF_ATIVO inválido cai no padrão seguro (ligado)', Csrf::normalizar(['CSRF_ATIVO' => 'talvez'])['ativo'] === true);
+$erros = [];
+$l = Csrf::lerOrigens('https://a.com, HTTPS://B.com:443 ,http://c.com:8080/, *.d.com, ftp://e.com, null, https://f.com:99999, https://g.com/x, https://h_h.com', $erros);
+caso('csrf: lerOrigens normaliza (minúsculas, sem porta padrão) e aponta as inválidas', $l === ['https://a.com', 'https://b.com'] && count($erros) === 7, json_encode([$l, $erros]));
+
+/* ================= sessão sob demanda (Core\Security\Session) ================= */
+$oh = Session::opcoes(true);
+$ov = Session::opcoes(false);
+caso('sessão em HTTPS: __Host-R4SID, Secure, Path=/, sem Domain, HttpOnly, SameSite=Lax',
+    $oh['nome'] === '__Host-R4SID' && $oh['cookie'] === ['lifetime' => 0, 'path' => '/', 'domain' => '', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax'], json_encode($oh));
+caso('sessão em HTTP: R4SID sem Secure (o prefixo __Host- exige Secure)', $ov['nome'] === 'R4SID' && $ov['cookie']['secure'] === false && $ov['cookie']['httponly'] === true);
+caso('sessão: use_strict_mode, use_only_cookies, sem trans_sid', $ov['ini']['session.use_strict_mode'] === '1' && $ov['ini']['session.use_only_cookies'] === '1' && $ov['ini']['session.use_trans_sid'] === '0');
+$raiz = dirname(__DIR__);
+$idx = (string) file_get_contents($raiz . '/public/index.php');
+$usos = [];
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($raiz . '/src', FilesystemIterator::SKIP_DOTS)) as $f) {
+    if (str_ends_with((string) $f, '.php') && preg_match('/\bsession_start\s*\(/', (string) file_get_contents((string) $f))) {
+        $usos[] = basename((string) $f);
+    }
+}
+foreach (glob($raiz . '/core/*.php') ?: [] as $f) {
+    if (preg_match('/\bsession_start\s*\(/', (string) file_get_contents($f))) {
+        $usos[] = basename($f);
+    }
+}
+caso('index.php não inicia sessão sozinho e nenhum controller chama session_start() direto', !preg_match('/\bsession_(start|set_cookie_params)\s*\(/', $idx) && $usos === [], json_encode($usos));
+caso('index.php sem script inline: chave pública em <meta name="r4-server-key">', !preg_match('/[\'"]<script/i', $idx) && str_contains($idx, '<meta name="r4-server-key"') && str_contains($idx, 'htmlspecialchars($json, ENT_QUOTES | ENT_SUBSTITUTE'));
+// sessão de verdade num processo PHP separado (aqui a saída já começou e o cookie não poderia ser criado)
+$filho = sys_get_temp_dir() . '/r4-teste-sessao-' . bin2hex(random_bytes(4)) . '.php';
+file_put_contents($filho, '<?php
+require ' . var_export(__DIR__ . '/../core/Security/Transport.php', true) . ';
+require ' . var_export(__DIR__ . '/../core/Security/Session.php', true) . ';
+use Core\Security\Session; use Core\Security\Transport;
+$_SERVER = ["REQUEST_METHOD" => "GET", "HTTP_HOST" => "exemplo.com", "REMOTE_ADDR" => "127.0.0.1", "SERVER_PORT" => "80"] + $_SERVER;
+Transport::configurar(Transport::normalizar(["HTTPS_MODE" => "optional"], false));
+$r = ["antes" => Session::ativa()];
+$r["start"] = Session::start() && Session::start() && Session::ativa();
+$r["nome"] = session_name();
+$r["strict"] = ini_get("session.use_strict_mode");
+$_SESSION["x"] = 1; $sid = session_id();
+$r["regen"] = Session::regenerar() && session_id() !== $sid && $_SESSION["x"] === 1;
+Session::encerrar();
+$r["fim"] = Session::ativa();
+echo json_encode($r);
+');
+$saida = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($filho) . ' 2>&1');
+@unlink($filho);
+$js = json_decode($saida, true);
+caso('Session::start() idempotente (R4SID, strict mode); regenerar() troca o ID e mantém os dados; encerrar() fecha',
+    $js === ['antes' => false, 'start' => true, 'nome' => 'R4SID', 'strict' => '1', 'regen' => true, 'fim' => false], $saida);
 
 echo "\n" . ($total - count($falhas)) . '/' . $total . ' casos passaram' . ($falhas ? ' — FALHARAM: ' . implode(' ; ', $falhas) : '') . "\n";
 exit($falhas ? 1 : 0);

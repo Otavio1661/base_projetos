@@ -234,7 +234,25 @@
       });
     }
   }
-  function structuredCloneSafe(o) { try { return structuredClone(o); } catch (e) { return Object.assign({}, o); } }
+  /**
+   * Cópia da `config` de cada classe. structuredClone quando existe e a config é clonável; senão (navegador sem ele, ou config com
+   * função) uma cópia recursiva só de objetos simples e arrays — funções, nós do DOM, datas e instâncias ficam por referência.
+   * Assim duas instâncias nunca compartilham o mesmo array/objeto de configuração padrão.
+   */
+  function structuredCloneSafe(o) {
+    try { return structuredClone(o); } catch (e) { return copiaSimples(o, []); }
+  }
+  function copiaSimples(v, vistos) {
+    if (!v || typeof v !== 'object' || vistos.includes(v)) return v;
+    if (Array.isArray(v)) { vistos.push(v); const r = v.map(x => copiaSimples(x, vistos)); vistos.pop(); return r; }
+    const p = Object.getPrototypeOf(v);
+    if (p !== Object.prototype && p !== null) return v;
+    vistos.push(v);
+    const r = {};
+    for (const k of Object.keys(v)) if (safeKey(k)) r[k] = copiaSimples(v[k], vistos);
+    vistos.pop();
+    return r;
+  }
   R4.Component = Component;
   R4.registry.component = { cls: Component, meta: { hidden: true } };
 

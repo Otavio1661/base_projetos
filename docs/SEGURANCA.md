@@ -6,7 +6,9 @@ checklist de produção e a auditoria feita (achados, correções e testes).
 
 Testes automatizados: `node tools/testes-seguranca.js` e `php tools/testes-transport.php` (veja a seção 12).
 Criptografia v2 (nenhum segredo no navegador) e política HTTPS: seções 5 e 5.1.
+Anti-CSRF por origem e sessão sob demanda: seções 5.2 e 5.3. CSP sem `'unsafe-inline'` em scripts: seção 7.
 Injeção de SQL, de arquivos e de prompt (servidor + cliente): seção 13.
+Como relatar uma vulnerabilidade: [`SECURITY.md`](../SECURITY.md).
 
 ---
 
@@ -140,8 +142,11 @@ visitante**) foi **removido**. No v2 **nenhum segredo sai do servidor**.
 1. O servidor tem um par de chaves **P-256 fixo**. A chave **privada** fica só no `.env`
    (`CRYPTO_PRIVATE_KEY`, gerada por `php tools/gerar-chave.php`); em `APP_ENV=local`, se faltar, é
    gerada em `storage/dev-crypto-key.pem` (0600, fora do Git). Em produção é obrigatória.
-2. A página recebe só a chave **pública**: `window.R4_SERVER_KEY = {v:2, pub, kid}` (injetada pelo
-   `public/index.php`) ou `GET /r4/chave` (mesmo JSON, `Cache-Control: no-cache`). `kid` = 8 primeiros
+2. A página recebe só a chave **pública** `{v:2, pub, kid}`: numa
+   `<meta name="r4-server-key" content="{...}">` inserida pelo `public/index.php` antes do `</head>`
+   (JSON escapado com `htmlspecialchars(ENT_QUOTES)`; **sem script inline**, compatível com a CSP estrita
+   da seção 7) ou em `GET /r4/chave` (mesmo JSON, `Cache-Control: no-cache`). `window.R4_SERVER_KEY`
+   continua aceito pela lib como alternativa (definido pelo seu próprio script externo). `kid` = 8 primeiros
    hex do SHA-256 do ponto público; a lib confere que `kid` e `pub` batem.
 3. A cada **sessão de página** a libr4 gera um par ECDH efêmero (WebCrypto, chave privada **não
    exportável**, só em memória — nunca em `localStorage`/`sessionStorage`/cookie), faz ECDH com a chave
@@ -190,12 +195,20 @@ visitante**) foi **removido**. No v2 **nenhum segredo sai do servidor**.
   resolve o atacante **passivo** sem TLS. **HTTPS continua obrigatório em produção** (seção 5.1).
 - **XSS lê os dados em claro**: um script injetado na página vê o que o usuário digita antes de cifrar
   (e pode chamar `R4.http` como a página). CSP, escape e `r4-ignore` continuam sendo a defesa.
-- **Replay dentro da janela**: sem cache de nonces, o MESMO pacote reenviado para o MESMO endpoint dentro
-  de `CRYPTO_JANELA_SEG` é aceito de novo. Com **APCu** ligado (`apcu_enabled()`), o servidor guarda cada
-  nonce e recusa a repetição (motivo `replay`). Sem APCu (como neste ambiente de dev), torne as rotas
-  sensíveis idempotentes ou use um token de uso único (ex.: id de transação) — ou ligue APCu/Redis.
-- Não autentica o usuário (qualquer um pode fazer uma sessão com a chave pública): **autenticação,
-  autorização e validação** (`ctrl::validate`) continuam obrigatórias no servidor.
+- **Replay dentro da janela**: o servidor guarda o nonce de cada pacote aceito (chave
+  `sha256(kid|nonce)`, validade = `CRYPTO_JANELA_SEG` + 65 s) e recusa a repetição com 400 (motivo
+  `replay` no log). Ordem: **APCu** se estiver ligado (`apcu_add`, atômico); senão **um arquivo por nonce**
+  em `storage/cache/nonces/` (pasta 0700, fora do Git; criação exclusiva `fopen(..., 'x')` = atômica entre
+  processos; limpeza oportunista no máximo 1x por minuto, que apaga os vencidos examinando até 20.000
+  arquivos por vez, e teto de 10.000 nonces válidos — passou disso, os mais velhos são apagados); senão
+  (storage sem permissão de escrita) o pacote é **aceito** e o log avisa uma vez por dia — sobra só a
+  janela de tempo. Limites: com vários servidores atrás de um balanceador cada um tem o seu cache (use
+  APCu+afinidade de sessão, um `storage/` compartilhado ou Redis); o teto existe contra encher o disco e, sob
+  inundação de pacotes válidos, um nonce apagado antes da hora volta a ser aceito. Rotas que movem dinheiro
+  continuam precisando de idempotência própria (id de transação).
+- Não autentica o usuário (qualquer um pode fazer uma sessão com a chave pública) — e por isso **não impede
+  CSRF sozinho**: um site de terceiros também consegue montar um pacote válido. A checagem de origem da
+  seção 5.2 cobre isso; **autenticação, autorização e validação** (`ctrl::validate`) continuam obrigatórias.
 - Relógio: o `t` vem do navegador (corrigido pelo `Date` do servidor quando há diferença > 30 s).
 - O caminho do AAD é o que o PHP vê em `REQUEST_URI`: um proxy que **reescreve o caminho** (ex.: tira
   um prefixo `/app`) faz o pacote falhar — publique a aplicação no mesmo caminho que o navegador usa.
@@ -242,9 +255,55 @@ Aplicada no começo do `public/index.php` (logo após o `src/Env.php`). Variáve
   aviso no log (no máximo 1x por dia).
 - `APP_HOSTS` preenchido: Host fora da lista → 400 (anti Host-header injection). Vazio: o Host só é
   usado no redirecionamento se tiver sintaxe válida (nunca é refletido cru).
-- O cookie de sessão usa `secure` = detecção real de HTTPS (`Transport::isHttps()`).
+- O cookie de sessão (seção 5.3) usa `Secure` = detecção real de HTTPS (`Transport::isHttps()`).
 - No cliente: página https não envia para `http://` (conteúdo misto); página http fora de
   localhost/rede privada avisa uma vez no console; com `R4.config.exigirHttps = true` recusa enviar.
+
+## 5.2 Anti-CSRF por origem (`Core\Security\Csrf`)
+
+O envelope cifrado **não autentica o remetente** (a chave pública é pública): sem esta camada, uma página
+de outro site poderia fazer o navegador da vítima enviar um POST para cá, com os cookies dela.
+`Csrf::guard()` roda no `public/index.php` logo depois de `Transport::aplicar()`, em toda requisição cujo
+método altera estado (tudo que não é GET, HEAD ou OPTIONS):
+
+| Regra | Recusa |
+|---|---|
+| `Sec-Fetch-Site` presente e diferente de `same-origin`/`none` (inclui `same-site`: subdomínio irmão) | 403 |
+| `Origin` presente e diferente da origem da requisição — **esquema + host + porta**, exatos (host validado pelo `Transport`, com `APP_HOSTS`; esquema pela detecção real de HTTPS, inclusive atrás de proxy confiável) — e fora de `CSRF_ORIGENS_PERMITIDAS`. `Origin: null`, com caminho, barra final ou usuário → inválido | 403 |
+| `Content-Type` que não é `application/json` (ou `application/*+json`) nem `multipart/form-data`: `text/plain` e `application/x-www-form-urlencoded` são justamente o que um `<form>`/`fetch` “simples” de outro site envia **sem preflight**; corpo sem `Content-Type` também | 415 |
+
+- Resposta: JSON `{status, retorno}` (`"Requisição recusada."` / `"Tipo de conteúdo não suportado."`), sem
+  detalhes; o motivo (`origin-outra`, `origin-invalida`, `sec-fetch-site`, `content-type`...) vai só para o log.
+- **A proteção é contra NAVEGADORES**: requisições sem `Origin` e sem `Sec-Fetch-Site` (curl, cron, serviço
+  interno, app mobile) continuam aceitas se o `Content-Type` estiver certo. Todo navegador atual manda
+  `Origin` em POST entre origens; `multipart/form-data` é forjável por `<form enctype>` e por isso depende
+  dessa checagem de origem.
+- `CSRF_ORIGENS_PERMITIDAS="https://app.parceiro.com,https://admin.exemplo.com:8443"`: origens extras
+  (API consumida de propósito por outro domínio). Uma origem listada dispensa a regra do `Sec-Fetch-Site`;
+  o `Content-Type` continua exigido. O projeto não envia cabeçalhos CORS — configure-os se precisar.
+- `CSRF_ATIVO=false` desliga tudo (em produção o log avisa 1x/dia). Não use além de um diagnóstico.
+- Atrás de proxy/LB que termina o TLS: configure `TRUSTED_PROXIES` (senão o PHP acha que a requisição é
+  `http` e recusa o `Origin: https://...`) e preserve o cabeçalho `Host` original (com a porta, se não for a padrão).
+- Com cookie `SameSite=Lax` (seção 5.3) o navegador já não manda o cookie de sessão em POST entre sites;
+  esta checagem cobre o resto (rotas sem cookie, navegadores antigos, subdomínios) e é independente da sessão.
+
+## 5.3 Sessão sob demanda (`Core\Security\Session`)
+
+- O `public/index.php` **não inicia sessão**: páginas, vitrine, `/r4/chave` e a API não criam cookie nem
+  travam o arquivo de sessão (`session_start()` serializa as requisições do mesmo usuário).
+- Quem precisa chama `Session::start()` (idempotente). Ela aplica `session.use_strict_mode=1` (ID inventado
+  pelo cliente é descartado), `use_only_cookies=1`, `use_trans_sid=0` e cookie `HttpOnly`, `SameSite=Lax`,
+  `Path=/`, sem `Domain`, `Secure` em HTTPS. Em HTTPS o nome é **`__Host-R4SID`** (o navegador só aceita o
+  cookie se for Secure, Path=/ e sem Domain — um subdomínio não consegue plantá-lo); em HTTP, `R4SID`.
+- **Login**: autenticou (ou mudou de privilégio) → `Session::regenerar()` (novo ID, dados mantidos,
+  anti fixação de sessão). **Logout**: `Session::encerrar()` (apaga dados, destrói e expira o cookie).
+- O middleware gerado por `composer middleware X` já chama `Session::start()` antes de ler `$_SESSION`.
+
+```php
+use Core\Security\Session;
+Session::start();
+if (senhaConfere($u, $senha)) { Session::regenerar(); $_SESSION['usuario_id'] = $u['id']; }
+```
 
 ---
 
@@ -256,8 +315,9 @@ Aplicada no começo do `public/index.php` (logo após o `src/Env.php`). Variáve
 - O playground executa com `eval` **apenas** o código que o próprio usuário digitou/clicou no editor
   (o texto inicial é o código-fonte das demos). Nada vem da URL, do `#hash` ou do `localStorage`:
   o `#hash` só seleciona um item já registrado (comparação exata com `R4.registry`/`R4.modules`).
-- `vitrine.php` só carrega arquivos locais (`/libr4`, `/showcase`); o único script inline aplica o
-  tema salvo (lê o `localStorage`, só liga/desliga uma classe).
+- `vitrine.php` só carrega arquivos locais (`/libr4`, `/showcase`) e não tem script inline: o tema salvo
+  é aplicado antes de pintar a página por um script externo (`/showcase/boot.js`, que lê o
+  `localStorage` e só liga/desliga uma classe).
 - A API de teste: `nosniff`, `Cache-Control: no-store`, CSP `default-src 'none'`, corpo ≤ 1 MB
   (413), envelope cifrado v2 conferido antes de qualquer rota (400 JSON limpo; `{x,y,z}` antigo
   também recusado), parâmetros GET só como texto e com limites, ordenação só por campo existente,
@@ -271,24 +331,33 @@ Aplicada no começo do `public/index.php` (logo após o `src/Env.php`). Variáve
 Aplicado no nginx:
 
 - `Content-Security-Policy` por rota (via `map $request_uri`):
-  - padrão: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
+  - padrão: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
     img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:;
     worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self';
     form-action 'self'; frame-ancestors 'self'`;
-  - `/vitrine...`: igual + `'unsafe-eval'` (playground). **Só nessa rota.**
+  - `/vitrine...` (inclui `/vitrine/testes`): igual + `'unsafe-eval'` (playground). **Só nessa rota.**
+- **`script-src` sem `'unsafe-inline'`** em todas as rotas: a chave pública vai numa `<meta>` (seção 5) e o
+  tema da vitrine é aplicado por `/showcase/boot.js`. Um `<script>` inline ou `onclick="..."` injetado por
+  XSS **não executa**. No seu código: só `<script src>` de arquivos da própria origem e `addEventListener`.
+- `style-src 'unsafe-inline'` **continua** necessário: a libr4 cria `<style>` em tempo de execução (tema,
+  variáveis `--r4-*`, tags declarativas), os gráficos usam `style="..."` nos SVG e as páginas de erro têm
+  `<style>`. CSS injetado não executa código, mas pode vazar dados por seletores. Plano para eliminá-lo:
+  tema por classes + CSSOM (`element.style`/`adoptedStyleSheets` não são bloqueados pela CSP), atributos de
+  apresentação (`fill=`, `stroke=`) nos SVG e CSS das páginas de erro em arquivo — aí `style-src 'self'`.
 - `Permissions-Policy` (câmera, microfone, geolocalização, pagamento, USB, sensores desligados),
-  `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options`, `Referrer-Policy`, `nosniff`
-  (agora repetidos também no bloco de estáticos, que antes os perdia); `X-Powered-By` escondido.
+  `Cross-Origin-Opener-Policy: same-origin`, **`Cross-Origin-Resource-Policy: same-origin`** (outro site não
+  embute nossos scripts/imagens/JSON; a própria origem, `/r4/chave` e o `fetch` da página não são afetados —
+  não há CDN; se um parceiro precisar carregar um arquivo daqui, troque para `cross-origin` só naquele
+  `location`), `X-Frame-Options`, `Referrer-Policy`, `nosniff` — todos repetidos no bloco de estáticos
+  (no nginx, `add_header` dentro de um `location` anula os do `server`); `X-Powered-By` escondido.
+- Cache: estáticos com `?v=` (o `asset()` versiona pelo `mtime`) → `public, max-age=31536000, immutable`;
+  sem `?v=` → 7 dias. `open_file_cache` moderado (recarregue o nginx depois de publicar arquivos) e
+  `gzip_static` comentado (exige o módulo; ver `default.conf`).
 - `Strict-Transport-Security` é enviado pelo PHP (`Core\Security\Transport`) só em HTTPS com
   `HTTPS_MODE=required` — não ligue também no nginx (duplicaria). O `default.conf` tem, comentado, um
   exemplo de server 443 com TLS, redirecionamento e repasse de `X-Forwarded-Proto` atrás de proxy.
-
-**Para CSP estrita** (sem `'unsafe-inline'` em `script-src`): o `public/index.php` injeta um script
-inline com a chave **pública** (`window.R4_SERVER_KEY`). Opções: (a) gerar um nonce por requisição no
-PHP e mandar a CSP pelo PHP; (b) usar o hash desse script (comando no comentário do `default.conf`;
-muda quando a chave muda); (c) remover a injeção e deixar a lib buscar `GET /r4/chave` (ela já faz isso
-quando `window.R4_SERVER_KEY` não existe). A libr4 em si não precisa de script inline nem de `eval`. `style-src 'unsafe-inline'` continua necessário (a lib cria `<style>`
-de tema e usa `style="..."` nos gráficos).
+- Endurecimento do PHP-FPM e dos containers (`disable_functions`, `allow_url_fopen=Off`, `open_basedir`,
+  `no-new-privileges`, `cap_drop: ALL`): `docs/PRODUCAO.md`, seção "Docker".
 
 ---
 
@@ -300,8 +369,11 @@ de tema e usa `style="..."` nos gráficos).
 - [ ] HTTPS em tudo: `HTTPS_MODE=required` (padrão em produção), `APP_HOSTS` preenchido,
       `TRUSTED_PROXIES` só com o IP do proxy/LB (se houver) e HSTS ativo (`HSTS_MAX_AGE` > 0).
 - [ ] Rotas sensíveis com `ctrl::getPost(true)` (ou `CRYPTO_OBRIGATORIA=true`) se o corpo precisar vir cifrado;
-      APCu ligado se replay dentro da janela for um risco (seção 5).
-- [ ] CSP do nginx ativa; idealmente estrita (seção 7).
+      `storage/` gravável pelo PHP (cache de nonces anti-replay) ou APCu ligado (seção 5).
+- [ ] `CSRF_ATIVO=true` (padrão) e `CSRF_ORIGENS_PERMITIDAS` só com origens que realmente consomem a API (seção 5.2).
+- [ ] Sessão só com `Session::start()`; `Session::regenerar()` no login, `Session::encerrar()` no logout (seção 5.3).
+- [ ] CSP do nginx ativa (script-src sem `'unsafe-inline'`; seção 7) e nenhum `<script>` inline nas suas views.
+- [ ] PHP-FPM com `docker/php/zz-fpm-seguranca.conf` e containers com `no-new-privileges`/`cap_drop` (`docs/PRODUCAO.md`).
 - [ ] `R4.config.strictOrigins = true` (e `allowedOrigins` se usar API de outro domínio).
 - [ ] Vitrine desabilitada (automático com `APP_DEBUG=false`) e rota `/` apontando para a aplicação.
 - [ ] Toda entrada validada de novo no servidor (tamanho, tipo, formato); limite de taxa no proxy.
@@ -406,18 +478,21 @@ atributos); `#hash` hostil na vitrine; IV/salt aleatórios e detecção de adult
 
 - ~~**`src/Utils/Decryption.php`**~~: virou fachada fina da criptografia v2 (`Core\Security\Crypto`);
   o esquema v1 com PBKDF2 foi removido.
-- **`public/index.php`**: ~~chave com `json_encode` + `JSON_HEX_*`~~ (feito; agora só a chave pública),
-  ~~cookie `secure` pela detecção real de HTTPS~~ (feito, `Transport::isHttps()`); falta usar nonce de
-  CSP e `expose_php=Off`.
+- ~~**`public/index.php`**~~: chave pública numa `<meta>` (sem script inline), sessão sob demanda
+  (`Core\Security\Session`), anti-CSRF (`Core\Security\Csrf`), erros sempre no log; `expose_php=0` no
+  `zz-app.ini`.
 - ~~**`core/Controller.php`**: a página de "view não encontrada" mostra caminhos do servidor~~ —
   corrigido na seção 13 (com `APP_DEBUG=false` só "Erro interno"; detalhe no log).
-- **CSP estrita**: depende do item do `index.php` (seção 7).
+- ~~**CSP estrita**~~: `script-src` sem `'unsafe-inline'` (seção 7); falta só eliminar `style-src 'unsafe-inline'` (plano na seção 7).
 - **ReDoS por alternância sobreposta** (`(a|aa)+$`) não é detectado — limitação documentada.
 - **HTML confiável por design** (seção 3) continua sendo HTML: a lib documenta, não escapa.
 - **Redirecionamento aberto**: `goto:https://outro-site` é permitido (é navegação legítima);
   valide destinos vindos de dados.
 - ~~Custo do PBKDF2 no servidor~~: removido com o v2 (ECDH + HKDF por requisição cifrada).
-- A configuração do nginx não pôde ser validada com `nginx -t` neste ambiente (sem nginx/docker).
+- A configuração do nginx e do Docker não pôde ser validada com `nginx -t`/`docker compose up` neste
+  ambiente (sem nginx/docker): valide no servidor. O `Dockerfile` roda `php-fpm -t` no build. O efeito de
+  `disable_functions` + `allow_url_fopen=Off` + `open_basedir` foi exercitado com `php -S` (vitrine, upload,
+  POST cifrado, replay, SQLite).
 
 ---
 
@@ -439,9 +514,17 @@ Criptografia v2 (casos `crypto v2:`): interoperabilidade real Node (`crypto.webc
 limpo, sem caminho/stack) para pacote adulterado, AAD de outra rota/método (replay em outro endpoint),
 `t` expirado/no futuro (`R4_TEMPO`), `kid` errado (`R4_CHAVE`), ponto fora da curva/comprimido/zero,
 tamanhos absurdos, `k`/`s`/`z`/`x` fora do base64url, campos com tipo errado/extras, `v` errado, formato
-v1 `{x,y,z}` e corpo gigante (413). `tools/testes-transport.php` cobre a política HTTPS (https direto,
-porta 443, proxy confiável × não confiável, IP isento IPv4/IPv6/CIDR, Host fora de `APP_HOSTS`,
-GET→308, POST→426, optional, HSTS, cabeçalho forjado) e o `Crypto` unitário (rotação de chave, motivos).
+v1 `{x,y,z}`, corpo gigante (413) e **replay do mesmo pacote na mesma rota** (2º envio → 400). Casos
+`csrf:`/`sessao:`: POST real com `Origin` de outro domínio/`null`/outra porta, `Sec-Fetch-Site: cross-site`
+e `same-site` → 403, `text/plain`/formulário → 415, same-origin e curl sem `Origin` → 200, GET entre sites
+→ 200, nenhuma rota cria cookie de sessão; `config:` confere a CSP sem `'unsafe-inline'` em `script-src`,
+COOP/CORP/cache no nginx e o endurecimento do PHP-FPM/compose. `tools/testes-transport.php` cobre a
+política HTTPS (https direto, porta 443, proxy confiável × não confiável, IP isento IPv4/IPv6/CIDR, Host
+fora de `APP_HOSTS`, GET→308, POST→426, optional, HSTS, cabeçalho forjado), o `Crypto` unitário (rotação de
+chave, motivos), o **cache de nonces em arquivos** (replay, memo no mesmo request, arquivo vencido × recente,
+limpeza 1x/min com relógio simulado, teto, varredura limitada, storage não gravável), o **`Csrf`** (origem
+exata com porta/IPv6/esquema, proxy confiável, `APP_HOSTS`, `CSRF_ORIGENS_PERMITIDAS`, tipos de
+conteúdo, métodos) e a **`Session`** (opções do cookie, `__Host-`, start/regenerar/encerrar num processo separado).
 
 Cada caso imprime `PASSOU`/`FALHOU`; o processo sai com código 1 se algum falhar (2 se o ambiente
 não estiver pronto). Os testes usam payloads reais (`<img src=x onerror=...>`, `<script>`,
