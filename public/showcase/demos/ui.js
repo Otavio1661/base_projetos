@@ -302,10 +302,10 @@
   <r4-alert variant="warn" title="Atenção" closable>Existem 3 pedidos sem pagamento.</r4-alert>
   <r4-alert variant="err" title="Erro" closable>Não foi possível conectar ao servidor.</r4-alert>
 </r4-div>` },
-    { title: 'JS: R4.alert(alvo, texto, opções) e evento close', fn(el, out) {
-      const a = R4.alert(el, 'Esta é uma mensagem fechável.', { variant: 'warn', title: 'Aviso', closable: true });
+    { title: 'JS: R4.callout(alvo, texto, opções) e evento close', fn(el, out) {
+      const a = R4.callout(el, 'Esta é uma mensagem fechável.', { variant: 'warn', title: 'Aviso', closable: true });
       a.on('close', () => out('alerta fechado'));
-      R4.alert(el, 'Operação concluída.', 'ok');
+      R4.callout(el, 'Operação concluída.', 'ok');
     } }
   );
 

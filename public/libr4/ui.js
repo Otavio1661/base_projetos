@@ -956,7 +956,7 @@
     setText(t) { this.text = t; this.body.textContent = t; return this; }
   }, {
     title: 'alert', group: 'Interface',
-    description: 'Aviso em linha, fechável, com ícone e cor por variante. Erros e avisos usam role="alert"; os demais role="status". Também: R4.alert(alvo, texto, {variant}).',
+    description: 'Aviso em linha, fechável, com ícone e cor por variante. Erros e avisos usam role="alert"; os demais role="status". Função rápida: R4.callout(alvo, texto, {variant}) (R4.alert é só o diálogo).',
     props: [
       { name: 'variant', type: "'info'|'ok'|'warn'|'err'", default: "'info'", desc: 'Tipo do aviso (aceita também success, warning, error).' },
       { name: 'title', type: 'string', default: "''", desc: 'Título em negrito.' },
@@ -1380,13 +1380,9 @@
   Q.emptystate = (a, b) => plain(a) ? a : Object.assign({ title: a }, typeof b === 'string' ? { text: b } : b);
   Q.tooltip = (a, b) => plain(a) ? a : Object.assign({ text: a }, typeof b === 'string' ? { html: b } : b);
 
-  // R4.alert(título, texto) já existe (diálogo de R4.msg). Com um alvo (elemento ou "#id"/".classe" existente) cria o componente.
-  const msgAlert = R4.alert;
-  const targetLike = a => isEl(a) || (typeof a === 'string' && /^[#.][A-Za-z_-]/.test(a) && (() => { try { return !!document.querySelector(a); } catch (e) { return false; } })());
-  R4.alert = function (a, b, c) {
-    if (targetLike(a)) return R4.create(Object.assign({}, Q.alert(b, c), { xtype: 'alert', renderTo: a }));
-    return msgAlert.apply(this, arguments);
-  };
+  // R4.alert(título, texto) continua sendo SÓ o diálogo (R4.msg.alert). O aviso embutido (componente alert) usa R4.callout:
+  // R4.callout('#alvo', 'texto', { variant, title, closable }).
+  R4.callout = (alvo, a, b) => R4.create(Object.assign({}, Q.alert(a, b), { xtype: 'alert', renderTo: alvo }));
 
   const PG = (x, pg) => { R4.registry[x].meta.playground = pg; };
   const VAR = ['default', 'primary', 'ok', 'warn', 'err', 'info'];

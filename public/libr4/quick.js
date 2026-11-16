@@ -82,7 +82,7 @@
       { name: 'R4.div(alvo, html, {cols, gap...})', type: 'Div', desc: 'Contêiner de layout.' },
       { name: 'R4.window(título, html)', type: 'Window', desc: 'Abre a janela na hora (sem alvo).' },
       { name: 'R4.render(alvo, html)', type: 'Element', desc: 'Coloca HTML com tags <r4-*> no alvo e já ativa.' },
-      { name: 'R4.alert(título, texto) / R4.confirm(título, texto, cb)', type: 'Window', desc: 'Atalhos de R4.msg.' },
+      { name: 'R4.alert(título, texto) / R4.confirm(título, texto, cb)', type: 'Window', desc: 'Atalhos de R4.msg (diálogos). Para o aviso embutido na página use R4.callout(alvo, texto, {variant}).' },
       { name: 'alvo', type: "'#id' | elemento", desc: 'Seletor CSS ou elemento DOM. Todas as funções devolvem o componente (use .el, .reload(), etc.).' }
     ]
   });
