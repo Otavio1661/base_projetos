@@ -272,6 +272,14 @@ composer seed:erp-transacoes     # 2.000.000 de transações em storage/data/tra
 
 O `storage/` não vai para o Git: gere os dados em cada ambiente com os comandos acima.
 
+**Servidor embutido do PHP:** use o roteador de desenvolvimento, senão `/erp/*` devolve 404 (existe a pasta `public/erp/`):
+
+```bash
+php -S 127.0.0.1:8087 -t public tools/dev-router.php
+```
+
+Ele serve os arquivos estáticos de `public/` e manda o resto para o `public/index.php`, como faz o nginx de produção.
+
 ## Testes
 
 Os testes da libr4 rodam **no navegador**, com um runner próprio em JavaScript puro (sem Node, sem npm, sem terceiros). Com o servidor de desenvolvimento no ar (`APP_DEBUG=true`), abra **`/vitrine/testes`** (ex.: http://127.0.0.1:8087/vitrine/testes) e clique em "Rodar tudo"; `?auto=1` roda ao abrir, `?suite=grid,form` limita e `?slow=0` pula a suíte lenta. Há filtro por suíte, resumo no topo e, para cada teste, PASSOU/FALHOU/PULADO com a mensagem e o tempo. Mantenha a aba visível durante a execução (alguns testes usam `requestAnimationFrame`).
