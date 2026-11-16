@@ -28,4 +28,14 @@ class VitrineController extends ctrl
             'titulo' => 'Vitrine r4.js',
         ]);
     }
+
+    /** Testes automatizados da libr4 (runner próprio em JS, roda no navegador) — mesmo gate APP_DEBUG da vitrine. */
+    public function testes()
+    {
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: no-referrer');
+        ctrl::render('testes', [
+            'titulo' => 'Testes da libr4',
+        ]);
+    }
 }

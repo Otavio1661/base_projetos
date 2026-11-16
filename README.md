@@ -243,6 +243,19 @@ Cada componente registrado vira a tag `<r4-xtype>`; `r4-click` (ações), `r4-co
 
 **Segurança (resumo — completo em [`docs/SEGURANCA.md`](docs/SEGURANCA.md)):** textos (`title`, `text`, `label`, células do grid, mensagens do servidor...) são sempre escapados. Parâmetros `html`, o conteúdo das tags `<r4-*>` e `R4.render` são **HTML confiável**: dado de fora vai com `R4.html\`<b>${valor}</b>\`` (escapa cada `${}`) ou `R4.util.esc`. No grid, `renderer` que devolve string vira **texto**; para HTML devolva `R4.html\`...\`` (ou use `html: true` na coluna para o modo antigo). `goto:` só navega para URL relativa/http(s)/mailto/tel; `R4.http` recusa `javascript:`/`data:` e avisa sobre outra origem (`R4.config.strictOrigins = true` bloqueia). Envolva HTML de usuário com `r4-ignore` para que tags/ações `r4-*` dentro dele fiquem inertes.
 
+## Testes
+
+Os testes da libr4 rodam **no navegador**, com um runner próprio em JavaScript puro (sem Node, sem npm, sem terceiros). Com o servidor de desenvolvimento no ar (`APP_DEBUG=true`), abra **`/vitrine/testes`** (ex.: http://127.0.0.1:8087/vitrine/testes) e clique em "Rodar tudo"; `?auto=1` roda ao abrir, `?suite=grid,form` limita e `?slow=0` pula a suíte lenta. Há filtro por suíte, resumo no topo e, para cada teste, PASSOU/FALHOU/PULADO com a mensagem e o tempo. Mantenha a aba visível durante a execução (alguns testes usam `requestAnimationFrame`).
+
+O que cobre (16 suítes em `public/showcase/testes/suites/`): núcleo (`define/create`, `merge`, formatos pt-BR), rede/criptografia, HTML declarativo (`r4-click`, `r4-confirm`, `r4-ignore`), funções prontas, grid (inclusive 20 mil linhas com virtualização e layout real), formulários e select, arquivos (CSV/XLSX/filedrop), sanitize, ícones, i18n, tema, componentes de interface, gráficos, abas e, por último (lenta), a regressão da vitrine, que roda todos os exemplos de `R4Demos`. O framework de testes é `public/showcase/testes/r4test.js` (`suite`, `test`, `assert.*`, `spy`, `mockFetch`, isolamento por teste).
+
+Opcional, só para desenvolvimento: `tools/rodar-testes.js` abre a mesma página no jsdom (que **não** fica no repositório) e sai com código diferente de zero se algo falhar:
+
+```bash
+JSDOM_PATH=/caminho/node_modules/jsdom node tools/rodar-testes.js [grid,form] [--sem-lentas] [--verbose]
+```
+
+O jsdom não tem layout: o teste de arrastar abas é pulado nele (roda no Chrome). Testes de segurança de ponta a ponta (HTTP, PHP, uploads): `tools/testes-seguranca.js` (veja `docs/SEGURANCA.md`, seção 12).
 
 ## Pacote minificado da libr4 (produção)
 

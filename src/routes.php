@@ -59,6 +59,7 @@ $router = new Router();
 */
 $router->get('/', 'VitrineController@index');
 $router->get('/vitrine', 'VitrineController@index');
+$router->get('/vitrine/testes', 'VitrineController@testes');   // testes automatizados da libr4 (rodam no navegador; só APP_DEBUG)
 
 // API de teste da vitrine (só com APP_DEBUG=true)
 $router->get('/vitrine/api/clientes', 'VitrineApiController@clientes');

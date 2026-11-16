@@ -1,0 +1,638 @@
+/* suíte grid: colunas, ordenação, filtro, paginação, formatos, renderer seguro, seleção, edição, rodapé,
+   virtualização (20 mil linhas, layout real no navegador), estados de erro/carregando, exportação */
+(() => {
+  const { suite, test, assert } = R4Test;
+  const nb = s => String(s).replace(/[  ]/g, ' ');
+  const PESSOAS = () => [
+    { id: 1, nome: 'Carla', idade: 30, cidade: 'Recife', valor: 1500.5, ativo: true, data: '2026-03-05' },
+    { id: 2, nome: 'ana', idade: 25, cidade: 'São Paulo', valor: 80, ativo: false, data: '2025-12-31' },
+    { id: 3, nome: 'Bruno', idade: 30, cidade: 'Recife', valor: 20, ativo: true, data: '2026-01-01' },
+    { id: 4, nome: 'Davi', idade: 41, cidade: 'Natal', valor: 999.99, ativo: true, data: '2024-02-29' },
+    { id: 5, nome: 'Érica', idade: null, cidade: 'Natal', valor: 0, ativo: false, data: null }
+  ];
+  const linhas = g => [...g.tbody.querySelectorAll('tr[aria-rowindex]')];
+  const col = (g, i) => linhas(g).map(tr => tr.cells[i].textContent);
+  const heads = g => [...g.thead.querySelectorAll('th')];
+  const tecla = (alvo, key, extra) => alvo.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key, bubbles: true, cancelable: true }, extra)));
+
+  suite('grid', () => {
+    test('colunas automáticas (das chaves) e por lista de nomes; cabeçalho legível; role=grid', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS() });
+      assert.deepEq(g.columns.map(c => c.dataIndex), ['id', 'nome', 'idade', 'cidade', 'valor', 'ativo', 'data']);
+      assert.deepEq(heads(g).map(h => h.textContent).slice(0, 3), ['Id', 'Nome', 'Idade']);
+      assert.eq(linhas(g).length, 5);
+      assert.eq(g.table.getAttribute('role'), 'grid');
+      assert.eq(g.table.getAttribute('aria-rowcount'), '6', '5 linhas + cabeçalho');
+      assert.eq(g.table.getAttribute('aria-colcount'), '7');
+      assert.eq(col(g, 1)[0], 'Carla');
+      assert.eq(col(g, 5)[0], 'true', 'sem format: valor como texto');
+      assert.eq(col(g, 2)[4], '', 'null vira célula vazia');
+      const g2 = t.create({ xtype: 'grid', data: PESSOAS(), columns: ['nome', { dataIndex: 'idade', header: 'Anos' }] });
+      assert.deepEq(heads(g2).map(h => h.textContent), ['Nome', 'Anos']);
+      const g3 = t.create({ xtype: 'grid' });
+      assert.eq(linhas(g3).length, 0);
+      assert.eq(g3.tbody.querySelector('.r4-msgrow').hidden, false, 'sem dados: linha de mensagem');
+      assert.eq(g3.tbody.querySelector('.r4-msgrow').textContent, 'Nenhum registro.', 'texto padrão em português');
+      const g4 = t.create({ xtype: 'grid', emptyText: 'Nada aqui <b>x</b>' });
+      assert.eq(g4.tbody.querySelector('.r4-msgrow').textContent, 'Nada aqui <b>x</b>', 'emptyText como texto');
+    });
+
+    test('ordenação: clique no cabeçalho alterna asc/desc, aria-sort, texto com acento/caixa e números', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS() });
+      const th = heads(g)[1];
+      assert.eq(th.classList.contains('r4-sortable'), true);
+      th.click();
+      assert.deepEq(col(g, 1), ['ana', 'Bruno', 'Carla', 'Davi', 'Érica'], 'asc: ignora caixa e acento (collator pt-BR)');
+      assert.eq(heads(g)[1].getAttribute('aria-sort'), 'ascending');
+      heads(g)[1].click();
+      assert.deepEq(col(g, 1), ['Érica', 'Davi', 'Carla', 'Bruno', 'ana'], 'desc');
+      assert.eq(heads(g)[1].getAttribute('aria-sort'), 'descending');
+      assert.deepEq(g.getSorters(), [{ key: 'nome', dir: 'desc' }]);
+      g.sort('valor', 'asc');
+      assert.deepEq(col(g, 4), ['0', '20', '80', '999.99', '1500.5'], 'números por valor, não por texto');
+      g.sort('idade', 'asc');
+      assert.deepEq(col(g, 2), ['', '25', '30', '30', '41'], 'null vem primeiro em asc');
+      g.setSorters([]);
+      assert.deepEq(col(g, 0), ['1', '2', '3', '4', '5'], 'sem ordenação: ordem original');
+      assert.deepEq(g.getSorters(), []);
+    });
+
+    test('ordenação é estável (empate mantém a ordem original) e multi-coluna com sort(chave, dir, true)', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS() });
+      g.sort('idade', 'asc');
+      const ids = col(g, 0);
+      assert.deepEq(ids.slice(2, 4), ['1', '3'], 'Carla(1) e Bruno(3) têm 30: ficam na ordem original');
+      g.sort('idade', 'desc');
+      assert.deepEq(col(g, 0).slice(1, 3), ['1', '3'], 'também em desc os empates não se invertem');
+      g.sort('cidade', 'asc').sort('valor', 'desc', true);
+      assert.deepEq(g.getSorters(), [{ key: 'cidade', dir: 'asc' }, { key: 'valor', dir: 'desc' }]);
+      assert.deepEq(col(g, 3), ['Natal', 'Natal', 'Recife', 'Recife', 'São Paulo']);
+      assert.deepEq(col(g, 1), ['Davi', 'Érica', 'Carla', 'Bruno', 'ana'], 'dentro da cidade, valor decrescente');
+      assert.eq(heads(g)[3].querySelector('.r4-sort').textContent, '1', 'ordem da coluna mostrada com 2+ critérios');
+      const h = heads(g)[2];
+      h.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      assert.eq(g.getSorters().length, 3, 'Shift+clique acrescenta critério');
+    });
+
+    test('ordenação: evento sortchange, sortable:false não ordena e números em texto ("a2" < "a10")', t => {
+      const ev = t.spy();
+      const g = t.create({ xtype: 'grid', data: [{ k: 'a10' }, { k: 'a2' }, { k: 'a1' }], columns: [{ header: 'K', dataIndex: 'k' }], listeners: { sortchange: ev } });
+      g.sort('k');
+      assert.deepEq(col(g, 0), ['a1', 'a2', 'a10'], 'ordenação natural (numeric collation)');
+      assert.eq(ev.count, 1);
+      assert.deepEq(ev.lastArgs[1], [{ key: 'k', dir: 'asc' }]);
+      const g2 = t.create({ xtype: 'grid', data: [{ k: 2 }, { k: 1 }], columns: [{ header: 'K', dataIndex: 'k', sortable: false }] });
+      assert.eq(heads(g2)[0].classList.contains('r4-sortable'), false);
+      heads(g2)[0].click();
+      assert.deepEq(col(g2, 0), ['2', '1'], 'cabeçalho não ordenável não ordena');
+    });
+
+    test('filtro: caixa de busca (debounce) e setFilter ignoram caixa/espaços; sem resultado mostra a mensagem', async t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS() });
+      assert.ok(g.filterEl, 'caixa de filtro existe por padrão');
+      assert.eq(g.filterEl.getAttribute('aria-label'), 'Filtrar registros');
+      g.filterEl.value = 'RECIFE';
+      g.filterEl.dispatchEvent(new Event('input'));
+      assert.eq(linhas(g).length, 5, 'debounce: ainda não filtrou');
+      await t.waitFor(() => linhas(g).length === 2, 1500, 'filtro por digitação');
+      assert.deepEq(col(g, 1), ['Carla', 'Bruno']);
+      g.setFilter('  natal ');
+      assert.deepEq(col(g, 1), ['Davi', 'Érica']);
+      assert.eq(g.getView().length, 2, 'getView devolve só as filtradas');
+      assert.eq(g.getData().length, 5, 'getData devolve todas');
+      g.setFilter('999.99');
+      assert.deepEq(col(g, 1), ['Davi'], 'busca também em números');
+      g.setFilter('zzzz');
+      assert.eq(linhas(g).length, 0);
+      assert.eq(g.tbody.querySelector('.r4-msgrow').hidden, false);
+      g.setFilter('');
+      assert.eq(linhas(g).length, 5);
+      assert.eq(g.filterEl.value, '', 'caixa limpa junto');
+      const g2 = t.create({ xtype: 'grid', data: PESSOAS(), filter: false });
+      assert.eq(g2.filterEl, undefined, 'filter:false remove a caixa');
+    });
+
+    test('paginação local: pageSize, botões anterior/próxima, setPage com limites e texto da página', t => {
+      const dados = Array.from({ length: 10 }, (_, i) => ({ n: i + 1 }));
+      const g = t.create({ xtype: 'grid', data: dados, pageSize: 4 });
+      assert.deepEq(col(g, 0), ['1', '2', '3', '4']);
+      assert.eq(g.pager.hidden, false);
+      assert.contains(g.pager, '1 / 3');
+      assert.contains(g.pager, '10 registros');
+      const [ant, prox] = g.pager.querySelectorAll('button');
+      assert.eq(ant.disabled, true, 'primeira página: anterior desabilitado');
+      prox.click();
+      assert.deepEq(col(g, 0), ['5', '6', '7', '8']);
+      assert.contains(g.pager, '2 / 3');
+      g.setPage(2);
+      assert.deepEq(col(g, 0), ['9', '10'], 'última página parcial');
+      assert.eq(g.pager.querySelectorAll('button')[1].disabled, true, 'última: próxima desabilitada');
+      g.setPage(99);
+      assert.eq(g.page, 2, 'página acima do limite é ajustada');
+      g.setPage(-5);
+      assert.eq(g.page, 0, 'abaixo de zero vira 0');
+      g.sort('n', 'desc');
+      assert.deepEq(col(g, 0), ['10', '9', '8', '7'], 'ordenar vale para todas as páginas (e mostra a primeira)');
+      g.setFilter('1');
+      assert.eq(g.getView().length, 2, 'filtro "1": 1 e 10');
+      assert.eq(g.page, 0, 'filtrar volta à primeira página');
+      assert.eq(t.create({ xtype: 'grid', data: dados }).pager.hidden, true, 'sem pageSize: sem paginador');
+    });
+
+    test('format: money, number, date (sem deslocar o dia), bytes, bool, upper — e valores vazios', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), columns: [
+        { header: 'V', dataIndex: 'valor', format: 'money' }, { header: 'D', dataIndex: 'data', format: 'date' }, { header: 'A', dataIndex: 'ativo', format: 'bool' },
+        { header: 'N', dataIndex: 'nome', format: 'upper' }, { header: 'B', dataIndex: 'id', format: 'bytes' }, { header: 'X', dataIndex: 'valor', format: 'number' }] });
+      assert.deepEq(col(g, 0).map(nb), ['R$ 1.500,50', 'R$ 80,00', 'R$ 20,00', 'R$ 999,99', 'R$ 0,00']);
+      assert.deepEq(col(g, 1), ['05/03/2026', '31/12/2025', '01/01/2026', '29/02/2024', ''], "'AAAA-MM-DD' mostra o mesmo dia; null vazio");
+      assert.deepEq(col(g, 2), ['✔', '✖', '✔', '✔', '✖']);
+      assert.deepEq(col(g, 3), ['CARLA', 'ANA', 'BRUNO', 'DAVI', 'ÉRICA']);
+      assert.deepEq(col(g, 4), ['1 B', '2 B', '3 B', '4 B', '5 B']);
+      assert.eq(col(g, 5)[0], '1.500,50');
+      R4.formats.r4tdobro = v => String(v * 2);
+      t.cleanup(() => { delete R4.formats.r4tdobro; });
+      const g2 = t.create({ xtype: 'grid', data: [{ n: 4 }], columns: [{ header: 'Dobro', dataIndex: 'n', format: 'r4tdobro' }] });
+      assert.eq(col(g2, 0)[0], '8', 'formato próprio em R4.formats');
+    });
+
+    test('renderer: string é TEXTO por padrão; R4.html escapa dados; R4.raw e Node são HTML; html:true é o modo antigo', t => {
+      const XSS = '<img src=x onerror=window.__r4tpwn=1>';
+      const g = t.create({ xtype: 'grid', data: [{ v: XSS }], columns: [
+        { header: 'texto', dataIndex: 'v', renderer: v => v },
+        { header: 'concat', dataIndex: 'v', renderer: v => '<b>' + v + '</b>' },
+        { header: 'html', dataIndex: 'v', renderer: v => R4.html`<b class="ok">${v}</b>` },
+        { header: 'raw', dataIndex: 'v', renderer: () => R4.raw('<i class="cru">fixo</i>') },
+        { header: 'node', dataIndex: 'v', renderer: v => { const s = document.createElement('u'); s.textContent = v; return s; } },
+        { header: 'legado', dataIndex: 'v', html: true, renderer: () => '<s class="legado">ok</s>' },
+        { header: 'numero', dataIndex: 'v', renderer: () => 42 }] });
+      const tr = linhas(g)[0];
+      assert.eq(tr.cells[0].textContent, XSS, 'string do renderer vira texto');
+      assert.eq(tr.cells[1].textContent, '<b>' + XSS + '</b>', 'concatenar tags não vira HTML');
+      assert.eq(tr.cells[1].querySelector('b'), null);
+      assert.eq(tr.cells[2].querySelector('b.ok').textContent, XSS, 'R4.html escapa o dado e mantém a tag do autor');
+      assert.eq(tr.cells[3].querySelector('i.cru').textContent, 'fixo', 'R4.raw é HTML');
+      assert.eq(tr.cells[4].querySelector('u').textContent, XSS, 'Node é anexado');
+      assert.eq(tr.cells[5].querySelector('s.legado').textContent, 'ok', 'html:true mantém o modo antigo');
+      assert.eq(tr.cells[6].textContent, '42');
+      assert.eq(g.tbody.querySelectorAll('img').length, 0, 'nenhum <img> criado');
+      assert.eq(window.__r4tpwn, undefined);
+    });
+
+    test('cabeçalho, rodapé e filtro com HTML hostil continuam texto', t => {
+      const XSS = '<script>window.__r4tpwn=1</script>';
+      const g = t.create({ xtype: 'grid', data: [{ a: 1 }], emptyText: XSS, summaryLabel: XSS, columns: [{ header: XSS, dataIndex: 'a', summary: 'sum' }] });
+      assert.eq(heads(g)[0].textContent, XSS);
+      assert.eq(g.tfoot.rows[0].cells[0].textContent, '1', 'a coluna com summary mostra a soma');
+      g.setFilter(XSS);
+      assert.eq(g.tbody.querySelector('.r4-msgrow').textContent, XSS);
+      assert.eq(g.el.querySelectorAll('script').length, 0);
+      const g2 = t.create({ xtype: 'grid', data: [{ a: 1, b: 2 }], summaryLabel: XSS, columns: [{ header: 'A', dataIndex: 'a' }, { header: 'B', dataIndex: 'b', summary: 'sum' }] });
+      assert.eq(g2.tfoot.rows[0].cells[0].textContent, XSS, 'summaryLabel como texto');
+      assert.eq(window.__r4tpwn, undefined);
+    });
+
+    test('seleção única: clique marca a linha, troca a seleção, evento selectionchange, aria-selected', t => {
+      const ev = t.spy();
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), selectable: 'single', listeners: { selectionchange: ev } });
+      const trs = linhas(g);
+      trs[1].cells[1].click();
+      assert.eq(g.getSelection().length, 1);
+      assert.eq(g.getSelection()[0].nome, 'ana');
+      assert.ok(trs[1].classList.contains('r4-selected'));
+      assert.eq(trs[1].getAttribute('aria-selected'), 'true');
+      assert.eq(trs[0].getAttribute('aria-selected'), 'false');
+      trs[3].cells[1].click();
+      assert.deepEq(g.getSelection().map(r => r.nome), ['Davi'], 'selecionar outra troca a seleção');
+      assert.eq(ev.count, 2);
+      assert.eq(ev.lastArgs[1][0].id, 4, 'evento recebe as linhas selecionadas');
+      g.clearSelection();
+      assert.eq(g.getSelection().length, 0);
+      g.select(PESSOAS()[0]);
+      assert.eq(g.isSelected(g.getData()[0]), true, 'select() por programa (chave = idProperty)');
+      assert.eq(linhas(g)[0].classList.contains('r4-selected'), true);
+      assert.eq(t.create({ xtype: 'grid', data: PESSOAS() }).table.querySelector('[aria-selected]'), null, 'sem selectable: sem aria-selected');
+    });
+
+    test('seleção múltipla: checkbox por linha, Ctrl+clique, Shift+clique, selecionar todas (só as filtradas) e indeterminado', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), selectable: 'multi' });
+      assert.ok(g.table.querySelector('.r4-check-all'), 'checkbox de selecionar todos');
+      assert.eq(g.table.getAttribute('aria-multiselectable'), 'true');
+      const trs = linhas(g);
+      trs[0].querySelector('.r4-check').click();
+      trs[2].querySelector('.r4-check').click();
+      assert.deepEq(g.getSelection().map(r => r.id), [1, 3], 'checkbox alterna cada linha');
+      assert.eq(g._all.indeterminate, true, 'cabeçalho indeterminado');
+      assert.eq(trs[0].querySelector('.r4-check').checked, true);
+      trs[2].querySelector('.r4-check').click();
+      assert.deepEq(g.getSelection().map(r => r.id), [1], 'desmarcar tira da seleção');
+      g.setFilter('natal');
+      g._all.click();
+      assert.deepEq(g.getSelection().map(r => r.id).sort(), [1, 4, 5], 'selecionar todos pega as linhas filtradas');
+      g.setFilter('');
+      g.clearSelection();
+      trs[1].cells[1].click();
+      trs[3].cells[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      assert.deepEq(g.getSelection().map(r => r.id).sort(), [2, 3, 4], 'Shift+clique seleciona o intervalo');
+      trs[0].cells[1].dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+      assert.eq(g.getSelection().length, 4, 'Ctrl+clique soma');
+      g.selectAll();
+      assert.eq(g.getSelection().length, 5);
+      assert.eq(g._all.checked, true);
+      g.deselect(g.getData()[0]);
+      assert.eq(g.getSelection().length, 4);
+      g.select(r => r.ativo, false);
+      assert.deepEq(g.getSelection().map(r => r.id), [1, 3, 4], 'select(fn) escolhe entre as linhas');
+    });
+
+    test('teclado (role=grid): setas movem a célula ativa, Enter seleciona, Home/End, F2 e Esc não quebram', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), selectable: 'single' });
+      const tab = () => g.table.querySelector('[tabindex="0"]');
+      assert.ok(tab(), 'uma célula com tabindex=0 (foco móvel)');
+      const c0 = linhas(g)[0].cells[0];
+      tecla(c0, 'ArrowDown');
+      assert.eq(g._act.r, 1, 'seta para baixo');
+      tecla(linhas(g)[1].cells[0], 'ArrowRight');
+      assert.eq(g._act.c, 1, 'seta para a direita');
+      tecla(linhas(g)[1].cells[1], 'End');
+      assert.eq(g._act.c, 6, 'End vai à última coluna');
+      tecla(linhas(g)[1].cells[6], 'Home');
+      assert.eq(g._act.c, 0, 'Home à primeira');
+      tecla(linhas(g)[1].cells[0], 'End', { ctrlKey: true });
+      assert.eq(g._act.r, 4, 'Ctrl+End última linha');
+      tecla(linhas(g)[4].cells[0], 'ArrowDown');
+      assert.eq(g._act.r, 4, 'não passa do fim');
+      tecla(linhas(g)[4].cells[0], 'Enter');
+      assert.deepEq(g.getSelection().map(r => r.id), [5], 'Enter seleciona a linha ativa');
+      assert.eq(tab(), linhas(g)[4].cells[0], 'o tabindex=0 acompanha a célula ativa');
+      tecla(linhas(g)[4].cells[0], 'ArrowUp', { ctrlKey: false });
+      tecla(linhas(g)[3].cells[0], 'ArrowUp');
+      tecla(linhas(g)[2].cells[0], 'ArrowUp');
+      tecla(linhas(g)[1].cells[0], 'ArrowUp');
+      tecla(linhas(g)[0].cells[0], 'ArrowUp');
+      assert.eq(g._act.r, -1, 'a seta para cima chega ao cabeçalho');
+      tecla(heads(g)[1], 'Enter');
+      assert.deepEq(g.getSorters(), [{ key: 'nome', dir: 'asc' }], 'Enter no cabeçalho ordena');
+    });
+
+    test('edição na célula: duplo clique/F2, Enter confirma com eventos, Esc cancela, beforecellchange cancela, tipos', t => {
+      const antes = t.spy(), depois = t.spy();
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), columns: [
+        { header: 'Nome', dataIndex: 'nome', editable: true }, { header: 'Idade', dataIndex: 'idade', editable: 'number' },
+        { header: 'Cidade', dataIndex: 'cidade', editable: { options: ['Recife', 'Natal', { value: 'SP', text: 'São Paulo' }] } }, { header: 'Valor', dataIndex: 'valor', summary: 'sum' }],
+        listeners: { beforecellchange: antes, cellchange: depois } });
+      assert.eq(linhas(g)[0].cells[0].classList.contains('r4-editable'), true);
+      assert.eq(g.startEdit(0, 'nome'), true);
+      const inp = g.tbody.querySelector('.r4-cell-editor');
+      assert.ok(inp, 'editor aberto');
+      assert.eq(inp.value, 'Carla');
+      inp.value = 'Carla Maria';
+      tecla(inp, 'Enter');
+      assert.eq(g.getData()[0].nome, 'Carla Maria', 'valor gravado na linha');
+      assert.eq(linhas(g)[0].cells[0].textContent, 'Carla Maria');
+      assert.eq(g.tbody.querySelector('.r4-cell-editor'), null, 'editor fechou');
+      assert.eq(depois.count, 1);
+      const ctx = depois.lastArgs[1];
+      assert.eq(ctx.field, 'nome');
+      assert.eq(ctx.value, 'Carla Maria');
+      assert.eq(ctx.oldValue, 'Carla');
+      assert.eq(ctx.row, g.getData()[0]);
+      g.startEdit(1, 'nome');
+      const i2 = g.tbody.querySelector('.r4-cell-editor');
+      i2.value = 'XXXX';
+      tecla(i2, 'Escape');
+      assert.eq(g.getData()[1].nome, 'ana', 'Esc descarta');
+      assert.eq(depois.count, 1);
+      g.startEdit(0, 'idade');
+      const n = g.tbody.querySelector('.r4-cell-editor');
+      assert.eq(n.type, 'number');
+      n.value = '31.5';
+      tecla(n, 'Enter');
+      assert.eq(g.getData()[0].idade, 31.5, 'tipo number: grava número (não texto)');
+      g.startEdit(0, 'idade');
+      const n2 = g.tbody.querySelector('.r4-cell-editor');
+      n2.value = '';
+      tecla(n2, 'Enter');
+      assert.eq(g.getData()[0].idade, null, 'vazio vira null');
+      g.startEdit(0, 'cidade');
+      const s = g.tbody.querySelector('select.r4-cell-editor');
+      assert.deepEq([...s.options].map(o => o.value), ['Recife', 'Natal', 'SP']);
+      s.value = 'SP';
+      tecla(s, 'Enter');
+      assert.eq(g.getData()[0].cidade, 'SP', 'select grava o value da opção');
+      assert.eq(g.startEdit(0, 'valor'), false, 'coluna sem editable não abre editor');
+      assert.eq(antes.count, 4, 'beforecellchange antes de cada gravação');
+      antes.reset();
+      g.un('beforecellchange', antes);
+      g.on('beforecellchange', () => false);
+      g.startEdit(2, 'nome');
+      const i3 = g.tbody.querySelector('.r4-cell-editor');
+      i3.value = 'Barrado';
+      tecla(i3, 'Enter');
+      assert.eq(g.getData()[2].nome, 'Bruno', 'beforecellchange retornando false cancela');
+      assert.eq(linhas(g)[2].cells[0].textContent, 'Bruno', 'a célula volta ao valor original');
+    });
+
+    test('rodapé de resumo: sum/avg/count/min/max/função, acompanha o filtro e as edições, rótulo configurável', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), summaryLabel: 'TOTAIS', columns: [
+        { header: 'Nome', dataIndex: 'nome' }, { header: 'Idade', dataIndex: 'idade', summary: 'avg' }, { header: 'Valor', dataIndex: 'valor', summary: 'sum', format: 'money', editable: true },
+        { header: 'Qtd', dataIndex: 'id', summary: 'count' }, { header: 'Mín', dataIndex: 'id', summary: 'min' }, { header: 'Máx', dataIndex: 'id', summary: 'max' },
+        { header: 'Fn', dataIndex: 'id', summary: vals => vals.length * 100 }] });
+      assert.eq(g.tfoot.hidden, false);
+      const c = () => [...g.tfoot.rows[0].cells].map(td => nb(td.textContent));
+      assert.deepEq(c(), ['TOTAIS', '31,50', 'R$ 2.600,49', '5', '1', '5', '500']);
+      g.setFilter('davi');
+      assert.deepEq(c(), ['TOTAIS', '41', 'R$ 999,99', '1', '4', '4', '100'], 'o resumo acompanha o filtro');
+      g.setFilter('');
+      g.startEdit(1, 'valor');
+      const i = g.tbody.querySelector('.r4-cell-editor');
+      i.value = '1000';
+      tecla(i, 'Enter');
+      assert.eq(c()[2], 'R$ 3.520,49', 'editar uma célula atualiza o total');
+      const g2 = t.create({ xtype: 'grid', data: [{ a: 1 }] });
+      assert.eq(g2.tfoot.hidden, true, 'sem summary: rodapé oculto');
+      const g3 = t.create({ xtype: 'grid', data: [{ a: 'x' }], columns: [{ header: 'A', dataIndex: 'a', summary: 'sum' }, { header: 'B', dataIndex: 'a', summary: 'avg' }] });
+      assert.deepEq([...g3.tfoot.rows[0].cells].map(td => td.textContent), ['0', ''], 'texto: soma 0 e média vazia');
+    });
+
+    test('colunas: ocultar/mostrar mantém ao menos uma; menu de colunas e de exportação abrem e fecham com Esc', t => {
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), columns: [{ header: 'Nome', dataIndex: 'nome' }, { header: 'Idade', dataIndex: 'idade' }], columnMenu: true, exportable: true });
+      const mudou = t.spy();
+      g.on('columnchange', mudou);
+      g.hideColumn('idade');
+      assert.deepEq(heads(g).map(h => h.textContent), ['Nome']);
+      assert.eq(linhas(g)[0].cells.length, 1);
+      assert.eq(mudou.count, 1);
+      g.hideColumn('nome');
+      assert.eq(heads(g).length, 1, 'sempre sobra uma coluna');
+      g.showColumn('idade');
+      assert.deepEq(heads(g).map(h => h.textContent), ['Nome', 'Idade']);
+      const [bc, be] = g.el.querySelectorAll('.r4-grid-tool');
+      assert.eq(bc.getAttribute('aria-expanded'), 'false');
+      bc.click();
+      const menu = document.querySelector('.r4-grid-menu');
+      assert.ok(menu, 'menu de colunas abriu no body');
+      assert.eq(menu.getAttribute('role'), 'menu');
+      assert.eq(bc.getAttribute('aria-expanded'), 'true');
+      assert.eq(menu.querySelectorAll('input[type=checkbox]').length, 2);
+      const cb = menu.querySelector('input[data-ci="1"]');
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+      assert.deepEq(heads(g).map(h => h.textContent), ['Nome'], 'checkbox oculta a coluna');
+      tecla(menu, 'Escape');
+      assert.eq(document.querySelector('.r4-grid-menu'), null, 'Esc fecha o menu');
+      assert.eq(bc.getAttribute('aria-expanded'), 'false');
+      be.click();
+      const mx = document.querySelector('.r4-grid-menu');
+      assert.deepEq([...mx.querySelectorAll('[data-k]')].map(b => b.getAttribute('data-k')), ['csv', 'xlsx', 'json', 'print']);
+      g.destroy();
+      assert.eq(document.querySelector('.r4-grid-menu'), null, 'destroy remove o menu aberto');
+    });
+
+    test('coluna de ações: handler recebe a linha, evento action, {campo} no r4-click sem ";" encadeando', t => {
+      const h = t.spy(), ev = t.spy();
+      const g = t.create({ xtype: 'grid', data: [{ id: 7, nome: 'Zé;toast:injetado' }], listeners: { action: ev }, columns: [{ header: 'Nome', dataIndex: 'nome' },
+        { header: 'Ações', actions: [{ text: 'Editar', handler: h }, { text: 'Avisar', 'r4-click': 'toast:Olá {nome} ({id})' }, { text: 'Apagar', 'r4-click': 'toast:ok', 'r4-confirm': 'Apagar {nome}?' }] }] });
+      const b = g.tbody.querySelectorAll('.r4-grid-act');
+      assert.eq(b.length, 3);
+      assert.eq(heads(g)[1].classList.contains('r4-sortable'), false, 'coluna de ações não ordena');
+      b[0].click();
+      assert.eq(h.count, 1);
+      assert.eq(h.lastArgs[0].id, 7, 'handler(linha, grid, evento)');
+      assert.eq(h.lastArgs[1], g);
+      assert.eq(ev.lastArgs[2].id, 7, 'evento action(grid, nome, linha)');
+      assert.eq(b[1].getAttribute('r4-click'), 'toast:Olá Zé toast:injetado (7)', '";" do dado não vira outra ação');
+      assert.eq(b[2].getAttribute('r4-confirm'), 'Apagar Zé toast:injetado?');
+      b[1].click();
+      const toasts = [...document.querySelectorAll('.r4-toast')].map(x => x.textContent);
+      assert.deepEq(toasts, ['Olá Zé toast:injetado (7)'], 'só uma ação executou');
+    });
+
+    test('loadData troca os dados, volta à página 0, zera a seleção e dispara load; getData/getView são cópias', t => {
+      const load = t.spy(), sel = t.spy();
+      const dados = Array.from({ length: 12 }, (_, i) => ({ id: i + 1 }));
+      const g = t.create({ xtype: 'grid', data: dados, pageSize: 5, selectable: 'single', listeners: { load, selectionchange: sel } });
+      g.setPage(2);
+      g.select(dados[0]);
+      assert.eq(sel.count, 1);
+      g.loadData([{ id: 100 }, { id: 101 }]);
+      assert.eq(g.page, 0);
+      assert.eq(g.getSelection().length, 0, 'seleção zerada');
+      assert.eq(sel.count, 2, 'e avisada');
+      assert.eq(load.count, 1);
+      assert.deepEq(col(g, 0), ['100', '101']);
+      const copia = g.getData();
+      copia.push({ id: 5 });
+      assert.eq(g.getData().length, 2, 'getData devolve cópia');
+      g.loadData(null);
+      assert.eq(g.getData().length, 0, 'valor inválido vira lista vazia');
+    });
+
+    test('virtualização: 20 mil linhas — só dezenas de <tr> no DOM, espaçadores mantêm a altura, rolar atualiza a janela', async t => {
+      const dados = VitrineData.rows(20000);
+      const g = t.create({ xtype: 'grid', data: dados, height: 400 });
+      const rhs = () => linhas(g).map(tr => +tr.getAttribute('aria-rowindex'));
+      assert.eq(g._v, true, 'virtual automático acima de 1000 linhas');
+      assert.eq(g.getView().length, 20000);
+      assert.lt(linhas(g).length, 80, 'só a janela visível + folga existe no DOM');
+      assert.gt(linhas(g).length, 5);
+      assert.eq(rhs()[0], 2, 'começa na primeira linha');
+      assert.eq(col(g, 0)[0], String(dados[0].id));
+      assert.lt(g.tbody.querySelectorAll('tr').length, 80, 'total de <tr> do tbody');
+      assert.contains(g.pager, '20.000 registros', 'contador no lugar do paginador');
+      assert.eq(g.table.getAttribute('aria-rowcount'), '20001');
+      if (t.hasLayout()) {
+        assert.near(g.scroller.clientHeight, 400, 20, 'contêiner com a altura pedida (layout real)');
+        assert.gt(g.scroller.scrollHeight, 20000 * 30, 'altura total da rolagem preservada pelos espaçadores');
+      }
+      g.scroller.scrollTop = 36 * 10000;
+      g.scroller.dispatchEvent(new Event('scroll'));
+      await t.waitFor(() => rhs().includes(10002), 2500, 'janela perto da linha 10.000 (usa requestAnimationFrame: aba visível)');
+      assert.lt(linhas(g).length, 80, 'continua com poucas linhas');
+      assert.ok(rhs().every(n => n > 9900 && n < 10100), 'todas as linhas renderizadas ficam perto de 10.000: ' + rhs()[0] + '…' + rhs().at(-1));
+      assert.eq(col(g, 0)[rhs().indexOf(10002)], String(dados[10000].id), 'a linha certa com os dados certos');
+      g.scroller.scrollTop = 36 * 20000;   // além do fim: o navegador limita ao máximo
+      g.scroller.dispatchEvent(new Event('scroll'));
+      await t.waitFor(() => rhs().includes(20001), 2500, 'última linha');
+      assert.eq(col(g, 0).at(-1), String(dados[19999].id));
+      g.scroller.scrollTop = 0;
+      g.scroller.dispatchEvent(new Event('scroll'));
+      await t.waitFor(() => rhs()[0] === 2, 2500, 'volta ao topo');
+    }, { timeout: 15000 });
+
+    test('virtualização: ordenar e filtrar 20 mil linhas atualiza a janela e o contador', async t => {
+      const dados = VitrineData.rows(20000);
+      const g = t.create({ xtype: 'grid', data: dados, height: 400 });
+      const t0 = performance.now();
+      g.sort('valor', 'desc');
+      const ms = performance.now() - t0;
+      const maior = Math.max(...dados.map(r => r.valor));
+      assert.eq(Number(col(g, 2)[0]), maior, 'primeira linha é o maior valor');
+      assert.lt(ms, 2000, 'ordenar 20 mil linhas leva menos de 2 s (levou ' + Math.round(ms) + ' ms)');
+      assert.lt(linhas(g).length, 80);
+      const alvo = dados[1234].nome;
+      g.setFilter(alvo);
+      const n = dados.filter(r => String(r.nome).toLowerCase().includes(alvo.toLowerCase()) || Object.values(r).some(v => String(v ?? '').toLowerCase().includes(alvo.toLowerCase()))).length;
+      assert.eq(g.getView().length, n, 'filtro conta igual ao cálculo direto');
+      assert.gt(n, 0);
+      assert.ok(linhas(g).length <= Math.min(n, 80));
+      g.setFilter('texto-que-nao-existe-r4t');
+      assert.eq(linhas(g).length, 0);
+      assert.eq(g.tbody.querySelector('.r4-msgrow').hidden, false);
+    }, { timeout: 15000 });
+
+    test('estado de erro: HTTP 500 mostra a mensagem, dispara loaderror, "Tentar de novo" recarrega; dados antigos ficam', async t => {
+      let tentativas = 0;
+      const m = t.mockFetch({ '/api/g-erro': () => (++tentativas === 1 ? { status: 500, body: { retorno: 'quebrou <b>feio</b>' } } : { body: [{ a: 1 }, { a: 2 }] }) });
+      const falha = t.spy();
+      const g = t.create({ xtype: 'grid', src: '/api/g-erro', listeners: { loaderror: falha } });
+      await t.waitFor(() => g.tbody.querySelector('.r4-grid-err'), 2000, 'estado de erro');
+      const msg = g.tbody.querySelector('.r4-grid-err');
+      assert.contains(msg, 'Falha ao carregar.');
+      assert.contains(msg, 'HTTP 500: quebrou <b>feio</b>', 'mensagem do servidor como texto');
+      assert.eq(msg.querySelector('b'), null, 'sem HTML da resposta');
+      assert.eq(falha.count, 1);
+      assert.eq(g.el.getAttribute('aria-busy'), 'false');
+      const retry = msg.querySelector('.r4-grid-retry');
+      assert.ok(retry, 'botão de nova tentativa');
+      retry.click();
+      await t.waitFor(() => linhas(g).length === 2, 2000, 'dados da segunda tentativa');
+      assert.eq(m.count('/api/g-erro'), 2);
+      assert.eq(g.tbody.querySelector('.r4-msgrow').hidden, true, 'linha de mensagem some depois do sucesso');
+      assert.eq(g.tbody.querySelector('.r4-msgrow').textContent, '', 'e sem o texto do erro');
+    });
+
+    test('estados de erro: JSON inválido, corpo {status:500} em HTTP 200, resposta sem lista, 404', async t => {
+      t.mockFetch({ '/api/g-lixo': { body: 'isto não é json', headers: { 'content-type': 'text/plain' } }, '/api/g-st': { body: { status: 500, retorno: 'erro lógico' } },
+        '/api/g-obj': { body: { retorno: { nao: 'lista' } } }, '/api/g-404': { status: 404, body: { mensagem: 'sumiu' } } });
+      const casos = [['/api/g-lixo', 'não é JSON válido'], ['/api/g-st', 'erro lógico'], ['/api/g-obj', 'sem lista'], ['/api/g-404', 'HTTP 404: sumiu']];
+      for (const [src, trecho] of casos) {
+        const g = t.create({ xtype: 'grid', src });
+        await t.waitFor(() => g.tbody.querySelector('.r4-grid-err'), 2000, 'erro de ' + src);
+        assert.contains(g.tbody.querySelector('.r4-grid-err'), trecho, src);
+        assert.eq(linhas(g).length, 0);
+      }
+    });
+
+    test('estado carregando: mask visível e aria-busy durante a requisição; formatos do envelope (retorno/data/rows)', async t => {
+      t.mockFetch({ '/api/g-lento': { body: [{ a: 1 }], delay: 200 }, '/api/g-ret': { body: { status: 200, retorno: [{ a: 1 }] } }, '/api/g-data': { body: { data: [{ a: 1 }, { a: 2 }] } }, '/api/g-rows': { body: { rows: [{ a: 9 }] } } });
+      const g = t.create({ xtype: 'grid', src: '/api/g-lento' });
+      assert.eq(g.el.getAttribute('aria-busy'), 'true', 'ocupado enquanto carrega');
+      assert.eq(g.mask.hidden, false, 'máscara visível');
+      assert.contains(g.mask, 'Carregando');
+      await t.waitFor(() => linhas(g).length === 1, 2000, 'dados');
+      assert.eq(g.mask.hidden, true);
+      assert.eq(g.el.getAttribute('aria-busy'), 'false');
+      for (const [u, n] of [['/api/g-ret', 1], ['/api/g-data', 2], ['/api/g-rows', 1]]) {
+        const x = t.create({ xtype: 'grid', src: u });
+        await t.waitFor(() => linhas(x).length === n, 2000, u);
+      }
+    });
+
+    test('modo remote: envia page/size/sort/dir/q na URL, usa o total do servidor e refaz a busca ao paginar/ordenar/filtrar', async t => {
+      const todos = Array.from({ length: 23 }, (_, i) => ({ id: i + 1, nome: 'Linha ' + (i + 1) }));
+      const m = t.mockFetch({ '/api/g-remoto': req => {
+        const p = req.url.searchParams, page = +p.get('page'), size = +p.get('size');
+        return { body: { status: 200, total: 23, retorno: todos.slice((page - 1) * size, page * size) } };
+      } });
+      const g = t.create({ xtype: 'grid', src: '/api/g-remoto', remote: true, pageSize: 10, columns: [{ header: 'Id', dataIndex: 'id' }, { header: 'Nome', dataIndex: 'nome' }] });
+      await t.waitFor(() => linhas(g).length === 10, 2000, 'primeira página');
+      let q = m.calls.at(-1).url.searchParams;
+      assert.eq(q.get('page'), '1');
+      assert.eq(q.get('size'), '10');
+      assert.eq(q.get('sort'), null, 'sem ordenação: sem sort');
+      assert.contains(g.pager, '1 / 3', 'total do servidor define as páginas');
+      assert.contains(g.pager, '23 registros');
+      g.setPage(2);
+      await t.waitFor(() => col(g, 0)[0] === '21', 2000, 'página 3');
+      assert.eq(m.calls.at(-1).url.searchParams.get('page'), '3');
+      assert.eq(linhas(g).length, 3, 'última página tem 3');
+      g.sort('nome', 'desc');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('sort') === 'nome', 2000, 'ordenação no servidor');
+      q = m.calls.at(-1).url.searchParams;
+      assert.eq(q.get('dir'), 'desc');
+      assert.eq(q.get('page'), '1', 'ordenar volta à página 1');
+      g.setFilter('Linha 7');
+      await t.waitFor(() => m.calls.at(-1).url.searchParams.get('q') === 'linha 7', 2000, 'filtro no servidor');
+    });
+
+    test('requisição obsoleta é descartada: resposta antiga não sobrescreve a mais nova', async t => {
+      const m = t.mockFetch({ '/api/g-corrida': req => (req.url.searchParams.get('v') === 'a' ? { body: [{ v: 'antiga' }], delay: 150 } : { body: [{ v: 'nova' }], delay: 10 }) });
+      const g = t.create({ xtype: 'grid', src: '/api/g-corrida?v=a' });
+      g.src = '/api/g-corrida?v=b';
+      g.load();
+      await t.waitFor(() => linhas(g).length === 1, 2000, 'dados');
+      await t.sleep(250);
+      assert.eq(col(g, 0)[0], 'nova', 'a resposta mais lenta (antiga) foi descartada');
+      assert.eq(m.calls.length, 2);
+    });
+
+    test('exportação: CSV (; e vírgula decimal, só filtradas/ordenadas/visíveis), JSON e XLSX — geradas sem baixar arquivo', async t => {
+      const baixados = [], real = R4.files.download;
+      R4.files.download = (conteudo, nome, mime) => { baixados.push({ conteudo, nome, mime }); return conteudo; };
+      t.cleanup(() => { R4.files.download = real; });
+      const g = t.create({ xtype: 'grid', data: PESSOAS(), exportName: 'pessoas', columns: [{ header: 'Nome', dataIndex: 'nome' }, { header: 'Valor', dataIndex: 'valor' }, { header: 'Cidade', dataIndex: 'cidade' }, { header: 'Ações', actions: [{ text: 'x' }] }] });
+      const ev = t.spy();
+      g.on('export', ev);
+      g.sort('valor', 'desc');
+      g.setFilter('natal');
+      g.exportCSV();
+      const csv = baixados[0];
+      assert.eq(csv.nome, 'pessoas.csv');
+      assert.contains(csv.mime, 'text/csv');
+      assert.eq(csv.conteudo.charCodeAt(0), 0xFEFF, 'BOM para o Excel abrir em UTF-8');
+      assert.eq(csv.conteudo.slice(1), 'Nome;Valor;Cidade\r\nDavi;999,99;Natal\r\nÉrica;0;Natal\r\n', 'filtrado, ordenado, sem a coluna de ações, vírgula decimal');
+      g.hideColumn('cidade');
+      g.exportCSV('outro.csv');
+      assert.eq(baixados[1].nome, 'outro.csv');
+      assert.eq(baixados[1].conteudo.slice(1), 'Nome;Valor\r\nDavi;999,99\r\nÉrica;0\r\n', 'coluna oculta não sai');
+      g.exportJSON('dados');
+      assert.eq(baixados[2].nome, 'dados.json');
+      assert.deepEq(JSON.parse(baixados[2].conteudo), [{ nome: 'Davi', valor: 999.99 }, { nome: 'Érica', valor: 0 }], 'JSON só com as colunas visíveis');
+      g.exportXLSX('planilha');
+      assert.eq(baixados[3].nome, 'planilha.xlsx');
+      const bin = baixados[3].conteudo;
+      assert.ok(bin instanceof Blob, 'XLSX é um Blob');
+      const buf = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(new Uint8Array(r.result)); r.readAsArrayBuffer(bin); });
+      assert.deepEq([...buf.slice(0, 4)], [0x50, 0x4B, 0x03, 0x04], 'assinatura ZIP (PK..)');
+      assert.eq(ev.count, 4, 'evento export por arquivo');
+      assert.deepEq(ev.calls.map(c => c[1]), ['csv', 'csv', 'json', 'xlsx']);
+    });
+
+    test('impressão: o HTML de impressão escapa tudo e o iframe é sandbox sem scripts (sem abrir o diálogo de impressão)', t => {
+      // o grid chama print() no "load" do iframe: aqui o ouvinte de load é descartado para nunca abrir o diálogo do navegador
+      const proto = HTMLIFrameElement.prototype, real = proto.addEventListener;
+      proto.addEventListener = function (tipo, ...r) { return tipo === 'load' ? undefined : real.call(this, tipo, ...r); };
+      t.cleanup(() => { delete proto.addEventListener; });
+      const g = t.create({ xtype: 'grid', data: [{ n: '<img src=x onerror=alert(1)>' }], columns: [{ header: '<script>x</script>', dataIndex: 'n' }] });
+      const html = g._printHtml('<svg onload=alert(1)>');
+      const corpo = html.slice(html.indexOf('<body>'));
+      assert.notOk(/<img|<script|<svg/i.test(corpo), 'nada de tag ativa no corpo');
+      assert.contains(html, '&lt;img src=x onerror=alert(1)&gt;');
+      assert.contains(html, '&lt;svg onload=alert(1)&gt;', 'título escapado');
+      g.print('Relatório');
+      const f = document.querySelector('iframe.r4-print-frame');
+      assert.ok(f, 'iframe de impressão criado');
+      assert.notOk(/allow-scripts/.test(f.getAttribute('sandbox') || 'allow-scripts'), 'sandbox sem allow-scripts');
+      assert.eq(f.getAttribute('aria-hidden'), 'true');
+      assert.contains(f.srcdoc, '&lt;img src=x');
+      g.destroy();
+      assert.eq(document.querySelector('iframe.r4-print-frame'), null, 'destroy remove o iframe');
+    });
+
+    test('destroy: remove o elemento, o menu, os ouvintes da página e ignora respostas atrasadas', async t => {
+      t.mockFetch({ '/api/g-tarde': { body: [{ a: 1 }], delay: 80 } });
+      const g = t.create({ xtype: 'grid', src: '/api/g-tarde', exportable: true });
+      const el = g.el;
+      g.el.querySelector('.r4-grid-tool').click();
+      assert.ok(document.querySelector('.r4-grid-menu'));
+      g.destroy();
+      assert.notOk(t.box.contains(el), 'fora do DOM');
+      assert.eq(document.querySelector('.r4-grid-menu'), null);
+      assert.eq(R4.get(g.id), undefined);
+      await t.sleep(160);
+      assert.eq(g.data.length, 0, 'a resposta que chegou depois não alterou o grid destruído');
+      g.destroy();
+      g.setFilter('x');
+    });
+  });
+})();

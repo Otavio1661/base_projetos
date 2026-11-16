@@ -139,6 +139,7 @@
       if (cfg.closable) tabEl.append(R4.util.tx(R4.util.icon(el('span', { class: 'r4-x', onclick: ev => { ev.stopPropagation(); this.remove(tab); } }), 'close'), 'r4.close', 'Fechar', 'title'));
       this.strip.append(tabEl);
       panel.render(this.stage);
+      (this._children = this._children || []).push(panel);   // destroy() do tabpanel também destrói as abas
       panel.hide();
       this.tabs.push(tab);
       if (activate) this.setActive(tab);

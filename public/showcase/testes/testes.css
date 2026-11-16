@@ -1,0 +1,28 @@
+/* Página de testes da libr4 (o resto do visual vem da libr4.css, com as variáveis --r4-*) */
+body{margin:0;background:var(--r4-bg);color:var(--r4-txt);font:14px/1.5 var(--r4-font)}
+.r4t-page{max-width:1100px;margin:0 auto;padding:16px}
+.r4t-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px}
+.r4t-head h1{margin:0;font-size:20px}
+.r4t-head .r4t-sub{color:var(--r4-mut);flex:1;min-width:220px}
+.r4t-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:12px 0}
+.r4t-bar .r4-field{min-width:200px}
+.r4t-sum{margin:12px 0}
+.r4t-status{margin:8px 0;color:var(--r4-mut);font-size:13px}
+.r4t-status.bad{color:var(--r4-err)}.r4t-status.good{color:var(--r4-ok)}
+.r4t-suite{margin:10px 0}
+.r4t-suite.bad>.r4-header{border-left:4px solid var(--r4-err)}
+.r4t-suite.good>.r4-header{border-left:4px solid var(--r4-ok)}
+.r4t-suite .r4-body{padding:0}
+.r4t-tag{display:inline-block;min-width:64px;text-align:center;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.03em}
+.r4t-pass{background:color-mix(in srgb,var(--r4-ok) 18%,transparent);color:var(--r4-ok)}
+.r4t-fail{background:color-mix(in srgb,var(--r4-err) 18%,transparent);color:var(--r4-err)}
+.r4t-known{background:color-mix(in srgb,var(--r4-acc) 22%,transparent);color:var(--r4-txt)}
+.r4t-skip,.r4t-pending{background:var(--r4-head);color:var(--r4-mut)}
+.r4t-msg{white-space:pre-wrap;word-break:break-word;font:12px/1.4 var(--r4-mono)}
+.r4t-msg summary{cursor:pointer;color:var(--r4-err)}
+.r4t-msg pre{margin:6px 0 0;max-height:200px;overflow:auto;color:var(--r4-mut)}
+.r4t-skipmsg{color:var(--r4-mut)}
+.r4t-slow{font-size:11px;color:var(--r4-mut);margin-left:6px;font-weight:400}
+.r4t-badge-bad{color:var(--r4-err);font-weight:700}
+/* área onde os testes montam os componentes: fora da tela, mas com layout real */
+.r4t-box{width:900px;padding:8px}
