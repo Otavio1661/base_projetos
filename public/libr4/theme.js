@@ -667,6 +667,18 @@
         warnRows: 'Arquivo truncado em {n} linhas.', warnCols: 'Colunas limitadas a {n}.', warnText: 'Arquivo truncado em {n}.', warnCell: 'Textos longos foram cortados em {n} caracteres.',
         warnKey: 'Chaves ignoradas por segurança: {keys}.', warnPath: 'Caminho "{path}" não encontrado; usando a estrutura inteira.', textTooBig: 'Texto grande demais (máximo {n}).'
       },
+      imageeditor: {
+        title: 'Editar imagem', area: 'Área de edição da imagem',
+        help: 'Arraste para mover a imagem. Use a roda do mouse, a pinça (toque) ou as teclas + e − para ampliar, [ e ] para girar 90° e as setas para mover (Shift: passo de 1 px).',
+        zoom: 'Zoom', zoomIn: 'Aumentar o zoom', zoomOut: 'Diminuir o zoom', rotateL: 'Girar 90° à esquerda', rotateR: 'Girar 90° à direita',
+        flip: 'Espelhar', reset: 'Redefinir', fine: 'Ajuste fino', apply: 'Aplicar', choose: 'Escolher imagem',
+        empty: 'Nenhuma imagem carregada.', loading: 'Carregando imagem…',
+        badType: '"{name}": formato não aceito. Use PNG, JPEG, WebP ou GIF.', svg: '"{name}": SVG não é aceito (pode conter scripts). Use PNG, JPEG, WebP ou GIF.',
+        tooBig: '"{name}": arquivo muito grande ({size}; máximo {max}).', dims: 'Imagem grande demais ({w} × {h} px; máximo {max} px por lado).',
+        pixels: 'Imagem com megapixels demais (máximo {mp} MP).', decode: 'Não foi possível abrir a imagem (arquivo corrompido ou incompatível).',
+        support: 'Este navegador não consegue editar imagens.', badSrc: 'Origem da imagem não permitida: use um arquivo (File/Blob) ou um endereço data:/blob:.',
+        noImage: 'Nenhuma imagem para exportar.', encode: 'Não foi possível gerar a imagem editada.'
+      },
       sanitize: {
         warn: 'Atenção: o texto parece conter {kinds}. Ele será enviado como texto comum e o servidor valida de novo.',
         block: 'Conteúdo não permitido neste campo (parece conter {kinds}).',
@@ -731,6 +743,18 @@
         mismatch: '"{name}": the content does not match the .{ext} extension (looks like {kind}).', uploadFail: 'upload failed.',
         warnRows: 'File truncated at {n} rows.', warnCols: 'Columns limited to {n}.', warnText: 'File truncated at {n}.', warnCell: 'Long texts were cut at {n} characters.',
         warnKey: 'Keys ignored for security: {keys}.', warnPath: 'Path "{path}" not found; using the whole structure.', textTooBig: 'Text too large (maximum {n}).'
+      },
+      imageeditor: {
+        title: 'Edit image', area: 'Image editing area',
+        help: 'Drag to move the image. Use the mouse wheel, pinch (touch) or the + and − keys to zoom, [ and ] to rotate 90°, and the arrow keys to move (Shift: 1 px steps).',
+        zoom: 'Zoom', zoomIn: 'Zoom in', zoomOut: 'Zoom out', rotateL: 'Rotate 90° left', rotateR: 'Rotate 90° right',
+        flip: 'Flip', reset: 'Reset', fine: 'Fine rotation', apply: 'Apply', choose: 'Choose image',
+        empty: 'No image loaded.', loading: 'Loading image…',
+        badType: '"{name}": format not accepted. Use PNG, JPEG, WebP or GIF.', svg: '"{name}": SVG is not accepted (it can contain scripts). Use PNG, JPEG, WebP or GIF.',
+        tooBig: '"{name}": file too large ({size}; maximum {max}).', dims: 'Image too large ({w} × {h} px; maximum {max} px per side).',
+        pixels: 'Image has too many megapixels (maximum {mp} MP).', decode: 'Could not open the image (corrupted or incompatible file).',
+        support: 'This browser cannot edit images.', badSrc: 'Image source not allowed: use a file (File/Blob) or a data:/blob: address.',
+        noImage: 'No image to export.', encode: 'Could not generate the edited image.'
       },
       sanitize: {
         warn: 'Heads up: the text looks like it contains {kinds}. It will be sent as plain text and the server validates it again.',

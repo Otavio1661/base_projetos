@@ -14,9 +14,9 @@
   /* A mesma base da vitrine (lib + dados + demos), para a suíte de regressão rodar os exemplos reais. */
   $base = ['/libr4/libr4.js', '/showcase/demos.js', '/showcase/vitrineData/vitrineData.js',
     '/showcase/demos/form.js', '/showcase/demos/dados.js', '/showcase/demos/ui.js', '/showcase/demos/chart.js',
-    '/showcase/demos/theme.js', '/showcase/demos/receitas.js', '/showcase/i18n.js', '/showcase/demos/icons.js', '/showcase/demos/store.js'];
+    '/showcase/demos/theme.js', '/showcase/demos/receitas.js', '/showcase/i18n.js', '/showcase/demos/icons.js', '/showcase/demos/store.js', '/showcase/demos/imageeditor.js'];
   /* O runner e as suítes (ordem = ordem de execução; a "vitrine" é lenta e roda por último). */
-  $suites = ['core', 'net', 'support', 'declarative', 'quick', 'grid', 'form', 'files', 'sanitize', 'icons', 'store', 'i18n', 'theme', 'ui', 'chart', 'tabs', 'vitrine'];
+  $suites = ['core', 'net', 'support', 'declarative', 'quick', 'grid', 'form', 'files', 'imageeditor', 'sanitize', 'icons', 'store', 'i18n', 'theme', 'ui', 'chart', 'tabs', 'vitrine'];
   foreach ($base as $s) { echo '<script src="' . asset($s) . '"></script>' . "\n  "; }
   ?>
   <script src="<?= asset('/showcase/testes/r4test.js') ?>"></script>

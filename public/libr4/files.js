@@ -929,7 +929,9 @@
     config: { accept: '', multiple: false, maxSize: 10 * MB, maxFiles: 0, parse: '', text: '', buttonText: '',   // '' = texto padrão no idioma atual
       hint: '', disabled: false, list: true, delimiter: 'auto', header: true,
       // segurança (R4.sanitize): bloqueia .php/.exe/.js/... e dupla extensão; confere a assinatura dos bytes
-      blockExec: true, sniff: true, field: 'arquivo' },
+      blockExec: true, sniff: true, field: 'arquivo',
+      // editor de imagem (R4.imageeditor) antes de entrar na lista: edit="image"; os 5 atalhos abaixo valem como editOptions ('' / 0 = padrão do editor)
+      edit: '', editOptions: {}, aspect: '', shape: '', maxWidth: 0, format: '', quality: 0 },
     build() {
       this._files = [];
       const hint = this._hint();
@@ -990,9 +992,14 @@
           if (r.match === false || (bool(this.blockExec) && ['exe', 'script', 'php'].includes(r.kind)))
             e = T('r4.files.mismatch', { name: shown, ext: r.ext || '?', kind: r.kind }, '"' + shown + '": o conteúdo não corresponde à extensão .' + (r.ext || '?') + ' (parece ' + r.kind + ').');
         }
+        let cur = f;
+        if (!e && this.edit === 'image' && R4.imageeditor && R4.imageeditor.open) {
+          try { cur = await this._edit(f); } catch (er) { e = er && er.message ? er.message : String(er); }
+          if (!e && !cur) continue;   // cancelou: o arquivo é descartado, sem mensagem de erro
+        }
         if (e) errs.push(e);
-        else if (this.multiple && this._files.concat(ok).some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) errs.push(T('r4.files.dup', { name: shown }, '"' + shown + '" já está na lista.'));
-        else ok.push(f);
+        else if (this.multiple && this._files.concat(ok).some(x => x.name === cur.name && x.size === cur.size && x.lastModified === cur.lastModified)) errs.push(T('r4.files.dup', { name: shown }, '"' + shown + '" já está na lista.'));
+        else ok.push(cur);
       }
       if (this._destroyed) return this;
       if (this.multiple && this.maxFiles && this._files.length + ok.length > this.maxFiles) {
@@ -1015,6 +1022,32 @@
       }
       this.fire('files', this, ok, data);
       return this;
+    },
+    /**
+     * edit="image": abre o editor ANTES de o arquivo entrar na lista. Devolve o File editado (substitui o original),
+     * null se o usuário cancelou, ou o próprio arquivo se não se apresenta como imagem. Imagem recusada pelo editor
+     * (SVG, tipo falso, grande demais) lança Error com a mensagem. O editado passa de novo por accept/maxSize.
+     */
+    async _edit(f) {
+      const IE = R4.imageeditor;
+      if (!IE.isImageLike || !IE.isImageLike(f)) return f;
+      const o = {};
+      if (this.aspect !== '' && this.aspect != null) o.aspect = this.aspect;
+      if (this.shape) o.shape = this.shape;
+      if (this.maxWidth > 0) { o.maxWidth = this.maxWidth; o.maxHeight = this.maxWidth; }
+      if (this.format) o.format = this.format;
+      if (this.quality > 0) o.quality = this.quality;
+      Object.assign(o, this.editOptions && typeof this.editOptions === 'object' ? this.editOptions : {});
+      if (!o.format) {   // o editor grava JPEG; se o accept não aceita JPEG mas aceita PNG/WebP, usa esse
+        const nope = x => !acceptOk({ name: 'x.' + x, type: 'image/' + (x === 'jpg' ? 'jpeg' : x) }, this.accept);
+        if (nope('jpg')) o.format = !nope('png') ? 'png' : !nope('webp') ? 'webp' : undefined;
+      }
+      await IE.check(f, o);
+      const out = await IE.open(f, o);
+      if (!out) return null;
+      const bad = validate(out, { accept: this.accept, maxSize: this.maxSize });
+      if (bad) throw new Error(bad);
+      return out;
     },
     async _read(f) {
       const p = String(this.parse).toLowerCase();
@@ -1083,6 +1116,7 @@
       { name: 'disabled / list', type: 'boolean', default: 'false / true', desc: 'Desabilita; mostra a lista de arquivos.' },
       { name: 'blockExec', type: 'boolean', default: 'true', desc: 'Recusa extensões executáveis/script (.php, .phtml, .phar, .exe, .bat, .cmd, .sh, .js, .jar, .msi, .com, .scr, .vbs, .ps1, .htaccess...) e dupla extensão perigosa (shell.php.jpg).' },
       { name: 'sniff', type: 'boolean', default: 'true', desc: 'Lê os primeiros bytes (R4.sanitize.sniffFile) e recusa conteúdo que não bate com a extensão (PHP com nome .png, executável com nome .csv...).' },
+      { name: 'edit / editOptions', type: "'' | 'image' / object", default: "'' / {}", desc: "edit=\"image\": cada imagem aceita abre o editor (R4.imageeditor.open: cortar, girar, zoom) ANTES de entrar na lista; o arquivo editado (re-codificado, sem EXIF/GPS) substitui o original e é o que o upload() envia; cancelar descarta o arquivo. Arquivos que não são imagem seguem o fluxo normal; SVG e imagem falsa são recusados com mensagem. editOptions = {aspect, shape, maxWidth, format, quality...}; em HTML os atalhos aspect, shape, max-width, format e quality (<r4-filedrop edit=\"image\" accept=\"image/*\" aspect=\"1\">)." },
       { name: 'upload(url, {field, data, headers})', type: 'Promise', desc: 'Envia cada arquivo aceito em multipart/form-data (campo "arquivo" por padrão) com o nome JÁ saneado. Eventos upload / uploaderror. O servidor valida de novo (Core\\Security\\Upload).' },
       { name: 'Nome exibido', type: 'segurança', desc: 'A lista e as mensagens mostram R4.sanitize.filename(nome): sem caminho, bidi (U+202E), controles; só a última extensão.' },
       { name: 'add(files) / open() / remove(i|file) / clear() / getFiles() / setDisabled(b)', type: 'método', desc: 'add aceita FileList/array (ex.: new File([...], "x.csv")) e devolve Promise.' },
