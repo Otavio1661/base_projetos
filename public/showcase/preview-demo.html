@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prévia — página do cliente (demonstração)</title>
+  <link rel="stylesheet" href="/showcase/preview-demo.css">
+</head>
+<body class="topo-solido galeria-grade">
+  <!-- Página de PRÉVIA do <r4-phonepreview> (vitrine). Só preview.js + um arquivo seu: nada de script inline. -->
+  <header class="topo">
+    <div class="avatar" aria-hidden="true">R4</div>
+    <h1 id="titulo">Minha página</h1>
+    <p id="bio" class="bio">Escreva uma bio curta no painel.</p>
+  </header>
+  <main>
+    <a class="botao" id="cta" href="#">Fale comigo</a>
+    <section class="horarios" id="bloco-horarios">
+      <h2>Horários</h2>
+      <p id="horarios" class="linhas">Nenhum horário.</p>
+    </section>
+    <section class="galeria" aria-label="Galeria">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </section>
+  </main>
+  <script src="/libr4/preview.js"></script>
+  <script src="/showcase/preview-demo.js"></script>
+</body>
+</html>

@@ -1,13 +1,14 @@
 /* O ?v= dos imports força CDN e navegador a baixar de novo os parts/*.css (sem ele ficam em cache por 7 dias).
    Troque o valor (todos) sempre que mudar um arquivo em parts/. O pacote minificado (dist/) não precisa disso. */
-@import url('parts/tabs.css?v=20261117a');
-@import url('parts/icons.css?v=20261117a');
-@import url('parts/form.css?v=20261117a');
-@import url('parts/files.css?v=20261117a');
-@import url('parts/imageeditor.css?v=20261117a');
-@import url('parts/ui.css?v=20261117a');
-@import url('parts/chart.css?v=20261117a');
-@import url('parts/theme.css?v=20261117a');
+@import url('parts/tabs.css?v=20261117b');
+@import url('parts/icons.css?v=20261117b');
+@import url('parts/form.css?v=20261117b');
+@import url('parts/files.css?v=20261117b');
+@import url('parts/imageeditor.css?v=20261117b');
+@import url('parts/ui.css?v=20261117b');
+@import url('parts/chart.css?v=20261117b');
+@import url('parts/theme.css?v=20261117b');
+@import url('parts/admin.css?v=20261117b');
 /* ============================================
  * libr4.css — R4 dev
  * Tema padrão dos componentes. Tudo passa por variáveis --r4-*,

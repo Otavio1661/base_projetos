@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "retorno": {
+    "titulo": "Café da Praça",
+    "bio": "Cafés especiais, pães de fermentação natural e bolos da casa.",
+    "botao": "Peça pelo WhatsApp",
+    "mostrarBio": true,
+    "cor": "#0b3d2e",
+    "corTexto": "#ffffff",
+    "raio": 14,
+    "estilo": "gradiente",
+    "layout": "grade",
+    "mostrarHorarios": true,
+    "horarios": [
+      { "dias": "Seg a Sex", "inicio": "07:00", "fim": "19:00" },
+      { "dias": "Sábado", "inicio": "08:00", "fim": "14:00" }
+    ],
+    "foto": "",
+    "email": "contato@cafedapraca.com.br",
+    "site": "https://cafedapraca.com.br"
+  }
+}

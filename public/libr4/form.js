@@ -259,6 +259,7 @@
   const TEXT_CFG = { placeholder: '', minLength: 0, maxLength: 0, pattern: '', patternText: '', email: false, match: '', autocomplete: '',
     sanitize: true, guard: 'warn' };
   const BAD_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+  const OWNER = '.r4-form,.r4-subform';   // quem "possui" os campos: o form ou um item de <r4-repeater>
   const GUARD_TXT = { sql: 'comando SQL', script: 'código HTML/JavaScript', path: 'caminho de arquivo', prompt: 'instruções para IA', proto: 'chave de protótipo' };
 
   /** destroy idempotente que também destrói componentes montados pelo HTML interno */
@@ -355,9 +356,10 @@
     setLabel(t) { this.label = t; if (this.labelEl) { this.labelEl.firstChild.textContent = t; } return this; },
     focus() { const c = this._focusEl ? this._focusEl() : this._ctl(); c && c.focus(); return this; },
     _msg(k) { return (this.messages && this.messages[k]) || msgOf(k); },
+    /** Form dono do campo (ou o item do repeater, ".r4-subform", que se comporta como um mini-form) */
     _form() {
-      const p = this.el && this.el.parentElement && this.el.parentElement.closest('.r4-form');
-      return p ? R4.instances[p.id] : null;
+      const p = this.el && this.el.parentElement && this.el.parentElement.closest(OWNER);
+      return p ? p._r4sub || R4.instances[p.id] || null : null;
     },
     _formValues() { const f = this._form(); return f ? f.getValues(true) : {}; },
     _labelOf(name) {
@@ -1447,15 +1449,31 @@
    * form
    * ===================================================================== */
   const isField = c => c && c.name && typeof c.getValue === 'function' && typeof c.setValue === 'function';
-  /** Componentes-campo dentro de `root` que pertencem a ele (não a um form aninhado) */
+  /**
+   * Componentes-campo dentro de `root` que pertencem a ele (não a um form aninhado nem a um item de repeater).
+   * `form` é o componente dono (ou o controlador de um item, com .el); sem ele devolve todos.
+   */
   function fieldsIn(root, form) {
     return [...root.querySelectorAll('.r4-cmp')].map(n => {
       const c = R4.instances[n.id];
       if (!c || c.el !== n || !isField(c) || c === form) return null;
-      if (form && n.parentElement.closest('.r4-form') !== form.el) return null;
+      if (form && n.parentElement.closest(OWNER) !== form.el) return null;
       return c;
     }).filter(Boolean);
   }
+  R4.fieldsIn = fieldsIn;
+  /** Mostra o campo que estava escondido numa aba inativa ou num fieldset recolhido (antes de focar o erro). */
+  function reveal(node) {
+    for (let p = node; p && p !== document.body; p = p.parentElement) {
+      if (!p.hidden) continue;
+      const tp = p.parentElement && p.parentElement.closest('.r4-tabs'), cmp = tp && R4.instances[tp.id];
+      const tab = cmp && Array.isArray(cmp.tabs) && cmp.tabs.find(x => x.cmp && x.cmp.el === p);
+      if (tab && cmp.setActive) { cmp.setActive(tab); continue; }
+      const fs = p.parentElement && R4.instances[p.parentElement.id];
+      if (fs && fs.xtype === 'fieldset' && fs.body === p) fs.toggle(true);
+    }
+  }
+  R4.reveal = reveal;
 
   /** fetch próprio: distingue 2xx de 4xx/5xx sem perder o corpo JSON */
   async function send(url, { method = 'POST', data = null, encrypt = false, headers = null } = {}) {
@@ -1477,10 +1495,14 @@
   }
   const SUBMIT_SEL = '[data-r4-submit],button[type="submit"],input[type="submit"],[r4-click]';
 
+  const pathGet = (o, p) => String(p).split('.').reduce((a, k) => (a == null || BAD_NAMES.has(k) || !Object.prototype.hasOwnProperty.call(Object(a), k) ? undefined : a[k]), o);
+  const plainObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+
   R4.define('form', {
     config: { action: '', method: 'POST', encrypt: false, headers: null, html: '', fields: [], items: [], buttons: null,
       submitText: '', resetText: 'Limpar', successText: '', errorText: '',   // '' = texto padrão no idioma atual (resetText 'Limpar' idem; vazio esconde o botão)
-     
+      // src: carrega os valores (GET) ao montar; root: caminho até o objeto; notify: avisos com R4.notify; autosaveMs: rascunho automático
+      src: '', root: '', notify: true, autosaveMs: 0, autosaveUrl: '',
       resetOnSuccess: false, submitOnEnter: true, focusInvalid: true, values: null },
     build() {
       const f = el('form', { class: 'r4-form', novalidate: true });
@@ -1508,6 +1530,65 @@
         this.setValues(this.values, true);
         if (this.html) Promise.resolve().then(() => !this._destroyed && this.setValues(this.values, true));   // campos do HTML montam logo depois
       }
+      if (this.src) this.load();
+    },
+    _cleanup() { clearTimeout(this._asT); this._lseq = -1; },
+    _notify(kind, text) {
+      if (!text || !bool(this.notify) || !R4.notify || this._destroyed) return;
+      try { R4.notify({ type: kind, text }); } catch (e) { /* notify indisponível */ }
+    },
+    /**
+     * Busca os valores em `src` (GET, JSON) e preenche os campos (viram o "original" para reset/isDirty).
+     * Aceita {retorno:{...}}, {data:{...}} ou o objeto puro; `root` escolhe outro caminho ("dados.perfil").
+     * Mesmo tratamento do grid: "carregando" (aria-busy), status fora de 2xx, {status ≥ 400} ou JSON inválido
+     * viram erro com "Tentar de novo" (os valores atuais ficam). Eventos load(form, valores, corpo) / loaderror(form, erro).
+     */
+    async load(src = this.src) {
+      if (!src || !this.el || this._destroyed) return this;
+      const seq = this._lseq = (this._lseq || 0) + 1;
+      this.el.classList.add('r4-loading'); this.el.setAttribute('aria-busy', 'true');
+      this._showMsg(T('r4.loading', 0, 'Carregando...'), 'info');
+      try {
+        const res = await send(src, { method: 'GET', headers: this.headers });
+        if (seq !== this._lseq || this._destroyed) return this;
+        const b = res.data;
+        const txt = b && plainObj(b) && [b.mensagem, b.message, typeof b.retorno === 'string' ? b.retorno : '', b.erro].find(x => typeof x === 'string' && x);
+        if (!res.ok || (plainObj(b) && typeof b.status === 'number' && b.status >= 400)) throw new Error('HTTP ' + res.status + (txt ? ': ' + txt : ''));
+        if (b == null) throw new Error(T('r4.grid.badJson', 0, 'A resposta não é JSON válido.'));
+        const obj = this.root ? pathGet(b, this.root) : plainObj(b.retorno) ? b.retorno : plainObj(b.data) ? b.data : b;
+        if (!plainObj(obj)) throw new Error(T('r4.form.noObject', 0, 'A resposta não traz um objeto de valores.'));
+        this.setValues(obj, true);
+        this._hideMsg();
+        this.fire('load', this, obj, b);
+      } catch (e) {
+        if (seq !== this._lseq || this._destroyed) return this;
+        const m = T('r4.loadFail', 0, 'Falha ao carregar.') + (e && e.message ? ' (' + e.message + ')' : '');
+        this._showMsg(m, 'err');
+        this.msgEl.append(' ', el('button', { type: 'button', class: 'r4-btn r4-form-retry', text: T('r4.retry', 0, 'Tentar de novo'), onclick: () => this.load(src) }));
+        this._notify('err', m);
+        this.fire('loaderror', this, e);
+      } finally {
+        if (seq === this._lseq && !this._destroyed) { this.el.classList.remove('r4-loading'); this.el.removeAttribute('aria-busy'); }
+      }
+      return this;
+    },
+    reload() { return this.load(); },
+    /** Rascunho automático: depois de `autosaveMs` sem mudanças, envia (silencioso) se mudou e é válido. */
+    _autosave() {
+      const ms = +this.autosaveMs, url = this.autosaveUrl || this.action;
+      if (!(ms > 0) || !url || this._destroyed) return;
+      clearTimeout(this._asT);
+      this._asT = setTimeout(async () => {
+        if (this._destroyed || this._busy || !this.isDirty() || !this.isValid()) return;
+        const data = this.getValues();
+        let res;
+        try { res = await send(url, { method: this.method, data: R4.sanitize ? R4.sanitize.deep(data, { strip: false }) : data, encrypt: bool(this.encrypt), headers: this.headers }); }
+        catch (e) { res = { ok: false, status: 0, data: null, error: e }; }
+        if (this._destroyed) return;
+        const ok = res.ok && !(plainObj(res.data) && typeof res.data.status === 'number' && res.data.status >= 400);
+        if (ok && same(this.getValues(), data)) this.commit();
+        this.fire('autosave', this, ok, res);
+      }, ms);
     },
     relocalize() { (this._children || []).forEach(c => c._i18n && c.setText && c.setText(T(c._i18n))); },
     _buttonCfgs() {
@@ -1569,8 +1650,11 @@
         else list.forEach(f => f.setValue(v));
         list.forEach(f => { f.clearError(); if (commit) f.commit(); });
       });
+      this._valuesSet();
       return this;
     },
+    /** Avisa o estado reativo (R4.state) que os valores mudaram por código (setValues/reset/load). */
+    _valuesSet() { this.el && this.el.dispatchEvent(new CustomEvent('r4-values')); },
     /** Valida tudo; marca os erros, foca o primeiro inválido e dispara invalid. */
     validate() {
       const values = this.getValues(true), errors = {};
@@ -1579,7 +1663,7 @@
         if (!f.validate(values)) { errors[f.name] = f.getError(); first = first || f; }
       });
       if (first) {
-        if (this.focusInvalid) first.focus();
+        if (this.focusInvalid) { reveal(first.el); first.focus(); }
         this.fire('invalid', this, errors);
         return false;
       }
@@ -1592,6 +1676,7 @@
     reset() {
       this.getFields().forEach(f => f.reset());
       this._hideMsg();
+      this._valuesSet();
       this.fire('reset', this);
       return this;
     },
@@ -1607,7 +1692,7 @@
         const f = this.getField(n);
         if (f && !f.disabled) { f.setError(m || msgOf('invalid')); first = first || f; } else if (m) rest.push(m);
       });
-      if (first && this.focusInvalid) first.focus();
+      if (first && this.focusInvalid) { reveal(first.el); first.focus(); }
       return rest;
     },
     _showMsg(text, kind) {
@@ -1686,10 +1771,12 @@
         const txt = body && [body.mensagem, body.message, body.retorno, body.erro].find(x => typeof x === 'string' && x);
         const msg = res.status === 0 ? T('r4.form.offline', 0, 'Sem conexão com o servidor.') : (txt || this.errorText || T('r4.form.sendFail', 0, 'Não foi possível enviar. Tente novamente.'));
         this._showMsg([msg, ...rest].join(' '), 'err');
+        this._notify('err', [msg, ...rest].join(' '));
         this.fire('failure', this, body, res);
       } else {
         if (this.resetOnSuccess) this.reset(); else this.commit();
         this._showMsg(this.successText, 'ok');
+        this._notify('ok', this.successText || T('r4.form.saved', 0, 'Alterações salvas.'));
         this.fire('success', this, body, res);
       }
       return res;
@@ -1703,11 +1790,12 @@
     },
     _onFieldChange(ev) {
       const f = ev.detail && ev.detail.field;
-      if (!f || (f.el.parentElement && f.el.parentElement.closest('.r4-form') !== this.el)) return;
+      if (!f || (f.el.parentElement && f.el.parentElement.closest(OWNER) !== this.el)) return;
       if (this._msgKind === 'ok') this._hideMsg();
       // revalida quem depende deste campo (ex.: confirmar senha)
       this.getFields().forEach(o => { if (o !== f && o.match === f.name && (o._validated || o._error) && !o.isEmpty()) o.validate(); });
       this.fire('change', this, f, ev.detail.value);
+      this._autosave();
     },
     destroy: destroyAll   // resposta que chegar depois do destroy é ignorada (_destroyed)
   }, {
@@ -1724,6 +1812,10 @@
       { name: 'submitText / resetText', type: 'string', default: "'' / 'Limpar'", desc: 'Textos dos botões automáticos (padrão: Salvar / Limpar no idioma atual; resetText vazio esconde o Limpar).' },
       { name: 'successText / errorText', type: 'string', default: "'' / ''", desc: 'Aviso após sucesso (vazio = nenhum) / aviso padrão de falha (usa a mensagem do servidor quando houver).' },
       { name: 'values', type: 'object', default: 'null', desc: 'Valores iniciais (viram o "original" para reset/isDirty).' },
+      { name: 'src / root', type: 'string', default: "''", desc: 'Carrega os valores ao montar (GET JSON): aceita {retorno:{...}}, {data:{...}} ou o objeto puro; root escolhe um caminho ("dados.perfil"). Mostra "Carregando...", erro com "Tentar de novo"; evento load / loaderror. reload() (ou r4-click="recarregar:#id") busca de novo.' },
+      { name: 'notify', type: 'boolean', default: 'true', desc: 'Também avisa sucesso/erro do envio (e erro do src) com R4.notify. notify="false" desliga.' },
+      { name: 'autosaveMs / autosaveUrl', type: 'number / string', default: "0 / ''", desc: 'Rascunho automático: depois de N ms sem mudanças, envia (sem aviso) para autosaveUrl (ou action) se o form mudou e está válido; evento autosave(form, ok, resposta). 0 = desligado.' },
+      { name: 'Estado reativo', type: 'R4.state(form)', desc: 'Os valores por name, atualizados a cada digitação: r4-bind, r4-show-if e r4-enable-if reagem a eles (veja "Estado e bindings").' },
       { name: 'resetOnSuccess', type: 'boolean', default: 'false', desc: 'Limpa após enviar com sucesso (senão os valores enviados viram o original).' },
       { name: 'submitOnEnter / focusInvalid', type: 'boolean', default: 'true', desc: 'Enter num campo envia / foca o primeiro campo inválido.' },
       { name: 'getValues() / setValues(obj, commit)', type: 'método', desc: 'Lê / preenche pelo name. Campos desabilitados ficam fora de getValues(). Texto sai limpo (sem NUL/controles/bidi) e names __proto__/constructor/prototype são ignorados — também no envio.' },
@@ -1733,8 +1825,9 @@
       { name: 'markErrors({campo: msg}) / clearErrors()', type: 'método', desc: 'Erros manuais por campo.' },
       { name: 'getFields() / getField(name) / isBusy()', type: 'método', desc: 'Acesso aos campos.' }
     ],
-    events: ['change', 'invalid', 'beforesubmit', 'submit', 'success', 'failure', 'reset', 'suspicious']
+    events: ['change', 'invalid', 'beforesubmit', 'submit', 'success', 'failure', 'reset', 'suspicious', 'load', 'loaderror', 'autosave']
   });
+  R4.fieldCfg = fieldCfg;
 
   /* =====================================================================
    * HTML declarativo
@@ -1783,6 +1876,13 @@
   if (R4.action) {
     R4.action('submit', (a, e) => formOf(a, e).submit());
     R4.action('reset', (a, e) => formOf(a, e).reset());
+    // apelidos em português (mesma regra: sem alvo = o form do botão)
+    R4.action('salvar', (a, e) => formOf(a, e).submit());
+    R4.action('recarregar', (a, e) => {
+      const id = String(a || '').trim().replace(/^#/, ''), c = id ? R4.get(id) : formOf(a, e);
+      if (!c || typeof c.reload !== 'function') throw new Error('alvo sem reload(): #' + id);
+      return c.reload();
+    });
   }
 
   /* ---- funções prontas: R4.form(alvo, {...}), R4.select(alvo, opções)... ---- */
@@ -1800,7 +1900,9 @@
   const addDocs = (mod, list) => { const m = R4.modules[mod]; if (m && m.meta && Array.isArray(m.meta.props)) m.meta.props.push(...list); };
   addDocs('actions', [
     { name: 'submit  |  submit:#id', type: 'ação', desc: 'Envia o <r4-form> do botão (ou o indicado). <r4-button type="submit"> dentro do form faz o mesmo.' },
-    { name: 'reset  |  reset:#id', type: 'ação', desc: 'Limpa o form (volta aos valores originais).' }
+    { name: 'reset  |  reset:#id', type: 'ação', desc: 'Limpa o form (volta aos valores originais).' },
+    { name: 'salvar  |  salvar:#id', type: 'ação', desc: 'O mesmo que submit (valida e envia).' },
+    { name: 'recarregar:#id', type: 'ação', desc: 'Busca de novo os valores do <r4-form src> (também serve para grid e qualquer componente com reload()).' }
   ]);
   addDocs('tags', [
     { name: '<r4-form action encrypt method success-text>', type: 'html', desc: 'Campos r4-* dentro entram no form pelo name. <r4-button type="submit|reset"> envia/limpa.' },

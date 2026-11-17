@@ -25,6 +25,7 @@
   <script src="<?= asset('/showcase/demos/icons.js') ?>"></script>
   <script src="<?= asset('/showcase/demos/store.js') ?>"></script>
   <script src="<?= asset('/showcase/demos/imageeditor.js') ?>"></script>
+  <script src="<?= asset('/showcase/demos/declarativo.js') ?>"></script>
   <script src="<?= asset('/showcase/app.js') ?>"></script>
 </body>
 </html>

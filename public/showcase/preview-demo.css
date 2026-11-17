@@ -1,0 +1,22 @@
+/* Página de prévia (demonstração do r4-phonepreview). As variáveis vêm do painel via R4.preview. */
+:root{--cor:#3b5bdb;--cor-texto:#ffffff;--raio:12px;--fundo:#f4f6fb;--txt:#1f2a44}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--txt)}
+[hidden]{display:none!important}
+.topo{padding:40px 20px 28px;text-align:center;color:var(--cor-texto);background:var(--cor)}
+.topo-gradiente .topo{background:linear-gradient(160deg,var(--cor),#111827)}
+.topo-contorno .topo{background:var(--fundo);color:var(--cor);border-bottom:4px solid var(--cor)}
+.avatar{width:84px;height:84px;margin:0 auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;background:rgba(255,255,255,.25);border:3px solid currentColor}
+h1{margin:0;font-size:22px}
+.bio{margin:8px 0 0;opacity:.9;white-space:pre-line}
+main{padding:20px;display:flex;flex-direction:column;gap:18px}
+.botao{display:block;text-align:center;padding:12px;border-radius:var(--raio);background:var(--cor);color:var(--cor-texto);font-weight:600;text-decoration:none}
+.horarios{background:#fff;border-radius:var(--raio);padding:12px 16px}
+.horarios h2{margin:0 0 6px;font-size:15px}
+.linhas{margin:0;white-space:pre-line;color:#4b5563}
+.galeria{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
+.galeria span{aspect-ratio:1;border-radius:var(--raio);background:var(--cor);opacity:.25}
+.galeria-lista .galeria{grid-template-columns:1fr}
+.galeria-lista .galeria span{aspect-ratio:4/1}
+.galeria-carrossel .galeria{display:flex;overflow-x:auto}
+.galeria-carrossel .galeria span{flex:0 0 70%}

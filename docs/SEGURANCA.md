@@ -63,7 +63,8 @@ Estes pontos **recebem HTML de propósito** e não escapam nada. Só passe conte
 - `html` de `panel`, `window`, `div`, `fieldset`, `formrow`, `form`, `accordion` (itens), `steps`
   (etapas), `timeline` (itens passados por código), `alert`, `badge`, `tag`, `emptystate`,
   `tooltip`, `R4.notify({html})`; `setHtml(...)`; `R4.util.el(tag, { html })`;
-- o **conteúdo** das tags `<r4-*>` (e o atributo `html` delas);
+- o **conteúdo** das tags `<r4-*>` (e o atributo `html` delas), inclusive `<r4-item-template>` / `template` do
+  `repeater`, o conteúdo de `<r4-option>` no `choice` e o conteúdo de `<r4-phonepreview>`;
 - `R4.render(alvo, html)`, `R4.panel(alvo, título, html)`, `R4.div(alvo, html)`,
   `R4.window(título, html)`, `R4.tabpanel(alvo, {Título: html})`, `R4.accordion(alvo, {Título: html})`,
   `R4.tooltip(alvo, texto, html)`;
@@ -412,7 +413,12 @@ Aplicado no nginx:
 | `innerHTML` da vitrine | app.js:76, 127 | texto digitado no editor/playground | self-only (ferramenta de dev, só com APP_DEBUG) |
 | `eval` da vitrine | app.js:129 | texto do editor | self-only; nunca da URL/hash/storage |
 | `outerHTML` (leitura) | icons.js `R4.icon.html` | SVG montado por DOM a partir do mapa fixo | só serializa (não é sink); devolve `R4.raw` |
-| `eval`, `new Function`, `window.open`, `createContextualFragment` | — | — | não existem na lib |
+| `innerHTML` repeater (template do item) | admin.js `_make` | `<r4-item-template>`/`template` da página | HTML confiável, documentado; ids removidos |
+| `innerHTML` phonepreview (conteúdo da tag) | admin.js `build` | HTML da página | HTML confiável, documentado |
+| `setContent` choice (`html` da opção) | admin.js `_render` | `<r4-option>` da página → `R4.raw`; por JS só `R4.html`/`R4.raw` | string comum vira texto |
+| `textContent`/`setAttribute`/`style.setProperty` (r4-bind, prévia) | reactive.js, preview.js | valores do form / `postMessage` | allowlist de atributos, `safeUrl`, `cssValue` (seção 15) |
+| `postMessage` | admin.js `send` / preview.js `listen` | estado do form (só o `map`) | `targetOrigin = location.origin`; receptor confere origem **e** fonte |
+| `eval`, `new Function`, `window.open`, `createContextualFragment` | — | — | não existem na lib (expressões têm parser próprio) |
 
 ---
 
@@ -767,3 +773,29 @@ Contrato da API e permissões por cargo: [`docs/ERP.md`](ERP.md).
   (lidas do `src/routes.php`), login/429/X-Forwarded-For/tempo, anti-fixação e logout, cargo `gestor` recusado, 403 por cargo, IDOR do
   avatar, allowlists e parâmetros malformados, importação maliciosa, CSRF 403/415, CSP das páginas, transações (se o SQLite existir) e XSS
   no `/erp` (jsdom). Restaura `storage/data/*.json` e apaga as contas/avatares/contadores criados.
+
+---
+
+## 15. Camada reativa, painéis declarativos e prévia (`reactive.js`, `admin.js`, `preview.js`)
+
+Guia de uso em [`docs/DECLARATIVO.md`](DECLARATIVO.md). O que é garantido:
+
+| Área | Garantia |
+|---|---|
+| `r4-bind` | Só `textContent`, `.value`/`setValue`, `setAttribute` numa **allowlist** (`title`, `alt`, `aria-label`, `placeholder`, `href`, `src`) e `style.setProperty` de variável `--nome`. `href`/`src` passam por `R4.util.safeUrl` (src com regra de imagem). `on*`, `style`, `srcdoc` e qualquer outro atributo são recusados com aviso. |
+| Variáveis CSS | Valor revalidado por `R4.preview.cssValue`: `#rgb`/`#rrggbb` (normalizado), número com unidade de uma lista curta ou palavra de uma lista curta, até 32 caracteres. Nunca CSS livre (`;`, `url()`, `expression()`, `var()`, `}` são recusados). |
+| Expressões | `r4-show-if`, `r4-enable-if`, `classe:` usam um **parser próprio** (descida recursiva) que só conhece nomes de campo, literais e `! && || ( ) = != > < >= <= in #`. Sem `eval`/`new Function`, sem chamadas de função, sem acesso a propriedades (o valor do campo é lido como propriedade **própria** do objeto de valores), 300 caracteres, 8 níveis. Inválida → falso + um aviso. |
+| Limites | 5.000 bindings por página, 20 por atributo, 500 esperando o form; repeater até 100 itens (`setValue` corta arrays maiores com aviso), template até 20.000 caracteres, nomes `__proto__`/`constructor`/`prototype` ignorados. |
+| `r4-ignore` | Nada dentro dele é ativado (bindings incluídos). |
+| `<r4-phonepreview>` | `src` só da **mesma origem** (http/https); iframe com `sandbox="allow-same-origin allow-scripts"` e `loading="lazy"`; o estado sai só pelos campos do `map` (allowlist), com `postMessage(msg, location.origin)`, até 64 KB. |
+| `R4.preview.listen` | Aceita só `event.origin === location.origin` **e** `event.source === window.parent` (fora de iframe nada é aceito); protocolo `{v:1, t:'estado', d}` conferido; 64 KB, 100 chaves, textos de 5.000 caracteres, listas de 100 itens; aplica só o configurado (texto, variável CSS revalidada, classe de lista fixa, `hidden`). Nunca HTML, nunca URL. |
+| `<r4-choice>` | Label/descrição sempre texto; `html` só vira HTML se for `R4.html`/`R4.raw` (o conteúdo de `<r4-option>` na página é confiável, como o de qualquer tag); `thumb` por `safeUrl`. |
+| `<r4-filedrop name upload-url>` | Mesmas validações do filedrop (tipo, tamanho, assinatura, executáveis); valor vindo da resposta limitado a 2.000 caracteres e a miniatura só aparece com `safeUrl` de imagem. |
+
+**Responsabilidade de quem usa:** `<r4-item-template>`, o conteúdo de `<r4-option>` e o conteúdo de `<r4-phonepreview>`
+são HTML **confiável** (da sua página). A página de prévia é sua e da mesma origem: por isso `allow-same-origin allow-scripts`
+juntos são aceitáveis lá (com conteúdo de terceiros, não seriam). Valide tudo de novo no servidor.
+
+**Testes:** suítes `reactive`, `repeater`, `colorfield`, `choice` e `phonepreview` em `/vitrine/testes` (payloads `<img onerror>`/`<script>`
+em campos, `javascript:`/`data:` em `href`/`src`, CSS injection em `var:`, expressões maliciosas (`constructor.constructor(...)()`, `alert(1)`),
+`__proto__` em arrays do repeater e na mensagem da prévia, array de 100.000 itens, mensagem de outra origem/de outra janela/grande demais).
