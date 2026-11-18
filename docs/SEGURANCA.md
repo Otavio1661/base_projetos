@@ -81,7 +81,7 @@ R4.panel('#p', 'Cliente', R4.html`<b>${cliente.nome}</b>`);
 // CERTO: ou escape manual
 R4.panel('#p', 'Cliente', '<b>' + R4.util.esc(cliente.nome) + '</b>');
 // MELHOR ainda, quando não precisa de HTML: use os campos de texto
-R4.alert('#aviso', cliente.nome);           // text → textContent
+R4.callout('#aviso', cliente.nome);           // text → textContent
 
 // Grid: string vira texto; HTML só com R4.html
 { dataIndex: 'estoque', renderer: v => v < 20 ? R4.html`<b class="baixo">${v}</b>` : v }
