@@ -249,6 +249,7 @@ R4.ready(() => {
   R4.create({
     xtype: 'viewport', renderTo: document.body, items: [
       { region: 'north', xtype: 'toolbar', cls: 'vt-top', items: [
+        { xtype: 'button', icon: R4.icon && R4.icon.has && R4.icon.has('menu') ? 'menu' : '', text: R4.icon && R4.icon.has && R4.icon.has('menu') ? '' : '=', cls: 'vt-mini vt-menu', id: 'vt-menu' },
         { xtype: 'panel', header: false, padding: false, html: '<b class="vt-logo">libr4</b> <span class="vt-sub" ' + ix('sub') + ' params="' + esc(JSON.stringify({ brand: R4.brand })) + '">' + esc(vt('sub', { brand: R4.brand })) + '</span>', style: { border: 0, background: 'transparent' } },
         '->',
         { xtype: 'vtlang' },
@@ -261,6 +262,13 @@ R4.ready(() => {
     ]
   });
   tree = R4.get('vt-tree'); tabs = R4.get('vt-tabs');
+
+  // celular: a árvore vira gaveta (botão do topo abre/fecha; escolher um item ou tocar fora fecha)
+  const navTog = on => document.body.classList.toggle('vt-nav-open', on);
+  R4.get('vt-menu').on('click', () => navTog());
+  document.addEventListener('click', ev => { if (document.body.classList.contains('vt-nav-open') && !ev.target.closest('#vt-tree') && !ev.target.closest('.vt-menu')) navTog(false); });
+  tree.on('select', () => navTog(false));
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') navTog(false); });
 
   // "Limpar abas": fecha tudo menos o Início e apaga o estado salvo (último passo: fechar também agenda gravação)
   const clearBtn = R4.get('vt-clear');
