@@ -1,0 +1,4107 @@
+{
+ "version": 1.1,
+ "tags": [
+  {
+   "name": "r4-button",
+   "description": "Botão com handler, ícone e variantes de cor.",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Texto do botão. (string) padrão: ''"
+    },
+    {
+     "name": "handler",
+     "description": "Chamado ao clicar. (function(btn, ev)) padrão: null"
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilita o botão. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "variant",
+     "description": "Cor. ('default'|'primary'|'danger') padrão: 'default'"
+    },
+    {
+     "name": "icon",
+     "description": "Nome de ícone (R4.icon: \"edit\", \"trash\"...) ou texto/emoji exibido antes do rótulo. (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-toolbar",
+   "description": "Barra horizontal de itens. Use '->' para empurrar o resto à direita e '-' como separador. Itens sem xtype viram button.",
+   "attributes": []
+  },
+  {
+   "name": "r4-panel",
+   "description": "Contêiner básico com título, barra de ferramentas, corpo (html ou items) e recolhimento.",
+   "attributes": [
+    {
+     "name": "title",
+     "description": "Texto do cabeçalho. (string) padrão: ''"
+    },
+    {
+     "name": "html",
+     "description": "HTML do corpo — HTML CONFIÁVEL (não é escapado). Dado de fora: monte com R4.html`...${dado}...` ou R4.util.esc. (string) padrão: ''"
+    },
+    {
+     "name": "tbar",
+     "description": "Itens da toolbar superior. (Array<cfg>) padrão: null"
+    },
+    {
+     "name": "collapsible",
+     "description": "Permite recolher clicando no cabeçalho. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "collapsed",
+     "description": "Permite recolher clicando no cabeçalho. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "header",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "padding",
+     "description": "Espaçamento interno do corpo. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-textfield",
+   "description": "Campo de texto com rótulo, validação (obrigatório, tamanho, e-mail, pattern, match, validator), mensagem de erro acessível e eventos change/enter/blur.",
+   "attributes": [
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "placeholder",
+     "description": "Dica dentro do campo. (string) padrão: ''"
+    },
+    {
+     "name": "input-type",
+     "description": "text, email, url, tel, search... (string) padrão: 'text'"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "min-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "max-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "pattern",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "pattern-text",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "email",
+     "description": "Exige e-mail válido. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "match",
+     "description": "Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha). (string) padrão: ''"
+    },
+    {
+     "name": "autocomplete",
+     "description": "Atributo autocomplete do navegador. (string) padrão: ''"
+    },
+    {
+     "name": "sanitize",
+     "description": "getValue() devolve o texto limpo por R4.sanitize.text: sem NUL, controles, bidi (U+202E...) e invisíveis, NFC, espaços normalizados, cortado em maxLength (ou no limite padrão: 1000; textarea 10000 — maxLength 0 só desliga o contador/mensagem). false devolve o texto cru. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "guard",
+     "description": "Sinais de injeção (SQL, HTML/JS, caminho, prompt de IA, __proto__) via R4.sanitize.detect. warn: aviso visível no campo, console.warn (sem o valor) e evento suspicious; block: o campo fica inválido e o form não envia. É UX/log — a proteção real é no servidor. ('off' | 'warn' | 'block') padrão: 'warn'"
+    }
+   ]
+  },
+  {
+   "name": "r4-tabpanel",
+   "description": "Painel com abas. Cada item é um panel (ou outro xtype) com title; closable permite fechar; key evita abas duplicadas via find(key).",
+   "attributes": [
+    {
+     "name": "active-tab",
+     "description": "Índice da aba inicial. (number) padrão: 0"
+    },
+    {
+     "name": "reorderable",
+     "description": "Permite reordenar as abas arrastando (ou Alt+←/→ no teclado). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "persist",
+     "description": "Chave do R4.store onde guardar as abas abertas (vazio = não guarda). Só abas com key [A-Za-z0-9_.-] (1 a 64) entram; salva {key, título curto} e a aba ativa, nunca conteúdo. Salva ~300 ms depois de abrir/fechar/mover/trocar de aba e ao sair da página. (string) padrão: ''"
+    },
+    {
+     "name": "persist-ttl",
+     "description": "Validade do estado salvo ('30m', '12h', '7d' ou ms), renovada a cada uso (sliding). Depois disso a lixeira do R4.store apaga. (string | number) padrão: '7d'"
+    },
+    {
+     "name": "max-tabs",
+     "description": "Máximo de abas abertas depois de montado o painel: ao passar, fecha a aba mais antiga que não seja a ativa. 0 = sem limite. (number) padrão: 30"
+    }
+   ]
+  },
+  {
+   "name": "r4-treepanel",
+   "description": "Árvore hierárquica com filtro. É o menu lateral padrão da vitrine.",
+   "attributes": [
+    {
+     "name": "nodes",
+     "description": "Nós da árvore; folhas disparam select. (Array<{id,text,children,expanded,badge}>) padrão: []"
+    },
+    {
+     "name": "filterable",
+     "description": "Mostra campo de busca; placeholder vazio = \"Buscar...\" no idioma atual. (boolean / string) padrão: true / ''",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "placeholder",
+     "description": "Mostra campo de busca; placeholder vazio = \"Buscar...\" no idioma atual. (boolean / string) padrão: true / ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-grid",
+   "description": "Tabela de dados: ordenação multi-coluna (Shift+clique), filtro, paginação local ou no servidor (remote), virtualização para dezenas de milhares de linhas, seleção simples/múltipla com teclado, edição na célula, rodapé de totais, colunas redimensionáveis/ocultáveis, coluna de ações e exportação CSV/XLSX/JSON/impressão. Seguro por padrão: valores e strings devolvidas pelo renderer vão como texto; HTML só com R4.html`...${v}...` (escapa os dados) ou R4.raw.",
+   "attributes": [
+    {
+     "name": "columns",
+     "description": "Colunas. Vazio = automáticas a partir das chaves do primeiro registro. (Array<string | coluna>) padrão: []"
+    },
+    {
+     "name": "data",
+     "description": "Registros. (Array<object>) padrão: []"
+    },
+    {
+     "name": "page-size",
+     "description": "Linhas por página (0 = sem paginação; no modo remoto o padrão é 25). (number) padrão: 0"
+    },
+    {
+     "name": "filter",
+     "description": "Barra de filtro (busca em todas as colunas, com atraso de digitação). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "empty-text",
+     "description": "Listras, texto de vazio (vazio = \"Nenhum registro.\" no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420). (boolean / string / number) padrão: true / '' / 0"
+    },
+    {
+     "name": "striped",
+     "description": "Listras, texto de vazio (vazio = \"Nenhum registro.\" no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420). (boolean / string / number) padrão: true / '' / 0",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "src",
+     "description": "Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra \"carregando\"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo. (string / string / boolean / object) padrão: '' / 'GET' / false / null"
+    },
+    {
+     "name": "method",
+     "description": "Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra \"carregando\"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo. (string / string / boolean / object) padrão: '' / 'GET' / false / null"
+    },
+    {
+     "name": "encrypt",
+     "description": "Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra \"carregando\"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo. (string / string / boolean / object) padrão: '' / 'GET' / false / null",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "params",
+     "description": "Carrega os dados de uma URL ao renderizar (JSON; com encrypt o corpo vai como no R4.http). Mostra \"carregando\"; status HTTP fora de 2xx, {status ≥ 400} no corpo ou JSON inválido viram estado de erro com botão Tentar de novo, sem apagar os dados atuais. reload() busca de novo. (string / string / boolean / object) padrão: '' / 'GET' / false / null"
+    },
+    {
+     "name": "virtual",
+     "description": "Renderiza só as linhas visíveis (altura fixa rowHeight). Liga sozinho sem paginação acima de virtualThreshold linhas. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "virtual-threshold",
+     "description": "Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual. (number / number) padrão: 1000 / 36"
+    },
+    {
+     "name": "row-height",
+     "description": "Limite da virtualização automática (0 desliga) e altura da linha em px no modo virtual. (number / number) padrão: 1000 / 36"
+    },
+    {
+     "name": "height",
+     "description": "Listras, texto de vazio (vazio = \"Nenhum registro.\" no idioma atual, via R4.i18n), altura fixa da área de rolagem em px (0 = automática, máx. 420). (boolean / string / number) padrão: true / '' / 0"
+    },
+    {
+     "name": "selectable",
+     "description": "multi adiciona coluna de caixas (a do cabeçalho seleciona todos os filtrados), Ctrl+clique alterna e Shift+clique seleciona intervalo. ('' | 'single' | 'multi') padrão: ''"
+    },
+    {
+     "name": "id-property",
+     "description": "Campo que identifica a linha na seleção (mantém a seleção entre páginas do modo remoto). (string) padrão: 'id'"
+    },
+    {
+     "name": "remote",
+     "description": "Paginação, ordenação e filtro no servidor: envia page (1…), size, sort, dir (asc|desc), q e lê {total, retorno}. Multi-coluna envia só o critério principal. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "resizable",
+     "description": "sortable:false não ordena; hidden começa oculta (volta pelo menu de colunas); resizable:false impede arrastar. (boolean)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "column-menu",
+     "description": "Arrastar a borda do cabeçalho (ou Alt+←/→ no cabeçalho) muda a largura; menu \"Colunas\" mostra/oculta colunas. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "exportable",
+     "description": "Botão \"Exportar\" (CSV, Excel, JSON, imprimir) com as linhas filtradas/ordenadas e colunas visíveis. (boolean / string) padrão: false / 'dados'",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "export-name",
+     "description": "Botão \"Exportar\" (CSV, Excel, JSON, imprimir) com as linhas filtradas/ordenadas e colunas visíveis. (boolean / string) padrão: false / 'dados'"
+    },
+    {
+     "name": "summary-label",
+     "description": "Textos do rodapé e dos estados. Vazio = texto padrão no idioma atual (Total / Carregando... / Falha ao carregar.). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "loading-text",
+     "description": "Textos do rodapé e dos estados. Vazio = texto padrão no idioma atual (Total / Carregando... / Falha ao carregar.). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "error-text",
+     "description": "Textos do rodapé e dos estados. Vazio = texto padrão no idioma atual (Total / Carregando... / Falha ao carregar.). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "highlight",
+     "description": "Com filtro ativo, marca (classe r4-hit, cor --r4-hit) cada CÉLULA que contém o termo — mostra em qual coluna a linha casou. highlight=\"false\" desliga. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "page-size-selector",
+     "description": "Mostra o seletor \"Linhas por página\" no rodapé (page-size-selector). Funciona local e remoto. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "page-sizes",
+     "description": "Opções do seletor; 0 ou \"all\" = Todos (page-sizes=\"10,30,50,100,all\"). No modo remoto o padrão NÃO inclui Todos: só aparece se estiver aqui e ativa a JANELA REMOTA (rolagem sobre todas as linhas do servidor, DOM enxuto, blocos de 100 pedidos conforme a rolagem; acima de ~220 mil linhas a rolagem é escalada). O tamanho atual (pageSize) entra na lista se faltar. (Array<number|\"all\">) padrão: [] (10, 30, 50, 100, Todos)"
+    },
+    {
+     "name": "column-filters",
+     "description": "Funil em cada cabeçalho: abre uma lista dos valores da coluna (com a quantidade de cada um) para marcar quais aparecem — como a legenda de um gráfico. Nenhum marcado = sem filtro; valores da mesma coluna somam (OU) e colunas diferentes se combinam (E). Local: valores distintos da própria coluna sobre o que sobra da busca e dos outros filtros (até 1000; acima disso só pela busca do popover). Remoto: envia filtro[coluna][]=valor (um por valor) e busca os valores em coluna.optionsUrl. Atalho: Alt+↓ no cabeçalho. Atributo: column-filters. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-window",
+   "description": "Janela modal com título, corpo, botões no rodapé. Fecha com Esc, clique fora ou ×.",
+   "attributes": [
+    {
+     "name": "title",
+     "description": "Conteúdo da janela. title é texto; html é HTML CONFIÁVEL (escape dados com R4.util.esc ou use R4.html). Para mensagem com dado de fora use R4.msg.alert (escapa). (mixed)"
+    },
+    {
+     "name": "html",
+     "description": "Conteúdo da janela. title é texto; html é HTML CONFIÁVEL (escape dados com R4.util.esc ou use R4.html). Para mensagem com dado de fora use R4.msg.alert (escapa). (mixed)"
+    },
+    {
+     "name": "buttons",
+     "description": "Botões do rodapé; fecham a janela, exceto close:false. (Array<{text,handler,variant,close}>) padrão: []"
+    },
+    {
+     "name": "width",
+     "description": "Largura em px. (number) padrão: 420"
+    },
+    {
+     "name": "modal",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "closable",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "close-action",
+     "description": "hide mantém a janela para reabrir com show(). ('destroy'|'hide') padrão: 'destroy'"
+    }
+   ]
+  },
+  {
+   "name": "r4-viewport",
+   "description": "Ocupa a tela inteira e distribui os itens por região: north, west, center, east, south (layout border).",
+   "attributes": []
+  },
+  {
+   "name": "r4-div",
+   "description": "Contêiner de layout. Com cols vira colunas (grid), com flex/column vira linha/coluna. Em telas pequenas as colunas empilham sozinhas (use keep para impedir).",
+   "attributes": [
+    {
+     "name": "html",
+     "description": ""
+    },
+    {
+     "name": "cols",
+     "description": "Número de colunas iguais, ou um modelo livre (\"200px 1fr\"). ('2' | '3' | '1fr 2fr' ...) padrão: ''"
+    },
+    {
+     "name": "gap",
+     "description": "Espaço entre os filhos (0, 4, 8, 16, 24px ou um valor CSS). ('0'..'4' | '12px') padrão: '2'"
+    },
+    {
+     "name": "flex",
+     "description": "Linha ou coluna em flexbox. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "column",
+     "description": "Linha ou coluna em flexbox. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "wrap",
+     "description": "Quebra de linha no flex. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "align",
+     "description": "Alinhamento cruzado. ('start' | 'center' | 'end' | 'stretch') padrão: ''"
+    },
+    {
+     "name": "justify",
+     "description": "Distribuição no eixo principal. ('start' | 'center' | 'end' | 'between' | 'around') padrão: ''"
+    },
+    {
+     "name": "pad",
+     "description": "Espaçamento interno. ('0'..'4' | '10px') padrão: ''"
+    },
+    {
+     "name": "keep",
+     "description": "Mantém as colunas também no celular. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-icon",
+   "description": "Ícones SVG próprios (81 nomes), desenhados em 24x24 com traço de 2 e cor herdada do texto. Função R4.icon(\"nome\") devolve o <svg>; tag <r4-icon name=\"edit\">; em qualquer opção icon (button, dropdown, stat, alert, emptystate, timeline...) basta usar o nome: icon=\"edit\". Um valor que não é nome continua aparecendo como texto/emoji. Segurança: o SVG vem de um mapa fixo (o nome nunca vira HTML); nome desconhecido → círculo + aviso com sugestão.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome do ícone (veja a grade abaixo). Desconhecido → círculo neutro e aviso \"quis dizer ...?\" no console. (string) padrão: ''"
+    },
+    {
+     "name": "size",
+     "description": "Tamanho em px. 0 = 1em (acompanha a fonte do texto). (number) padrão: 0"
+    },
+    {
+     "name": "title",
+     "description": "Nome acessível (role=\"img\" + <title>). Sem title o ícone é decorativo (aria-hidden). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-select",
+   "description": "Lista de escolha com popup próprio e acessível (combobox + listbox): busca interna, múltipla escolha com chips, opções estáticas, de <r4-option> ou carregadas de uma URL. Teclado: setas, Home/End, PageUp/Down, Enter/Espaço, Esc, digitação para pular; fecha com Esc e clique fora.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "options",
+     "description": "Opções. Também pode usar filhos <r4-option value=\"x\">Texto</r4-option>. (Array<{valor,texto} | {value,text} | string>) padrão: []"
+    },
+    {
+     "name": "src",
+     "description": "URL (GET) das opções: array ou {retorno|data|rows}. reload() busca de novo. (string) padrão: ''"
+    },
+    {
+     "name": "root",
+     "description": "Caminho até a lista dentro da resposta (ex.: \"planos\" em opcoes.json). (string) padrão: ''"
+    },
+    {
+     "name": "value-field",
+     "description": "Chaves do valor e do texto quando não forem valor/value/id e texto/text/label/nome. (string) padrão: ''"
+    },
+    {
+     "name": "text-field",
+     "description": "Chaves do valor e do texto quando não forem valor/value/id e texto/text/label/nome. (string) padrão: ''"
+    },
+    {
+     "name": "placeholder",
+     "description": "Texto quando nada está selecionado (vazio = \"Selecione...\" no idioma atual). (string) padrão: ''"
+    },
+    {
+     "name": "searchable",
+     "description": "Campo de busca dentro do popup (ignora acentos e maiúsculas). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "multiple",
+     "description": "Várias escolhas: o valor vira array e aparece como chips. No HTML: value=\"a,b\" ou JSON. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "max-items",
+     "description": "Limite de escolhas no modo multiple (0 = sem limite). (number) padrão: 0"
+    },
+    {
+     "name": "clearable",
+     "description": "Botão × para limpar a seleção. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "empty-text",
+     "description": "Textos do popup (vazio = \"Nenhuma opção encontrada.\" / \"Buscar...\" no idioma atual). (string) padrão: '' / ''"
+    },
+    {
+     "name": "search-placeholder",
+     "description": "Textos do popup (vazio = \"Nenhuma opção encontrada.\" / \"Buscar...\" no idioma atual). (string) padrão: '' / ''"
+    },
+    {
+     "name": "max-visible",
+     "description": "Máximo de opções desenhadas por vez (listas grandes pedem busca). (number) padrão: 300"
+    }
+   ]
+  },
+  {
+   "name": "r4-checkbox",
+   "description": "Caixa de seleção estilizada (input nativo por baixo: teclado e leitores de tela funcionam). O label fica ao lado da caixa; o conteúdo da tag vira o label.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Marcado ao iniciar. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "checked",
+     "description": "Marcado ao iniciar. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "input-value",
+     "description": "Se informado, getValue devolve esse texto quando marcado e \"\" quando não. Vários checkboxes com o mesmo name viram um array no form. (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-switch",
+   "description": "Interruptor liga/desliga (role=\"switch\"). Mesma API do checkbox.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Ligado ao iniciar. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "checked",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "input-value",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-radiogroup",
+   "description": "Grupo de opções exclusivas (radios nativos estilizados; setas trocam a opção). Opções estáticas, <r4-option> ou src.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "options",
+     "description": "Opções. Também pode usar filhos <r4-option value=\"x\">Texto</r4-option>. (Array<{valor,texto} | {value,text} | string>) padrão: []"
+    },
+    {
+     "name": "src",
+     "description": "URL (GET) das opções: array ou {retorno|data|rows}. reload() busca de novo. (string) padrão: ''"
+    },
+    {
+     "name": "root",
+     "description": "Caminho até a lista dentro da resposta (ex.: \"planos\" em opcoes.json). (string) padrão: ''"
+    },
+    {
+     "name": "value-field",
+     "description": "Chaves do valor e do texto quando não forem valor/value/id e texto/text/label/nome. (string) padrão: ''"
+    },
+    {
+     "name": "text-field",
+     "description": "Chaves do valor e do texto quando não forem valor/value/id e texto/text/label/nome. (string) padrão: ''"
+    },
+    {
+     "name": "inline",
+     "description": "Opções lado a lado. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-textarea",
+   "description": "Texto em várias linhas com contador de caracteres e crescimento automático opcional. Enter não envia o form. getValue() mantém as quebras de linha e tira controles/bidi/invisíveis (limite padrão 10.000 caracteres).",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "placeholder",
+     "description": "Dica dentro do campo. (string) padrão: ''"
+    },
+    {
+     "name": "min-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "max-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "pattern",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "pattern-text",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "email",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "match",
+     "description": "Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha). (string) padrão: ''"
+    },
+    {
+     "name": "autocomplete",
+     "description": ""
+    },
+    {
+     "name": "sanitize",
+     "description": "getValue() devolve o texto limpo por R4.sanitize.text: sem NUL, controles, bidi (U+202E...) e invisíveis, NFC, espaços normalizados, cortado em maxLength (ou no limite padrão: 1000; textarea 10000 — maxLength 0 só desliga o contador/mensagem). false devolve o texto cru. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "guard",
+     "description": "Sinais de injeção (SQL, HTML/JS, caminho, prompt de IA, __proto__) via R4.sanitize.detect. warn: aviso visível no campo, console.warn (sem o valor) e evento suspicious; block: o campo fica inválido e o form não envia. É UX/log — a proteção real é no servidor. ('off' | 'warn' | 'block') padrão: 'warn'"
+    },
+    {
+     "name": "rows",
+     "description": "Linhas visíveis. (number) padrão: 3"
+    },
+    {
+     "name": "auto-grow",
+     "description": "Cresce com o texto até maxRows linhas. (boolean / number) padrão: false / 12",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "max-rows",
+     "description": "Cresce com o texto até maxRows linhas. (boolean / number) padrão: false / 12"
+    },
+    {
+     "name": "counter",
+     "description": "Mostra o contador (automático quando há maxLength). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-numberfield",
+   "description": "Número no formato brasileiro (1.234,56): aceita vírgula ou ponto, setas ↑/↓ e botões somam step, limites min/max e casas decimais fixas. getValue() devolve Number (ou null se vazio).",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "placeholder",
+     "description": "Dica. (string) padrão: ''"
+    },
+    {
+     "name": "min",
+     "description": "Limites (validados e respeitados pelas setas). (number) padrão: null"
+    },
+    {
+     "name": "max",
+     "description": "Limites (validados e respeitados pelas setas). (number) padrão: null"
+    },
+    {
+     "name": "step",
+     "description": "Incremento das setas e botões. (number) padrão: 1"
+    },
+    {
+     "name": "decimals",
+     "description": "Casas decimais fixas ao sair do campo (-1 = livre; 0 = inteiro). (number) padrão: -1"
+    },
+    {
+     "name": "prefix",
+     "description": "Texto antes/depois (ex.: \"R$\", \"%\", \"kg\"). (string) padrão: ''"
+    },
+    {
+     "name": "suffix",
+     "description": "Texto antes/depois (ex.: \"R$\", \"%\", \"kg\"). (string) padrão: ''"
+    },
+    {
+     "name": "spinner",
+     "description": "Botões ▲▼. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-datefield",
+   "description": "Data com o seletor nativo do navegador. O valor é sempre 'AAAA-MM-DD' (setValue também aceita Date e 'dd/mm/aaaa').",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Data inicial. ('AAAA-MM-DD') padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "min",
+     "description": "Limites (o seletor respeita e a validação confere). ('AAAA-MM-DD') padrão: ''"
+    },
+    {
+     "name": "max",
+     "description": "Limites (o seletor respeita e a validação confere). ('AAAA-MM-DD') padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-passwordfield",
+   "description": "Senha com botão mostrar/ocultar (aria-pressed) e medidor de força opcional. Use match no campo de confirmação.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "placeholder",
+     "description": "Dica dentro do campo. (string) padrão: ''"
+    },
+    {
+     "name": "min-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "max-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "pattern",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "pattern-text",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "email",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "match",
+     "description": "Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha). (string) padrão: ''"
+    },
+    {
+     "name": "autocomplete",
+     "description": "Atributo autocomplete do navegador. (string) padrão: ''"
+    },
+    {
+     "name": "sanitize",
+     "description": "Na senha só tira NUL e limita ao tamanho (1000 por padrão): normalizar mudaria a senha. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "guard",
+     "description": "Sempre desligado na senha: a lib nunca inspeciona nem registra senhas. ('off') padrão: 'off'"
+    },
+    {
+     "name": "show-toggle",
+     "description": "Botão Mostrar/Ocultar. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "show-strength",
+     "description": "Barra de força (Muito fraca → Muito forte). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "min-strength",
+     "description": "Força mínima exigida (0 a 4); também liga o medidor. (number) padrão: 0"
+    }
+   ]
+  },
+  {
+   "name": "r4-maskfield",
+   "description": "Campo com máscara enquanto digita. Máscaras prontas: cpf, cnpj (inclusive alfanumérico), cpfcnpj, telefone (8 ou 9 dígitos), cep, moeda, data, hora, cartao — ou um padrão livre ('99/99/9999'; 9 = dígito, A = letra, S = letra ou dígito). CPF/CNPJ são validados pelos dígitos verificadores.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome da chave no objeto de valores do form. (string) padrão: ''"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo ligado ao campo (clicar foca o campo). (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor inicial (reset volta para ele). (mixed) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Obrigatório (marca * e valida). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Desabilitado (fica fora de getValues) / somente leitura. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Texto de ajuda sob o campo (aria-describedby). (string) padrão: ''"
+    },
+    {
+     "name": "validate-on",
+     "description": "Quando validar. Depois do primeiro erro, revalida ao digitar (exceto submit). ('blur'|'input'|'submit') padrão: 'blur'"
+    },
+    {
+     "name": "validator",
+     "description": "Regra própria: devolve true ou a mensagem de erro. Pode ser o nome de um R4.validation.validators. (function(valor, valores) | 'cpf'|'cnpj'|'email'...) padrão: null"
+    },
+    {
+     "name": "messages",
+     "description": "Troca mensagens só deste campo: { required: \"Informe o nome\" }. (object) padrão: {}"
+    },
+    {
+     "name": "placeholder",
+     "description": "Dica dentro do campo. (string) padrão: ''"
+    },
+    {
+     "name": "min-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "max-length",
+     "description": "Tamanho mínimo / máximo (0 = sem limite). maxLength também limita a digitação. (number) padrão: 0"
+    },
+    {
+     "name": "pattern",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "pattern-text",
+     "description": "Expressão regular (o valor inteiro precisa casar; máx. 512 caracteres) e a mensagem se não casar. Anti-ReDoS: padrão com quantificador aninhado como (a+)+ é ignorado com aviso, e valor com mais de 5.000 caracteres é recusado sem rodar a regex. Valide também no servidor. (string) padrão: ''"
+    },
+    {
+     "name": "email",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "match",
+     "description": "Nome de outro campo que precisa ter o mesmo valor (ex.: confirmar senha). (string) padrão: ''"
+    },
+    {
+     "name": "autocomplete",
+     "description": "Atributo autocomplete do navegador. (string) padrão: ''"
+    },
+    {
+     "name": "sanitize",
+     "description": "getValue() devolve o texto limpo por R4.sanitize.text: sem NUL, controles, bidi (U+202E...) e invisíveis, NFC, espaços normalizados, cortado em maxLength (ou no limite padrão: 1000; textarea 10000 — maxLength 0 só desliga o contador/mensagem). false devolve o texto cru. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "guard",
+     "description": "Sinais de injeção (SQL, HTML/JS, caminho, prompt de IA, __proto__) via R4.sanitize.detect. warn: aviso visível no campo, console.warn (sem o valor) e evento suspicious; block: o campo fica inválido e o form não envia. É UX/log — a proteção real é no servidor. ('off' | 'warn' | 'block') padrão: 'warn'"
+    },
+    {
+     "name": "mask",
+     "description": "Máscara aplicada. ('cpf'|'cnpj'|'cpfcnpj'|'telefone'|'cep'|'moeda'|'data'|'hora'|'cartao'|padrão) padrão: ''"
+    },
+    {
+     "name": "raw",
+     "description": "getValue() sem máscara (\"52998224725\"; moeda → Number). raw:false devolve o texto formatado. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "validate-mask",
+     "description": "Valida o conteúdo (CPF/CNPJ reais, telefone/CEP completos, padrão preenchido). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-fieldset",
+   "description": "Agrupa campos com uma legenda (<fieldset>/<legend>, lido pelos leitores de tela). Pode recolher.",
+   "attributes": [
+    {
+     "name": "title",
+     "description": "Legenda. (string) padrão: ''"
+    },
+    {
+     "name": "html",
+     "description": ""
+    },
+    {
+     "name": "collapsible",
+     "description": "Recolher pela legenda. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "collapsed",
+     "description": "Recolher pela legenda. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-formrow",
+   "description": "Linha de campos lado a lado que empilha sozinha em telas estreitas (< 560px).",
+   "attributes": [
+    {
+     "name": "html",
+     "description": ""
+    },
+    {
+     "name": "cols",
+     "description": "Colunas fixas; vazio = automático pelo minWidth. ('' | '3' | '2fr 1fr') padrão: ''"
+    },
+    {
+     "name": "min-width",
+     "description": "Largura mínima de cada campo no modo automático (px). (number) padrão: 180"
+    }
+   ]
+  },
+  {
+   "name": "r4-form",
+   "description": "Formulário: descobre sozinho os campos de dentro (qualquer componente com name), valida, mostra erros nos campos (inclusive os que o servidor devolver em {erros:{campo:msg}}), envia via JSON (opcionalmente criptografado) com estado de carregamento. Enter num campo envia.",
+   "attributes": [
+    {
+     "name": "action",
+     "description": "URL de envio. Vazio = só valida e dispara submit (tratamento local). (string) padrão: ''"
+    },
+    {
+     "name": "method",
+     "description": "POST, PUT, PATCH, DELETE ou GET (GET manda os valores na URL). (string) padrão: 'POST'"
+    },
+    {
+     "name": "encrypt",
+     "description": "Envia o corpo criptografado com R4.crypto ({x,y,z}). No HTML basta o atributo encrypt. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "headers",
+     "description": "Cabeçalhos extras. (object) padrão: null"
+    },
+    {
+     "name": "html",
+     "description": "Outros componentes ou HTML livre (tags r4-* dentro são montadas e entram no form). (Array<cfg> / string) padrão: [] / ''"
+    },
+    {
+     "name": "fields",
+     "description": "Campos por configuração: {type:'text'|'email'|'password'|'number'|'date'|'select'|'multiselect'|'checkbox'|'switch'|'radio'|'textarea'|'cpf'|'cnpj'|'telefone'|'cep'|'moeda'|'mask'|'fieldset'|'row', name, label, ...} ou {xtype}. (Array<cfg>) padrão: []"
+    },
+    {
+     "name": "buttons",
+     "description": "Botões no rodapé. null = Salvar/Limpar automáticos quando há fields. (true | false | Array<{text, action:\"submit\"|\"reset\", handler, variant}>) padrão: null"
+    },
+    {
+     "name": "submit-text",
+     "description": "Textos dos botões automáticos (padrão: Salvar / Limpar no idioma atual; resetText vazio esconde o Limpar). (string) padrão: '' / 'Limpar'"
+    },
+    {
+     "name": "reset-text",
+     "description": "Textos dos botões automáticos (padrão: Salvar / Limpar no idioma atual; resetText vazio esconde o Limpar). (string) padrão: '' / 'Limpar'"
+    },
+    {
+     "name": "success-text",
+     "description": "Aviso após sucesso (vazio = nenhum) / aviso padrão de falha (usa a mensagem do servidor quando houver). (string) padrão: '' / ''"
+    },
+    {
+     "name": "error-text",
+     "description": "Aviso após sucesso (vazio = nenhum) / aviso padrão de falha (usa a mensagem do servidor quando houver). (string) padrão: '' / ''"
+    },
+    {
+     "name": "src",
+     "description": "Carrega os valores ao montar (GET JSON): aceita {retorno:{...}}, {data:{...}} ou o objeto puro; root escolhe um caminho (\"dados.perfil\"). Mostra \"Carregando...\", erro com \"Tentar de novo\"; evento load / loaderror. reload() (ou r4-click=\"recarregar:#id\") busca de novo. (string) padrão: ''"
+    },
+    {
+     "name": "root",
+     "description": "Carrega os valores ao montar (GET JSON): aceita {retorno:{...}}, {data:{...}} ou o objeto puro; root escolhe um caminho (\"dados.perfil\"). Mostra \"Carregando...\", erro com \"Tentar de novo\"; evento load / loaderror. reload() (ou r4-click=\"recarregar:#id\") busca de novo. (string) padrão: ''"
+    },
+    {
+     "name": "notify",
+     "description": "Também avisa sucesso/erro do envio (e erro do src) com R4.notify. notify=\"false\" desliga. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "autosave-ms",
+     "description": "Rascunho automático: depois de N ms sem mudanças, envia (sem aviso) para autosaveUrl (ou action) se o form mudou e está válido; evento autosave(form, ok, resposta). 0 = desligado. (number / string) padrão: 0 / ''"
+    },
+    {
+     "name": "autosave-url",
+     "description": "Rascunho automático: depois de N ms sem mudanças, envia (sem aviso) para autosaveUrl (ou action) se o form mudou e está válido; evento autosave(form, ok, resposta). 0 = desligado. (number / string) padrão: 0 / ''"
+    },
+    {
+     "name": "reset-on-success",
+     "description": "Limpa após enviar com sucesso (senão os valores enviados viram o original). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "submit-on-enter",
+     "description": "Enter num campo envia / foca o primeiro campo inválido. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "focus-invalid",
+     "description": "Enter num campo envia / foca o primeiro campo inválido. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "values",
+     "description": "Valores iniciais (viram o \"original\" para reset/isDirty). (object) padrão: null"
+    }
+   ]
+  },
+  {
+   "name": "r4-filedrop",
+   "description": "Área de arrastar e soltar arquivos + botão, com validação de tipo e tamanho (mensagens em português), lista com remover e leitura opcional (CSV, JSON, XLSX ou texto). Arquivos são tratados como não confiáveis: limite de tamanho e nada é exibido como HTML.",
+   "attributes": [
+    {
+     "name": "accept",
+     "description": "Extensões e/ou tipos MIME: \".csv,.xlsx\" ou \"image/*\". Validado de novo após a escolha. (string) padrão: ''"
+    },
+    {
+     "name": "multiple",
+     "description": "Vários arquivos e o máximo (0 = sem limite). (boolean / number) padrão: false / 0",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "max-size",
+     "description": "Tamanho máximo por arquivo (10 MB). (number (bytes)) padrão: 10485760"
+    },
+    {
+     "name": "max-files",
+     "description": "Vários arquivos e o máximo (0 = sem limite). (boolean / number) padrão: false / 0"
+    },
+    {
+     "name": "parse",
+     "description": "Lê o conteúdo e entrega no evento files/data. CSV detecta o delimitador e converte números (vírgula decimal quando o separador é \";\"). ('' | 'csv' | 'json' | 'xlsx' | 'text') padrão: ''"
+    },
+    {
+     "name": "text",
+     "description": "Textos da área (vazios = padrão no idioma atual; o hint padrão mostra tipos e tamanho máximo). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "button-text",
+     "description": "Textos da área (vazios = padrão no idioma atual; o hint padrão mostra tipos e tamanho máximo). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "hint",
+     "description": "Textos da área (vazios = padrão no idioma atual; o hint padrão mostra tipos e tamanho máximo). (string) padrão: '' / '' / ''"
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilita; mostra a lista de arquivos. (boolean) padrão: false / true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "list",
+     "description": "Desabilita; mostra a lista de arquivos. (boolean) padrão: false / true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "delimiter",
+     "description": "Opções de leitura do CSV/XLSX (primeira linha como cabeçalho). (string / boolean) padrão: 'auto' / true"
+    },
+    {
+     "name": "header",
+     "description": "Opções de leitura do CSV/XLSX (primeira linha como cabeçalho). (string / boolean) padrão: 'auto' / true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "block-exec",
+     "description": "Recusa extensões executáveis/script (.php, .phtml, .phar, .exe, .bat, .cmd, .sh, .js, .jar, .msi, .com, .scr, .vbs, .ps1, .htaccess...) e dupla extensão perigosa (shell.php.jpg). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "sniff",
+     "description": "Lê os primeiros bytes (R4.sanitize.sniffFile) e recusa conteúdo que não bate com a extensão (PHP com nome .png, executável com nome .csv...). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "field",
+     "description": ""
+    },
+    {
+     "name": "edit",
+     "description": "edit=\"image\": cada imagem aceita abre o editor (R4.imageeditor.open: cortar, girar, zoom) ANTES de entrar na lista; o arquivo editado (re-codificado, sem EXIF/GPS) substitui o original e é o que o upload() envia; cancelar descarta o arquivo. Arquivos que não são imagem seguem o fluxo normal; SVG e imagem falsa são recusados com mensagem. editOptions = {aspect, shape, maxWidth, format, quality...}; em HTML os atalhos aspect, shape, max-width, format e quality (<r4-filedrop edit=\"image\" accept=\"image/*\" aspect=\"1\">). ('' | 'image' / object) padrão: '' / {}"
+    },
+    {
+     "name": "edit-options",
+     "description": "edit=\"image\": cada imagem aceita abre o editor (R4.imageeditor.open: cortar, girar, zoom) ANTES de entrar na lista; o arquivo editado (re-codificado, sem EXIF/GPS) substitui o original e é o que o upload() envia; cancelar descarta o arquivo. Arquivos que não são imagem seguem o fluxo normal; SVG e imagem falsa são recusados com mensagem. editOptions = {aspect, shape, maxWidth, format, quality...}; em HTML os atalhos aspect, shape, max-width, format e quality (<r4-filedrop edit=\"image\" accept=\"image/*\" aspect=\"1\">). ('' | 'image' / object) padrão: '' / {}"
+    },
+    {
+     "name": "aspect",
+     "description": ""
+    },
+    {
+     "name": "shape",
+     "description": ""
+    },
+    {
+     "name": "max-width",
+     "description": ""
+    },
+    {
+     "name": "format",
+     "description": ""
+    },
+    {
+     "name": "quality",
+     "description": ""
+    },
+    {
+     "name": "name",
+     "description": "Com name, o filedrop vira campo do <r4-form>: valor = URL (ou nome) da imagem atual; required exige uma. (campo)"
+    },
+    {
+     "name": "label",
+     "description": "Com name, o filedrop vira campo do <r4-form>: valor = URL (ou nome) da imagem atual; required exige uma. (campo)"
+    },
+    {
+     "name": "src",
+     "description": "Imagem atual (miniatura com botão \"Remover imagem\"; passa por safeUrl). Também é o valor inicial. (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": ""
+    },
+    {
+     "name": "upload-url",
+     "description": "Ao escolher (e editar, com edit=\"image\") o arquivo, já envia em multipart para upload-url; o valor passa a ser a URL devolvida (url, retorno.url, data.url, retorno.nome... ou o caminho de value-field). Enquanto envia, o form não valida (aviso \"Aguarde o envio\"). (string) padrão: ''"
+    },
+    {
+     "name": "value-field",
+     "description": "Ao escolher (e editar, com edit=\"image\") o arquivo, já envia em multipart para upload-url; o valor passa a ser a URL devolvida (url, retorno.url, data.url, retorno.nome... ou o caminho de value-field). Enquanto envia, o form não valida (aviso \"Aguarde o envio\"). (string) padrão: ''"
+    },
+    {
+     "name": "required",
+     "description": "Com name, o filedrop vira campo do <r4-form>: valor = URL (ou nome) da imagem atual; required exige uma. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-imageeditor",
+   "description": "Editor de imagem no navegador: cortar (moldura com proporção fixa ou livre), dar zoom, mover, girar de 90 em 90° (e ajuste fino opcional) e espelhar ANTES de enviar. A saída é re-codificada pelo canvas: remove EXIF/GPS e qualquer carga extra anexada ao arquivo (privacidade). Só PNG, JPEG, WebP e GIF (primeiro quadro), conferidos pela assinatura dos bytes; SVG e demais tipos são recusados. Corrige a orientação EXIF das fotos de celular. Mouse, caneta e toque (pinça); teclado: setas movem 10 px (Shift: 1 px), + e − ampliam, [ e ] giram.",
+   "attributes": [
+    {
+     "name": "src",
+     "description": "Imagem a editar. Nunca URL externa (http/https/relativa são recusadas). Sem src, o editor mostra o botão \"Escolher imagem\". load(src) troca a imagem. (File | Blob | \"data:image/...\" | \"blob:...\") padrão: null"
+    },
+    {
+     "name": "aspect",
+     "description": "Proporção da moldura (largura/altura): 1, 4/3, 3/4, 16/9... 0 = livre (a moldura segue a proporção da própria imagem; o recorte é feito com zoom e arraste). Em HTML aceita aspect=\"4/3\". (number | '4/3') padrão: 0"
+    },
+    {
+     "name": "shape",
+     "description": "Só a pré-visualização da moldura (círculo para avatar). A imagem de saída é sempre retangular. ('rect' | 'circle') padrão: 'rect'"
+    },
+    {
+     "name": "zoom",
+     "description": "Zoom inicial e máximo (o slider vai de 1x a maxZoom). A moldura nunca sai da imagem. (number) padrão: 1 / 5"
+    },
+    {
+     "name": "max-zoom",
+     "description": "Zoom inicial e máximo (o slider vai de 1x a maxZoom). A moldura nunca sai da imagem. (number) padrão: 1 / 5"
+    },
+    {
+     "name": "fine-rotate",
+     "description": "Mostra o ajuste fino de rotação (-45° a 45°). O recorte continua dentro da imagem. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "height",
+     "description": "Altura da área de edição (limitada a 65% da altura da tela). (number (px)) padrão: 360"
+    },
+    {
+     "name": "format",
+     "description": "Formato da saída (sem WebP no navegador, cai para JPEG) e qualidade (JPEG/WebP). JPEG recebe fundo branco onde a imagem era transparente. ('jpeg'|'webp'|'png' / number) padrão: 'jpeg' / 0.86"
+    },
+    {
+     "name": "quality",
+     "description": "Formato da saída (sem WebP no navegador, cai para JPEG) e qualidade (JPEG/WebP). JPEG recebe fundo branco onde a imagem era transparente. ('jpeg'|'webp'|'png' / number) padrão: 'jpeg' / 0.86"
+    },
+    {
+     "name": "max-width",
+     "description": "Limites da saída (maior lado 1600 px por padrão). outputWidth fixa a largura. Nunca amplia acima do original. (number (px)) padrão: 1600 / 1600 / 0"
+    },
+    {
+     "name": "max-height",
+     "description": "Limites da saída (maior lado 1600 px por padrão). outputWidth fixa a largura. Nunca amplia acima do original. (number (px)) padrão: 1600 / 1600 / 0"
+    },
+    {
+     "name": "output-width",
+     "description": "Limites da saída (maior lado 1600 px por padrão). outputWidth fixa a largura. Nunca amplia acima do original. (number (px)) padrão: 1600 / 1600 / 0"
+    },
+    {
+     "name": "background",
+     "description": ""
+    },
+    {
+     "name": "max-size",
+     "description": "Limites de segurança: tamanho do arquivo, lado máximo e megapixels. Dimensões são lidas do cabeçalho ANTES de decodificar. (number) padrão: 15 MB / 12000 / 64000000"
+    },
+    {
+     "name": "max-dimension",
+     "description": "Limites de segurança: tamanho do arquivo, lado máximo e megapixels. Dimensões são lidas do cabeçalho ANTES de decodificar. (number) padrão: 15 MB / 12000 / 64000000"
+    },
+    {
+     "name": "max-pixels",
+     "description": "Limites de segurança: tamanho do arquivo, lado máximo e megapixels. Dimensões são lidas do cabeçalho ANTES de decodificar. (number) padrão: 15 MB / 12000 / 64000000"
+    }
+   ]
+  },
+  {
+   "name": "r4-accordion",
+   "description": "Seções que expandem e recolhem. Um aberto por vez (ou vários com multiple). Setas, Home e End navegam entre os títulos; animação de altura que respeita prefers-reduced-motion.",
+   "attributes": [
+    {
+     "name": "multiple",
+     "description": "Permite várias seções abertas ao mesmo tempo. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "animate",
+     "description": "Anima a altura (desligada sozinha com prefers-reduced-motion). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-dropdown",
+   "description": "Botão com menu suspenso. Teclado: ↑ ↓ Home End navegam, Enter/Espaço ativam, Esc fecha, letra salta para o item. Fecha ao clicar fora e nunca vaza da tela (inverte para cima ou alinha à direita).",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Rótulo e ícone do botão (nome de R4.icon ou texto/emoji; o mesmo vale para icon dos itens). (string) padrão: ''"
+    },
+    {
+     "name": "icon",
+     "description": "Rótulo e ícone do botão (nome de R4.icon ou texto/emoji; o mesmo vale para icon dos itens). (string) padrão: ''"
+    },
+    {
+     "name": "variant",
+     "description": "Cor do botão. ('default'|'primary'|'danger') padrão: 'default'"
+    },
+    {
+     "name": "align",
+     "description": "Lado em que o menu se alinha ao botão. ('left'|'right') padrão: 'left'"
+    },
+    {
+     "name": "disabled",
+     "description": "Desabilita o botão. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "caret",
+     "description": "Mostra a seta do botão. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "menu-label",
+     "description": "Nome acessível do botão quando não há texto. (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-progress",
+   "description": "Barra (ou círculo) de progresso com role=\"progressbar\" e aria-valuenow. Modo indeterminado para quando não se sabe o total.",
+   "attributes": [
+    {
+     "name": "value",
+     "description": "Valor atual e o valor que representa 100%. (number) padrão: 0 / 100"
+    },
+    {
+     "name": "max",
+     "description": "Valor atual e o valor que representa 100%. (number) padrão: 0 / 100"
+    },
+    {
+     "name": "type",
+     "description": "Barra horizontal ou círculo. ('bar'|'circle') padrão: 'bar'"
+    },
+    {
+     "name": "variant",
+     "description": "Cor. ('default'|'primary'|'ok'|'warn'|'err'|'info') padrão: 'primary'"
+    },
+    {
+     "name": "label",
+     "description": "Rótulo (também é o nome acessível). (string) padrão: ''"
+    },
+    {
+     "name": "show-value",
+     "description": "Mostra a porcentagem. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "indeterminate",
+     "description": "Animação contínua, sem valor. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "striped",
+     "description": "Listras na barra. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "size",
+     "description": "Espessura da barra. ('sm'|'md'|'lg') padrão: 'md'"
+    },
+    {
+     "name": "diameter",
+     "description": "Diâmetro do círculo em px. (number) padrão: 96"
+    }
+   ]
+  },
+  {
+   "name": "r4-spinner",
+   "description": "Indicador de carregamento giratório com role=\"status\". Para cobrir uma área inteira use R4.mask(alvo, texto).",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Texto ao lado do indicador. Sem texto, o rótulo fica só para leitores de tela. (string) padrão: ''"
+    },
+    {
+     "name": "size",
+     "description": "Tamanho. ('sm'|'md'|'lg') padrão: 'md'"
+    },
+    {
+     "name": "variant",
+     "description": "Cor. ('default'|'primary'|'ok'|'warn'|'err'|'info') padrão: 'primary'"
+    },
+    {
+     "name": "label",
+     "description": "Texto anunciado por leitores de tela quando não há text (vazio = \"Carregando\" no idioma atual). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-skeleton",
+   "description": "Placeholders cinza animados para mostrar a forma do conteúdo enquanto ele carrega: linhas, avatar, lista, cartão, retângulo, círculo.",
+   "attributes": [
+    {
+     "name": "type",
+     "description": "Formato do placeholder. ('lines'|'avatar'|'list'|'card'|'rect'|'circle') padrão: 'lines'"
+    },
+    {
+     "name": "lines",
+     "description": "Linhas (lines e card). (number) padrão: 3"
+    },
+    {
+     "name": "rows",
+     "description": "Itens da lista (type list). (number) padrão: 3"
+    },
+    {
+     "name": "width",
+     "description": "Tamanho CSS (ex.: \"200px\", \"50%\"). (string) padrão: ''"
+    },
+    {
+     "name": "height",
+     "description": "Tamanho CSS (ex.: \"200px\", \"50%\"). (string) padrão: ''"
+    },
+    {
+     "name": "animated",
+     "description": "Brilho em movimento (desligado com prefers-reduced-motion). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "label",
+     "description": "Texto para leitores de tela (vazio = \"Carregando conteúdo\" no idioma atual). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-stat",
+   "description": "Cartão de indicador (KPI): título, valor formatado e variação com seta e cor. Aceita src com JSON no formato de kpis.json.",
+   "attributes": [
+    {
+     "name": "title",
+     "description": "Nome do indicador. (string) padrão: ''"
+    },
+    {
+     "name": "value",
+     "description": "Valor. (number|string) padrão: ''"
+    },
+    {
+     "name": "format",
+     "description": "Formatação pt-BR do valor (usa R4.util; formatos extras de R4.formats também valem). ('money'|'number'|'percent'|'bytes'|'date') padrão: ''"
+    },
+    {
+     "name": "decimals",
+     "description": "Casas decimais (-1 = automático). (number) padrão: -1"
+    },
+    {
+     "name": "change",
+     "description": "Variação em %: positiva (verde, ▲) ou negativa (vermelha, ▼). (number) padrão: ''"
+    },
+    {
+     "name": "change-text",
+     "description": "Texto ao lado da variação (\"vs. mês anterior\"). (string) padrão: ''"
+    },
+    {
+     "name": "invert",
+     "description": "Inverte as cores da variação (quando queda é bom, como cancelamentos). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "icon",
+     "description": "Ícone no canto (nome de R4.icon ou texto/emoji) e textos antes/depois do valor. (string) padrão: ''"
+    },
+    {
+     "name": "variant",
+     "description": "Cor de destaque. ('default'|'primary'|'ok'|'warn'|'err'|'info') padrão: 'default'"
+    },
+    {
+     "name": "src",
+     "description": "URL JSON (array de { titulo, valor, variacao, formato }); key escolhe o indicador pelo id (senão o primeiro). (string) padrão: ''"
+    },
+    {
+     "name": "key",
+     "description": "URL JSON (array de { titulo, valor, variacao, formato }); key escolhe o indicador pelo id (senão o primeiro). (string) padrão: ''"
+    },
+    {
+     "name": "prefix",
+     "description": "Ícone no canto (nome de R4.icon ou texto/emoji) e textos antes/depois do valor. (string) padrão: ''"
+    },
+    {
+     "name": "suffix",
+     "description": "Ícone no canto (nome de R4.icon ou texto/emoji) e textos antes/depois do valor. (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-stats",
+   "description": "Grade de cartões stat gerada de uma lista de indicadores (formato de kpis.json) ou de uma URL. R4.stats(\"#alvo\", kpis).",
+   "attributes": [
+    {
+     "name": "src",
+     "description": "URL do JSON com os indicadores. (string) padrão: ''"
+    },
+    {
+     "name": "min-width",
+     "description": "Largura mínima de cada cartão em px (a grade se ajusta sozinha). (number) padrão: 200"
+    }
+   ]
+  },
+  {
+   "name": "r4-pagination",
+   "description": "Paginação independente do grid, com janela de páginas e reticências. Navegação por ←, →, Home e End; página atual com aria-current=\"page\".",
+   "attributes": [
+    {
+     "name": "total",
+     "description": "Total de registros. (number) padrão: 0"
+    },
+    {
+     "name": "page-size",
+     "description": "Registros por página. (number) padrão: 10"
+    },
+    {
+     "name": "page",
+     "description": "Página atual (começa em 1). (number) padrão: 1"
+    },
+    {
+     "name": "siblings",
+     "description": "Páginas mostradas de cada lado da atual. (number) padrão: 1"
+    },
+    {
+     "name": "info",
+     "description": "Mostra \"1–10 de 250\". (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "label",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-breadcrumb",
+   "description": "Trilha de navegação (migalhas). O último item é a página atual (aria-current=\"page\"). Itens aceitam href, r4-click ou handler.",
+   "attributes": [
+    {
+     "name": "separator",
+     "description": "Caractere entre os itens. (string) padrão: '/'"
+    },
+    {
+     "name": "label",
+     "description": "Nome acessível do <nav> (vazio = \"Trilha de navegação\" no idioma atual). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-steps",
+   "description": "Etapas de um fluxo (wizard) com estados concluído, atual, pendente e erro. Cada etapa pode ter conteúdo (html) mostrado quando está ativa.",
+   "attributes": [
+    {
+     "name": "steps",
+     "description": "Etapas. Em HTML: <r4-step title text error>conteúdo opcional</r4-step>. (Array<string | {title, text, html, error}>) padrão: []"
+    },
+    {
+     "name": "active",
+     "description": "Etapa atual (começa em 0). (number) padrão: 0"
+    },
+    {
+     "name": "clickable",
+     "description": "Permite ir a uma etapa clicando nela (vira botão, com setas no teclado). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "orientation",
+     "description": "Direção (no celular fica vertical). ('horizontal'|'vertical') padrão: 'horizontal'"
+    },
+    {
+     "name": "label",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-timeline",
+   "description": "Linha do tempo vertical de eventos com data, ícone e cor. Aceita o formato de eventos.json (titulo, descricao, data).",
+   "attributes": [
+    {
+     "name": "src",
+     "description": "URL JSON com os eventos. Por segurança o campo html dos eventos vindos de src é ignorado (tudo vira texto). (string) padrão: ''"
+    },
+    {
+     "name": "order",
+     "description": "Ordena por data (vazio mantém a ordem recebida). (''|'asc'|'desc') padrão: ''"
+    },
+    {
+     "name": "limit",
+     "description": "Mostra só os N primeiros (0 = todos). (number) padrão: 0"
+    },
+    {
+     "name": "label",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-alert",
+   "description": "Aviso em linha, fechável, com ícone e cor por variante. Erros e avisos usam role=\"alert\"; os demais role=\"status\". Função rápida: R4.callout(alvo, texto, {variant}) (R4.alert é só o diálogo).",
+   "attributes": [
+    {
+     "name": "title",
+     "description": "Título em negrito. (string) padrão: ''"
+    },
+    {
+     "name": "text",
+     "description": "Mensagem em texto puro ou HTML confiável (em tag: o conteúdo). (string) padrão: ''"
+    },
+    {
+     "name": "html",
+     "description": "Mensagem em texto puro ou HTML confiável (em tag: o conteúdo). (string) padrão: ''"
+    },
+    {
+     "name": "variant",
+     "description": "Tipo do aviso (aceita também success, warning, error). ('info'|'ok'|'warn'|'err') padrão: 'info'"
+    },
+    {
+     "name": "closable",
+     "description": "Mostra o botão ×. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "show-icon",
+     "description": "Ícone: nome de R4.icon ou texto/emoji (padrão por variante: info, success, warning, error). (boolean / string) padrão: true / ''",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "icon",
+     "description": "Ícone: nome de R4.icon ou texto/emoji (padrão por variante: info, success, warning, error). (boolean / string) padrão: true / ''"
+    },
+    {
+     "name": "close-action",
+     "description": "Remove o aviso ou só o esconde. ('destroy'|'hide') padrão: 'destroy'"
+    }
+   ]
+  },
+  {
+   "name": "r4-badge",
+   "description": "Etiqueta de status ou contador. Com dot vira um ponto colorido; com count mostra \"99+\" acima do limite max.",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Conteúdo (em tag: o conteúdo). (string) padrão: ''"
+    },
+    {
+     "name": "html",
+     "description": "Conteúdo (em tag: o conteúdo). (string) padrão: ''"
+    },
+    {
+     "name": "variant",
+     "description": "Cor. ('default'|'primary'|'ok'|'warn'|'err'|'info') padrão: 'default'"
+    },
+    {
+     "name": "pill",
+     "description": "Bordas totalmente arredondadas. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "dot",
+     "description": "Ponto colorido antes do texto (ou sozinho, sem texto). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "outline",
+     "description": "Só contorno, sem preenchimento. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "icon",
+     "description": "Ícone e nome acessível (usado quando só há o ponto). (string) padrão: ''"
+    },
+    {
+     "name": "count",
+     "description": "Contador; acima de max mostra \"99+\". (number) padrão: '' / 99"
+    },
+    {
+     "name": "max",
+     "description": "Contador; acima de max mostra \"99+\". (number) padrão: '' / 99"
+    },
+    {
+     "name": "label",
+     "description": "Ícone e nome acessível (usado quando só há o ponto). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-tag",
+   "description": "Etiqueta (chip) arredondada, opcionalmente removível. Tem as mesmas opções de badge.",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Iguais às de badge. (mixed)"
+    },
+    {
+     "name": "html",
+     "description": "Iguais às de badge. (mixed)"
+    },
+    {
+     "name": "variant",
+     "description": "Iguais às de badge. (mixed)"
+    },
+    {
+     "name": "pill",
+     "description": "Arredondamento total. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "dot",
+     "description": "Iguais às de badge. (mixed)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "outline",
+     "description": "Iguais às de badge. (mixed)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "icon",
+     "description": "Iguais às de badge. (mixed)"
+    },
+    {
+     "name": "count",
+     "description": ""
+    },
+    {
+     "name": "max",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "description": ""
+    },
+    {
+     "name": "closable",
+     "description": "Mostra o × que remove a etiqueta. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-avatar",
+   "description": "Avatar com imagem opcional; sem imagem (ou se ela falhar) mostra as iniciais do nome sobre uma cor sempre igual para o mesmo nome.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Nome (gera iniciais e cor determinística). (string) padrão: ''"
+    },
+    {
+     "name": "src",
+     "description": "URL da imagem (http, https, data:image ou relativa). Se falhar, usa as iniciais. (string) padrão: ''"
+    },
+    {
+     "name": "size",
+     "description": "Tamanho (número = px). ('xs'|'sm'|'md'|'lg'|'xl'|número) padrão: 'md'"
+    },
+    {
+     "name": "shape",
+     "description": "Formato. ('circle'|'rounded'|'square') padrão: 'circle'"
+    },
+    {
+     "name": "status",
+     "description": "Bolinha de presença. (''|'online'|'busy'|'away'|'offline') padrão: ''"
+    },
+    {
+     "name": "alt",
+     "description": "Nome acessível (padrão: o nome). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-emptystate",
+   "description": "Estado vazio: ícone, título, texto e um botão de ação opcional. Use quando uma lista ou busca não tem resultados.",
+   "attributes": [
+    {
+     "name": "icon",
+     "description": "Ícone (nome de R4.icon ou emoji), título (o padrão acompanha o idioma) e explicação. html aceita HTML confiável. (string) padrão: 'inbox' / 'Nada por aqui' / ''"
+    },
+    {
+     "name": "title",
+     "description": "Ícone (nome de R4.icon ou emoji), título (o padrão acompanha o idioma) e explicação. html aceita HTML confiável. (string) padrão: 'inbox' / 'Nada por aqui' / ''"
+    },
+    {
+     "name": "text",
+     "description": "Ícone (nome de R4.icon ou emoji), título (o padrão acompanha o idioma) e explicação. html aceita HTML confiável. (string) padrão: 'inbox' / 'Nada por aqui' / ''"
+    },
+    {
+     "name": "html",
+     "description": ""
+    },
+    {
+     "name": "action-text",
+     "description": "Texto do botão de ação (sem texto, não há botão). (string) padrão: ''"
+    },
+    {
+     "name": "action-variant",
+     "description": "Cor do botão. ('default'|'primary'|'danger') padrão: 'primary'"
+    },
+    {
+     "name": "action-click",
+     "description": "Valor de r4-click para o botão (ex.: \"toast:Criado\"). (string) padrão: ''"
+    },
+    {
+     "name": "handler",
+     "description": "Chamado ao clicar no botão. (function(cmp, ev)) padrão: null"
+    },
+    {
+     "name": "compact",
+     "description": "Versão com menos espaçamento. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-tooltip",
+   "description": "Dica ao passar o mouse ou focar com o teclado. Use o atributo r4-tip=\"texto\" em QUALQUER elemento (r4-tip-pos=\"top|bottom|left|right\"); funciona por delegação de eventos, inclusive em elementos criados depois. role=\"tooltip\" + aria-describedby; Esc fecha. Para o teclado, o elemento precisa ser focável (botão, link ou tabindex=\"0\").",
+   "attributes": [
+    {
+     "name": "text",
+     "description": "Envolve o conteúdo e já o torna focável. (componente)"
+    },
+    {
+     "name": "pos",
+     "description": "Configuração do componente. (string / string / boolean) padrão: '' / 'top' / true"
+    },
+    {
+     "name": "html",
+     "description": ""
+    },
+    {
+     "name": "focusable",
+     "description": "Configuração do componente. (string / string / boolean) padrão: '' / 'top' / true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "r4-chart",
+   "description": "Gráficos em SVG puro: barras (agrupadas, empilhadas, horizontais), linhas (suave, área), pizza, rosca, dispersão e sparkline. Eixos com escala 1-2-5, legenda clicável, tooltip por mouse/toque/teclado, animação, responsivo, tabela alternativa e exportação SVG/PNG. Cores: variáveis --r4-c1…--r4-c8 (claro/escuro). Limite: linhas com mais de maxPoints pontos são decimadas (testado com 10.000).",
+   "attributes": [
+    {
+     "name": "type",
+     "description": "Tipo do gráfico. Cada série pode ter type próprio (\"bar\" ou \"line\") para combinar barras e linhas. ('bar'|'line'|'area'|'pie'|'donut'|'scatter'|'sparkline') padrão: 'bar'"
+    },
+    {
+     "name": "data",
+     "description": "Linhas de dados. Um array de números vira x = 1, 2, 3… e uma única série. (Array<object|number>) padrão: []"
+    },
+    {
+     "name": "x",
+     "description": "Chave do rótulo/eixo X. Vazio = primeira chave não numérica. Datas \"AAAA-MM-DD\" saem em pt-BR (dd/mm) com rótulos ralos. (string) padrão: ''"
+    },
+    {
+     "name": "y",
+     "description": "Uma ou várias chaves de valor: y=\"receita,despesa\" no HTML ou [\"receita\",\"despesa\"] no JS. Vazio = chaves numéricas. Pizza/rosca usa a primeira. (string | string[]) padrão: ''"
+    },
+    {
+     "name": "series",
+     "description": "Define rótulo, cor e tipo de cada série. Se informado, tem prioridade sobre y. No HTML: filhos <r4-series key label color type>. (Array<{key,label,color,type}>) padrão: []"
+    },
+    {
+     "name": "src",
+     "description": "URL (GET via R4.http). Aceita array ou {retorno|data|rows}. Mostra carregando e erro (com \"Tentar novamente\"). (string) padrão: ''"
+    },
+    {
+     "name": "title",
+     "description": "Título (também usado na descrição acessível e no nome dos arquivos exportados). (string) padrão: ''"
+    },
+    {
+     "name": "format",
+     "description": "Formato dos valores (eixo, tooltip e tabela), usando R4.util. percent espera o valor já em % (3,8 → 3,8%). ('number'|'money'|'percent'|'bytes'|function) padrão: 'number'"
+    },
+    {
+     "name": "x-format",
+     "description": "auto reconhece datas ISO no eixo X. ('auto'|'date'|'text') padrão: 'auto'"
+    },
+    {
+     "name": "height",
+     "description": "Altura em px (0 = automática: 280, pizza 260, sparkline 36). width em px só para uso inline (0 = 100%). (number) padrão: 0"
+    },
+    {
+     "name": "width",
+     "description": "Altura em px (0 = automática: 280, pizza 260, sparkline 36). width em px só para uso inline (0 = 100%). (number) padrão: 0"
+    },
+    {
+     "name": "stacked",
+     "description": "Empilha barras (ou áreas, com type=\"area\"). Valores negativos empilham para baixo. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "horizontal",
+     "description": "Barras horizontais. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "smooth",
+     "description": "Linhas suavizadas (spline monótona, sem picos falsos). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "area",
+     "description": "Preenche sob a linha (equivale a type=\"area\"). (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "points",
+     "description": "Marcadores nas linhas (só até 40 pontos por série). (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "legend",
+     "description": "Legenda clicável (some com 1 série), tooltip, animação de entrada (respeita prefers-reduced-motion), grade. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "tooltip",
+     "description": "Legenda clicável (some com 1 série), tooltip, animação de entrada (respeita prefers-reduced-motion), grade. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "animate",
+     "description": "Legenda clicável (some com 1 série), tooltip, animação de entrada (respeita prefers-reduced-motion), grade. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "grid",
+     "description": "Legenda clicável (some com 1 série), tooltip, animação de entrada (respeita prefers-reduced-motion), grade. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "color",
+     "description": "Cor da 1ª série / cores por série ou fatia. Padrão: var(--r4-c1…c8). Aceita cor CSS simples. (string / string[]) padrão: '' / []"
+    },
+    {
+     "name": "colors",
+     "description": "Cor da 1ª série / cores por série ou fatia. Padrão: var(--r4-c1…c8). Aceita cor CSS simples. (string / string[]) padrão: '' / []"
+    },
+    {
+     "name": "inner-radius",
+     "description": "Espessura da rosca (fração do raio). (number) padrão: 0.62"
+    },
+    {
+     "name": "center-text",
+     "description": "Texto central da rosca. {total} vira o total formatado. Ao passar o mouse na fatia mostra o valor dela. (string) padrão: ''"
+    },
+    {
+     "name": "center-sub",
+     "description": "Texto central da rosca. {total} vira o total formatado. Ao passar o mouse na fatia mostra o valor dela. (string) padrão: ''"
+    },
+    {
+     "name": "y-min",
+     "description": "Limites do eixo de valores. (number) padrão: null"
+    },
+    {
+     "name": "y-max",
+     "description": "Limites do eixo de valores. (number) padrão: null"
+    },
+    {
+     "name": "max-points",
+     "description": "Acima disso as linhas são decimadas (mínimo/máximo por trecho). (number) padrão: 1500"
+    },
+    {
+     "name": "max-slices",
+     "description": "Pizza com mais fatias agrupa as menores em \"Outros\" (0 = não agrupa). (number) padrão: 8"
+    },
+    {
+     "name": "table-button",
+     "description": "Botão \"Ver como tabela\" (alternativa acessível) e estado inicial. (boolean) padrão: true / false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "table-view",
+     "description": "Botão \"Ver como tabela\" (alternativa acessível) e estado inicial. (boolean) padrão: true / false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "export-buttons",
+     "description": "Mostra os botões SVG e PNG. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "empty-text",
+     "description": "Textos dos estados vazio e erro (vazios = padrão no idioma atual); loading força o estado carregando. (string / string / boolean) padrão: '' / '' / false"
+    },
+    {
+     "name": "error-text",
+     "description": "Textos dos estados vazio e erro (vazios = padrão no idioma atual); loading força o estado carregando. (string / string / boolean) padrão: '' / '' / false"
+    },
+    {
+     "name": "loading",
+     "description": "Textos dos estados vazio e erro (vazios = padrão no idioma atual); loading força o estado carregando. (string / string / boolean) padrão: '' / '' / false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "aria-label",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-sparkline",
+   "description": "Mini gráfico de tendência sem eixos, para cartões e tabelas. Aceita array de números ou de objetos (y = chave). Mesmas opções do chart (area, smooth, color, series com type \"bar\" para minibarras). Passar o mouse mostra o valor.",
+   "attributes": [
+    {
+     "name": "type",
+     "description": ""
+    },
+    {
+     "name": "data",
+     "description": "[3,5,4,8] ou linhas com y=\"chave\". (Array<number|object>) padrão: []"
+    },
+    {
+     "name": "x",
+     "description": "Chaves quando data é array de objetos. (string) padrão: ''"
+    },
+    {
+     "name": "y",
+     "description": "Chaves quando data é array de objetos. (string) padrão: ''"
+    },
+    {
+     "name": "series",
+     "description": ""
+    },
+    {
+     "name": "src",
+     "description": ""
+    },
+    {
+     "name": "title",
+     "description": ""
+    },
+    {
+     "name": "format",
+     "description": "Formato do valor no tooltip. ('number'|'money'|'percent'|'bytes') padrão: 'number'"
+    },
+    {
+     "name": "x-format",
+     "description": ""
+    },
+    {
+     "name": "height",
+     "description": "Tamanho em px (padrão: largura do contêiner × 36). (number) padrão: 0"
+    },
+    {
+     "name": "width",
+     "description": "Tamanho em px (padrão: largura do contêiner × 36). (number) padrão: 0"
+    },
+    {
+     "name": "stacked",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "horizontal",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "smooth",
+     "description": "Área preenchida e curva suave. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "area",
+     "description": "Área preenchida e curva suave. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "points",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "legend",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "tooltip",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "animate",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "grid",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "color",
+     "description": "Cor da linha (padrão var(--r4-c1)). (string) padrão: ''"
+    },
+    {
+     "name": "colors",
+     "description": ""
+    },
+    {
+     "name": "inner-radius",
+     "description": ""
+    },
+    {
+     "name": "center-text",
+     "description": ""
+    },
+    {
+     "name": "center-sub",
+     "description": ""
+    },
+    {
+     "name": "y-min",
+     "description": ""
+    },
+    {
+     "name": "y-max",
+     "description": ""
+    },
+    {
+     "name": "max-points",
+     "description": ""
+    },
+    {
+     "name": "max-slices",
+     "description": ""
+    },
+    {
+     "name": "table-button",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "table-view",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "export-buttons",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "empty-text",
+     "description": ""
+    },
+    {
+     "name": "error-text",
+     "description": ""
+    },
+    {
+     "name": "loading",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "aria-label",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-themeswitch",
+   "description": "Alternador de tema pronto: botões Claro / Escuro / Auto (aria-pressed), seletor de preset e, opcionalmente, seletor de cor primária. Acompanha R4.theme e o idioma (R4.i18n). Tag <r4-themeswitch>, função R4.themeswitch(\"#alvo\").",
+   "attributes": [
+    {
+     "name": "modes",
+     "description": "Mostra os botões Claro / Escuro / Auto. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "presets",
+     "description": "Mostra o seletor de preset. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "picker",
+     "description": "Mostra o seletor de cor primária. (boolean) padrão: false",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "label",
+     "description": "Rótulo acessível do grupo (padrão: \"Tema\"). (string) padrão: ''"
+    }
+   ]
+  },
+  {
+   "name": "r4-repeater",
+   "description": "Lista editável de itens com campos (horários, links, telefones...). O item é definido por <r4-item-template> com tags de campo; valor = array de objetos. Adicionar, remover, reordenar (botões, Alt+↑/↓ ou arrastar pela alça), mínimo/máximo, título-resumo por item e validação por item. r4-bind e r4-show-if dentro do item enxergam os campos do PRÓPRIO item.",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)"
+    },
+    {
+     "name": "label",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)"
+    },
+    {
+     "name": "value",
+     "description": "Itens iniciais (também via setValue / setValues do form). Chaves __proto__/constructor/prototype são ignoradas. (Array<object> | JSON) padrão: []"
+    },
+    {
+     "name": "required",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Como os demais campos do form (required = pelo menos 1 item). (campo)"
+    },
+    {
+     "name": "validate-on",
+     "description": ""
+    },
+    {
+     "name": "validator",
+     "description": ""
+    },
+    {
+     "name": "messages",
+     "description": ""
+    },
+    {
+     "name": "min",
+     "description": "Quantidade mínima (já nasce com esse número de itens) e máxima (0 = até 100, o limite absoluto). Arrays maiores no setValue são cortados com aviso. (number) padrão: 0 / 0"
+    },
+    {
+     "name": "max",
+     "description": "Quantidade mínima (já nasce com esse número de itens) e máxima (0 = até 100, o limite absoluto). Arrays maiores no setValue são cortados com aviso. (number) padrão: 0 / 0"
+    },
+    {
+     "name": "template",
+     "description": ""
+    },
+    {
+     "name": "fields",
+     "description": ""
+    },
+    {
+     "name": "item-title",
+     "description": "Resumo do item com {campo}: \"{dias} {inicio}–{fim}\" (texto, nunca HTML). Vazio = \"Item N\". (string) padrão: ''"
+    },
+    {
+     "name": "add-text",
+     "description": "Texto do botão Adicionar e da lista vazia (padrão no idioma atual). (string) padrão: ''"
+    },
+    {
+     "name": "empty-text",
+     "description": "Texto do botão Adicionar e da lista vazia (padrão no idioma atual). (string) padrão: ''"
+    },
+    {
+     "name": "sortable",
+     "description": "Mostra a alça de arrastar. (boolean) padrão: true",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "max-fields",
+     "description": "Aviso no console se um item tiver mais campos que isso. (number) padrão: 40"
+    }
+   ]
+  },
+  {
+   "name": "r4-colorfield",
+   "description": "Campo de cor: seletor nativo + código #rrggbb digitável + amostra, cores sugeridas clicáveis e contraste WCAG ao vivo com outra cor do form (razão e nível AA/AAA), com bloqueio opcional abaixo do mínimo. getValue() sempre #rrggbb minúsculo (#abc vira #aabbcc).",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "label",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "value",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "required",
+     "description": "Como os demais campos do form. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Como os demais campos do form. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "validate-on",
+     "description": ""
+    },
+    {
+     "name": "validator",
+     "description": ""
+    },
+    {
+     "name": "messages",
+     "description": ""
+    },
+    {
+     "name": "presets",
+     "description": "Cores sugeridas separadas por vírgula: \"#0b3d2e,#1e88e5,#fff\". Inválidas são ignoradas (máx. 24). (string) padrão: ''"
+    },
+    {
+     "name": "contrast-with",
+     "description": "Name de outro campo de cor do mesmo form (ou uma cor fixa \"#ffffff\"): mostra a razão de contraste WCAG ao vivo. (string) padrão: ''"
+    },
+    {
+     "name": "min-contrast",
+     "description": "Abaixo disso o aviso fica destacado (não bloqueia). 4.5 = AA para texto normal; 3 = texto grande. (number) padrão: 4.5"
+    },
+    {
+     "name": "required-contrast",
+     "description": "Se > 0, a validação reprova abaixo desse contraste (o form não envia). (number) padrão: 0"
+    },
+    {
+     "name": "placeholder",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-choice",
+   "description": "Grupo de opções exclusivas em cartões (radio nativo acessível: setas trocam, Espaço marca), com miniatura, ícone ou SVG em cada opção. Para estilo de topo, layout de galeria, plano... Em HTML: <r4-option value label thumb icon description>conteúdo</r4-option> — o conteúdo é markup CONFIÁVEL da página; por JS, html só com R4.html/R4.raw (texto comum é escapado).",
+   "attributes": [
+    {
+     "name": "name",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "label",
+     "description": "Filhos. O conteúdo (ex.: <svg>) vira a ilustração do cartão; sem conteúdo usa thumb (imagem, safeUrl) ou icon (R4.icon). (html)"
+    },
+    {
+     "name": "value",
+     "description": "Filhos. O conteúdo (ex.: <svg>) vira a ilustração do cartão; sem conteúdo usa thumb (imagem, safeUrl) ou icon (R4.icon). (html)"
+    },
+    {
+     "name": "required",
+     "description": "Como os demais campos do form. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "description": "Como os demais campos do form. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "read-only",
+     "description": "Como os demais campos do form. (campo)",
+     "values": [
+      {
+       "name": "true"
+      },
+      {
+       "name": "false"
+      }
+     ]
+    },
+    {
+     "name": "help-text",
+     "description": "Como os demais campos do form. (campo)"
+    },
+    {
+     "name": "validate-on",
+     "description": ""
+    },
+    {
+     "name": "validator",
+     "description": ""
+    },
+    {
+     "name": "messages",
+     "description": ""
+    },
+    {
+     "name": "options",
+     "description": "Opções por JS. html só vira HTML se vier de R4.html/R4.raw; label/description são sempre texto. (Array<{value, label, description, thumb, icon, html, disabled}>) padrão: []"
+    },
+    {
+     "name": "columns",
+     "description": "Colunas fixas (1 a 8; empilha em telas estreitas); 0 = automático. (number) padrão: 0"
+    }
+   ]
+  },
+  {
+   "name": "r4-phonepreview",
+   "description": "Moldura de celular (CSS puro) com um <iframe> da página de prévia, ao lado do formulário em telas ≥ breakpoint (fixa ao rolar e escalada para caber na altura da janela). Em telas menores vira o botão \"Visualizar pré-review\", que abre a prévia em tela cheia (diálogo acessível: foco preso, Esc fecha; o iframe só carrega no clique). As mudanças do form (for) são enviadas por postMessage só para a mesma origem e só os campos do map; a página de prévia aplica com R4.preview.listen.",
+   "attributes": [
+    {
+     "name": "src",
+     "description": "Página de prévia — só MESMA origem (outra origem é recusada). iframe com sandbox=\"allow-same-origin allow-scripts\" e loading=\"lazy\". (string) padrão: ''"
+    },
+    {
+     "name": "for",
+     "description": "#id do <r4-form> cujo estado alimenta a prévia. Vazio = o form que estiver dentro do componente. (string) padrão: ''"
+    },
+    {
+     "name": "map",
+     "description": "Allowlist \"campo:chave,campo2:chave2\" (ou só \"campo\"): só esses valores vão para a prévia, com esses nomes. Listas (repeater) vão como lista de objetos rasos. (string) padrão: ''"
+    },
+    {
+     "name": "breakpoint",
+     "description": "Largura mínima (px) para mostrar o celular ao lado. (number) padrão: 1024"
+    },
+    {
+     "name": "title",
+     "description": "Textos (padrão: Pré-visualização / Visualizar pré-review / Atualizar prévia). (string) padrão: ''"
+    },
+    {
+     "name": "button-text",
+     "description": "Textos (padrão: Pré-visualização / Visualizar pré-review / Atualizar prévia). (string) padrão: ''"
+    },
+    {
+     "name": "reload-text",
+     "description": "Textos (padrão: Pré-visualização / Visualizar pré-review / Atualizar prévia). (string) padrão: ''"
+    },
+    {
+     "name": "width",
+     "description": "Tamanho da tela do celular e distância do topo quando fixo (sticky). (number) padrão: 390 / 780 / 16"
+    },
+    {
+     "name": "height",
+     "description": "Tamanho da tela do celular e distância do topo quando fixo (sticky). (number) padrão: 390 / 780 / 16"
+    },
+    {
+     "name": "top",
+     "description": "Tamanho da tela do celular e distância do topo quando fixo (sticky). (number) padrão: 390 / 780 / 16"
+    },
+    {
+     "name": "html",
+     "description": ""
+    }
+   ]
+  },
+  {
+   "name": "r4-col",
+   "description": "Coluna do r4-grid. Atributos: field, header, width, align, sortable, format (money|number|date|bytes|bool|upper).",
+   "attributes": [
+    {
+     "name": "field"
+    },
+    {
+     "name": "header"
+    },
+    {
+     "name": "width"
+    },
+    {
+     "name": "align"
+    },
+    {
+     "name": "sortable"
+    },
+    {
+     "name": "format"
+    },
+    {
+     "name": "editable"
+    },
+    {
+     "name": "summary"
+    }
+   ]
+  },
+  {
+   "name": "r4-node",
+   "description": "Nó do r4-treepanel (aninhável).",
+   "attributes": [
+    {
+     "name": "id"
+    },
+    {
+     "name": "text"
+    },
+    {
+     "name": "badge"
+    },
+    {
+     "name": "expanded"
+    }
+   ]
+  },
+  {
+   "name": "r4-tab",
+   "description": "Aba do r4-tabpanel.",
+   "attributes": [
+    {
+     "name": "title"
+    },
+    {
+     "name": "closable"
+    },
+    {
+     "name": "key"
+    }
+   ]
+  },
+  {
+   "name": "r4-tbar",
+   "description": "Barra superior do r4-panel.",
+   "attributes": []
+  },
+  {
+   "name": "r4-fill",
+   "description": "Empurra os itens seguintes da toolbar para a direita.",
+   "attributes": []
+  },
+  {
+   "name": "r4-sep",
+   "description": "Separador da toolbar.",
+   "attributes": []
+  },
+  {
+   "name": "r4-option",
+   "description": "Opção de r4-select / r4-choice.",
+   "attributes": [
+    {
+     "name": "value"
+    },
+    {
+     "name": "label"
+    },
+    {
+     "name": "selected"
+    },
+    {
+     "name": "disabled"
+    }
+   ]
+  },
+  {
+   "name": "r4-item",
+   "description": "Item de r4-accordion, r4-dropdown ou r4-timeline.",
+   "attributes": [
+    {
+     "name": "title"
+    },
+    {
+     "name": "text"
+    },
+    {
+     "name": "icon"
+    },
+    {
+     "name": "open"
+    },
+    {
+     "name": "disabled"
+    },
+    {
+     "name": "divider"
+    }
+   ]
+  },
+  {
+   "name": "r4-step",
+   "description": "Etapa do r4-steps.",
+   "attributes": [
+    {
+     "name": "title"
+    }
+   ]
+  },
+  {
+   "name": "r4-crumb",
+   "description": "Item do r4-breadcrumb.",
+   "attributes": [
+    {
+     "name": "text"
+    },
+    {
+     "name": "href"
+    }
+   ]
+  },
+  {
+   "name": "r4-series",
+   "description": "Série do r4-chart.",
+   "attributes": [
+    {
+     "name": "key"
+    },
+    {
+     "name": "label"
+    },
+    {
+     "name": "color"
+    },
+    {
+     "name": "type"
+    }
+   ]
+  },
+  {
+   "name": "r4-item-template",
+   "description": "Modelo de item do r4-repeater (contém os campos).",
+   "attributes": []
+  }
+ ],
+ "globalAttributes": [
+  {
+   "name": "r4-click",
+   "description": "Ação sem JavaScript: acao:alvo (modal, close, reload, toggle, copy, alert, toast, notify, goto, anim, salvar, reset, ...). Combine com \";\".",
+   "values": [
+    {
+     "name": "modal:"
+    },
+    {
+     "name": "close:"
+    },
+    {
+     "name": "reload:"
+    },
+    {
+     "name": "toggle:"
+    },
+    {
+     "name": "copy:"
+    },
+    {
+     "name": "alert:"
+    },
+    {
+     "name": "goto:"
+    },
+    {
+     "name": "anim:"
+    },
+    {
+     "name": "toast:"
+    },
+    {
+     "name": "submit:"
+    },
+    {
+     "name": "reset:"
+    },
+    {
+     "name": "salvar:"
+    },
+    {
+     "name": "recarregar:"
+    },
+    {
+     "name": "notify:"
+    }
+   ]
+  },
+  {
+   "name": "r4-confirm",
+   "description": "Pede confirmação antes de executar o r4-click."
+  },
+  {
+   "name": "r4-anim",
+   "description": "Animação de entrada ao aparecer na tela.",
+   "values": [
+    {
+     "name": "fade"
+    },
+    {
+     "name": "fade-up"
+    },
+    {
+     "name": "fade-down"
+    },
+    {
+     "name": "fade-left"
+    },
+    {
+     "name": "fade-right"
+    },
+    {
+     "name": "zoom-in"
+    },
+    {
+     "name": "zoom-out"
+    }
+   ]
+  },
+  {
+   "name": "r4-delay",
+   "description": "Atraso da animação (ms)."
+  },
+  {
+   "name": "r4-duration",
+   "description": "Duração da animação (ms)."
+  },
+  {
+   "name": "r4-once",
+   "description": "false = repete a animação cada vez que reaparece."
+  },
+  {
+   "name": "r4-hover",
+   "description": "Efeito ao passar o mouse.",
+   "values": [
+    {
+     "name": "lift"
+    },
+    {
+     "name": "grow"
+    },
+    {
+     "name": "glow"
+    }
+   ]
+  },
+  {
+   "name": "r4-bind",
+   "description": "Liga um campo do form a um alvo: texto:campo; valor:campo; attr:atributo:campo; var:--css:campo; classe:nome:expressão."
+  },
+  {
+   "name": "r4-show-if",
+   "description": "Mostra o elemento conforme o estado do form. Ex.: estilo=gradiente && !oculto."
+  },
+  {
+   "name": "r4-enable-if",
+   "description": "Habilita o elemento conforme o estado do form."
+  },
+  {
+   "name": "r4-scope",
+   "description": "Seletor (#id) do r4-form usado por r4-bind/r4-show-if fora do formulário."
+  },
+  {
+   "name": "r4-ignore",
+   "description": "Não ativa tags r4-* dentro deste elemento (conteúdo de terceiros)."
+  },
+  {
+   "name": "r4-tip",
+   "description": "Tooltip com este texto."
+  },
+  {
+   "name": "r4-tip-pos",
+   "description": "Posição da tooltip.",
+   "values": [
+    {
+     "name": "top"
+    },
+    {
+     "name": "bottom"
+    },
+    {
+     "name": "left"
+    },
+    {
+     "name": "right"
+    }
+   ]
+  },
+  {
+   "name": "r4-i18n",
+   "description": "Chave de tradução (R4.t) aplicada ao elemento; \"placeholder:chave\" traduz um atributo."
+  }
+ ]
+}
