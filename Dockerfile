@@ -1,6 +1,6 @@
 # PHP 8.5.12 FPM (versão corrigida p/ CVE-2026-109618/9; não usar < 8.5.12)
 # O servidor web é o Nginx (ver docker-compose.yml e docker/nginx/default.conf)
-FROM php:8.5.12-fpm
+FROM php:8.5.13-fpm
 
 # unzip/zip para o Composer baixar pacotes como dist
 RUN apt-get update && apt-get install -y --no-install-recommends unzip libzip-dev \

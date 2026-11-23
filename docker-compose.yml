@@ -23,7 +23,7 @@ services:
     #   - /tmp:size=64m,mode=1777
 
   web:
-    image: nginx:1.30.6-alpine
+    image: nginx:1.30.7-alpine
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8087}:80"
